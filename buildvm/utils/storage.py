@@ -1,0 +1,111 @@
+from __future__ import division
+
+import os
+import re
+
+from fabric.utils import warn
+from fabric.api import run, settings, hide
+
+from buildvm.utils.units import convert_size
+from buildvm.utils import cmd, fail_gracefully, raise_failure
+
+run = fail_gracefully(run)
+
+class StorageError(Exception):
+    pass
+
+def get_volume_groups():
+    with settings(warn_only=True):
+        lvminfo = run('vgdisplay -c')
+
+    if lvminfo.failed:
+        warn("No LVM found")
+        raise_failure(StorageError("No LVM found"))
+    
+    vgroups = []
+    for line in lvminfo.splitlines():
+        parts = line.strip().split(':')
+        volume_group = parts[0]
+        size = int(parts[11]) * 1024
+        free = int(parts[15]) * 1024
+        
+        vgroups.append({
+            'name': volume_group,
+            'size_total': size,
+            'size_free': free
+        })
+
+    return vgroups
+
+def create_logical_volume(volume_group, name, size_mb):
+    run(cmd('lvcreate -L {0}M -n {1} {2}', size_mb, name, volume_group))
+    return os.path.join('/dev', volume_group, name)
+
+def format_device(device):
+    run(cmd('mkfs.xfs {0}', device))
+
+def mount_temp(device, suffix=''):
+    mount_dir = run(cmd('mktemp -d --suffix {0}', suffix))
+    run(cmd('mount {0} {1}', device, mount_dir))
+    return mount_dir
+
+def umount_temp(device_or_path):
+    run(cmd('umount {0}', device_or_path))
+
+def get_storage_type():
+    with settings(warn_only=True), hide('everything'):
+        result = run('which santool')
+    return 'san' if not result.failed else 'lvm'
+
+def get_san_arrays():
+    saninfo = run('santool --show free')
+
+    arrays = []
+    array = None
+    for line in saninfo.splitlines():
+        line = line.strip()
+        if line.startswith('Array:'):
+            if array:
+                arrays.append(array)
+            match = re.match(r'Array:\s+(\w+)\s+\((\d+)\)', line)
+            if match:
+                array = {'id': match.group(1),
+                         'no': int(match.group(2))}
+            else:
+                array = None
+        elif line.startswith('free luns:') and array:
+            match = re.match('free luns:\s+(\d+) of (\d+)\s+\d+% free', line)
+            if match:
+                array['num_free'] = int(match.group(1))
+                array['num_total'] = int(match.group(2))
+    if array:
+        arrays.append(array)
+    
+    return arrays
+
+def choose_array(arrays):
+    return max(arrays, key=lambda x: x['num_free'] / x['num_total'])
+
+def create_san_raid(name, array):
+    run(cmd('santool --build-raid -u {0} --array-number {1}', name, array))
+    return os.path.join('/dev', 'san', 'raid', name)
+
+def prepare_storage(hostname, disk_size):
+    storage_type = get_storage_type()
+    if storage_type == 'san':
+        san_arrays = get_san_arrays()
+        array = choose_array(san_arrays)
+        device = create_san_raid(hostname, array['no'])
+    else:
+        volume_groups = get_volume_groups()
+        if not volume_groups:
+            raise_failure(StorageError('No volume groups found'))
+        volume_group = volume_groups[0]
+        volume = volume_group['name']
+        if convert_size(volume_group['size_free'], 'B', 'M') < disk_size:
+            raise_failure(StorageError('No enough free space'))
+        device = create_logical_volume(volume, hostname, disk_size)
+
+    format_device(device)
+    mount_path = mount_temp(device, suffix='-' + hostname)
+    return device, mount_path

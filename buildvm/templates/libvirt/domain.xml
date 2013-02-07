@@ -1,0 +1,27 @@
+<domain type='xen'>
+  <name>{{ name }}</name>
+  <uuid>{{ uuid }}</uuid>
+  <memory unit='KiB'>{{ memory_kib }}</memory>
+  <currentMemory unit='KiB'>{{ memory_kib }}</currentMemory>
+  <vcpu placement='static'>{{ num_vcpus }}</vcpu>
+  <os>
+    <type arch='x86_64' machine='xenpv'>linux</type>
+    <kernel>/boot/vmlinuz-2.6-xenU</kernel>
+    <cmdline>2 init=/sbin/init console=hvc0 mem=16384M</cmdline>
+  </os>
+  <clock offset='utc' adjustment='reset'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+  <devices>
+    <disk type='block' device='disk'>
+      <driver name='phy'/>
+      <source dev='/dev/san/raid/nl15db1.ds'/>
+      <target dev='xvda1' bus='xen'/>
+    </disk>
+    <console type='pty'>
+      <target type='xen' port='0'/>
+    </console>
+  </devices>
+</domain>
+

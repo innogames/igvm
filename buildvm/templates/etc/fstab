@@ -1,0 +1,4 @@
+proc /proc proc defaults 0 0
+/dev/xvda1 / {{ type }} {{ mount_options }} 0 1
+/swap none swap defaults 0 0
+
