@@ -7,6 +7,7 @@ from fabric.contrib.files import upload_template
 from adminapi.utils import IP
 from adminapi import api
 
+from buildvm.utils.sshkeys import create_authorized_keys
 from buildvm.utils import fail_gracefully, cmd
 
 run = fail_gracefully(run)
@@ -163,3 +164,4 @@ def prepare_vm(target_dir, server, mailname, dns_servers, swap_size):
 
     create_fstab(target_dir)
     create_inittab(target_dir)
+    create_authorized_keys(target_dir)
