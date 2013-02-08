@@ -14,5 +14,3 @@ pf::powerwait:/etc/init.d/powerfail start
 pn::powerfailnow:/etc/init.d/powerfail now
 po::powerokwait:/etc/init.d/powerfail stop
 1:2345:respawn:/sbin/getty 38400 console
-2:23:respawn:/sbin/getty 38400 tty2
-3:23:respawn:/sbin/getty 38400 tty3
