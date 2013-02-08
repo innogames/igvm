@@ -6,10 +6,12 @@ from adminapi.utils import IP
 from buildvm.utils import raise_failure
 from buildvm.utils.units import convert_size
 from buildvm.utils.resources import get_meminfo, get_cpuinfo
-from buildvm.utils.storage import prepare_storage, umount_temp
+from buildvm.utils.storage import prepare_storage, umount_temp, remove_temp
 from buildvm.utils.image import download_image, extract_image
 from buildvm.utils.preparevm import prepare_vm
-from buildvm.utils.hypervisor import create_sxp
+from buildvm.utils.hypervisor import (create_definition, get_hypervisor,
+        start_machine)
+from buildvm.utils.portping import wait_until
 
 
 def setup(config):
@@ -37,9 +39,9 @@ def setup(config):
     env.hosts = ['af05db005']
     execute(setup_hardware, config)
     env.hosts = [config['hostname']]
-    execute(setup_vm, config)
+    execute(setup_guest, config)
 
-def setup_hardware(config):
+def setup_hardware(config, boot=False):
     meminfo = get_meminfo()
     cpuinfo = get_cpuinfo()
 
@@ -66,14 +68,30 @@ def setup_hardware(config):
             dns_servers=config['dns_servers'],
             swap_size=config['swap_size'])
 
+    if 'postboot_script' in config:
+        pass
+
     umount_temp(device)
+    remove_temp(mount_path)
 
     server = config['server']
-    create_sxp(server['hostname'], config['num_cpu'], config['mem'],
-            config['mem'], device)
+    hypervisor = get_hypervisor()
+    create_definition(server['hostname'], config['num_cpu'], config['mem'],
+            config['mem'], device, hypervisor)
+
+    if not boot:
+        return
+
+    start_machine(server['hostname'], hypervisor)
+
+    host_up = wait_until(server['intern_ip'].as_ip(),
+            waitmsg='Waiting for guest to boot')
+
+    if not host_up:
+        raise_failure(Exception('Guest did not boot.'))
 
 
-def setup_vm(config):
+def setup_guest(config):
     pass
 
 if __name__ == '__main__':
