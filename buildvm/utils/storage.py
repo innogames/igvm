@@ -52,6 +52,9 @@ def mount_temp(device, suffix=''):
 def umount_temp(device_or_path):
     run(cmd('umount {0}', device_or_path))
 
+def remove_temp(mount_path):
+    run(cmd('rm -rf {0}', mount_path))
+
 def get_storage_type():
     with settings(warn_only=True), hide('everything'):
         result = run('which santool')
