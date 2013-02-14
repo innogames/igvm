@@ -1,7 +1,7 @@
 import os
 import math
 
-from fabric.api import run, cd, settings, abort
+from fabric.api import run, cd, settings, abort, put
 from fabric.contrib.files import upload_template
 
 from adminapi.utils import IP
@@ -11,6 +11,7 @@ from buildvm.utils.sshkeys import create_authorized_keys
 from buildvm.utils import fail_gracefully, cmd
 
 run = fail_gracefully(run)
+put = fail_gracefully(put)
 upload_template = fail_gracefully(upload_template)
 
 def set_hostname(target_dir, hostname):
@@ -165,3 +166,7 @@ def prepare_vm(target_dir, server, mailname, dns_servers, swap_size):
     create_fstab(target_dir)
     create_inittab(target_dir)
     create_authorized_keys(target_dir)
+
+def copy_postboot_script(target_dir, script):
+    with cd(target_dir):
+        put(script, 'buildvm-postboot', mode=755)
