@@ -1,47 +1,55 @@
-from fabric.api import env, execute
+from fabric.api import env, execute, run, prompt
 
-import adminapi
-from adminapi.utils import IP
-
-from buildvm.utils import raise_failure
+from buildvm.utils import raise_failure, fail_gracefully
 from buildvm.utils.units import convert_size
 from buildvm.utils.resources import get_meminfo, get_cpuinfo
 from buildvm.utils.storage import prepare_storage, umount_temp, remove_temp
 from buildvm.utils.image import download_image, extract_image
-from buildvm.utils.preparevm import prepare_vm
+from buildvm.utils.preparevm import prepare_vm, copy_postboot_script
 from buildvm.utils.hypervisor import (create_definition, get_hypervisor,
         start_machine)
 from buildvm.utils.portping import wait_until
+from buildvm.signals import send_signal
+
+
+run = fail_gracefully(run)
+
+
+def check_config(config):
+    send_signal('prefill_config', config)
+
+    if 'host' not in config:
+        config['host'] = prompt('Hostname for dom0:',
+                validate=r'^[a-z][a-z0-9_-]+')
+
+    if 'mem' not in config:
+        config['mem'] = int(prompt('Memory (in MiB):', validate=r'^\d+$'))
+
+    if 'num_cpu' not in config:
+        config['num_cpu'] = int(prompt('Number of CPUs:', validate='^\d+$'))
+
+    if 'disk_size' not in config:
+        config['disk_size'] = int(prompt('Disk size (in MiB):',
+                validate=r'^\d+$'))
+
+    if 'image' not in config:
+        config['image'] = prompt('Image:', validate='^[\w_-]+\.tar\.gz$')
+
+    send_signal('postfill_config', config)
 
 
 def setup(config):
-    hostname = 'test-buildvm'
-    config = {
-        'hostname': hostname,
-        'mem': 256,
-        'num_cpu': 1,
-        'disk_size': 4096,
-        'mailname': 'test-buildvm' + '.ig.local',
-        'dns_servers': ['10.0.0.102', '10.0.0.85', '10.0.0.83'],
-        'swap_size': 1024,
-        'image': 'wheezy-base.tar.gz',
-        'server': {
-            'hostname': hostname,
-            'intern_ip': IP('10.4.0.15'),
-            #'additional_ips': set([IP('212.48.98.12')])
-            'additional_ips': set()
-        }
-    }
+    check_config(config)
 
     env.use_ssh_config = True
     env.always_use_pty = False
     env.shell = '/bin/bash -c'
-    env.hosts = ['af05db005']
+    env.hosts = [config['host']]
     execute(setup_hardware, config)
     env.hosts = [config['hostname']]
     execute(setup_guest, config)
 
-def setup_hardware(config, boot=False):
+def setup_hardware(config, boot=True):
     meminfo = get_meminfo()
     cpuinfo = get_cpuinfo()
 
@@ -69,7 +77,7 @@ def setup_hardware(config, boot=False):
             swap_size=config['swap_size'])
 
     if 'postboot_script' in config:
-        pass
+        copy_postboot_script(mount_path, config['postboot_script'])
 
     umount_temp(device)
     remove_temp(mount_path)
@@ -92,7 +100,10 @@ def setup_hardware(config, boot=False):
 
 
 def setup_guest(config):
-    pass
+    if 'postboot_script' in config:
+        run('/buildvm-postboot')
+        run('rm -f /buildvm-postboot')
+
 
 if __name__ == '__main__':
     setup(None)
