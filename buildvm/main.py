@@ -1,3 +1,6 @@
+import os
+from glob import glob
+
 from fabric.api import env, execute, run, prompt
 
 from buildvm.utils import raise_failure, fail_gracefully
@@ -16,7 +19,7 @@ run = fail_gracefully(run)
 
 
 def check_config(config):
-    send_signal('prefill_config', config)
+    send_signal('config_created', config)
 
     if 'host' not in config:
         config['host'] = prompt('Hostname for dom0:',
@@ -35,10 +38,16 @@ def check_config(config):
     if 'image' not in config:
         config['image'] = prompt('Image:', validate='^[\w_-]+\.tar\.gz$')
 
-    send_signal('postfill_config', config)
+    send_signal('config_finished', config)
 
 
 def setup(config):
+    hooks = glob(os.path.join(os.path.dirname(__file__), 'hooks', '*.py'))
+    for hook in hooks:
+        if hook == '__init__.py':
+            continue
+        execfile(hook, {})
+
     check_config(config)
 
     env.use_ssh_config = True
@@ -50,6 +59,7 @@ def setup(config):
     execute(setup_guest, config)
 
 def setup_hardware(config, boot=True):
+    send_signal('setup_hardware', config, boot)
     meminfo = get_meminfo()
     cpuinfo = get_cpuinfo()
 
@@ -69,7 +79,8 @@ def setup_hardware(config, boot=True):
 
     download_image(config['image'])
     extract_image(config['image'], mount_path)
-
+    
+    send_signal('prepare_vm', config, device, mount_path)
     prepare_vm(mount_path,
             server=config['server'],
             mailname=config['mailname'],
