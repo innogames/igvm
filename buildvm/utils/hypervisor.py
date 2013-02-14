@@ -69,7 +69,6 @@ def start_machine_libvirt(hostname, hypervisor):
 def create_definition(hostname, num_vcpus, mem_size, max_mem, device, hypervisor):
     if hypervisor == 'libvirt-xen':
         xml = create_domain_xml(hostname, num_vcpus, mem_size, max_mem, device)
-        print xml
         return create_domain(xml, hypervisor)
     elif hypervisor == 'xen':
         return create_sxp(hostname, num_vcpus, mem_size, max_mem, device)
