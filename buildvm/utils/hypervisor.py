@@ -54,6 +54,11 @@ def create_domain(domain_xml, hypervisor):
     conn = get_virtconn(env.host_string, hypervisor)
     puts('Defining domain on libvirt')
     conn.defineXML(domain_xml)
+    
+    # Refresh storage pools to register the vm image
+    for pool_name in conn.listStoragePools():
+        pool = conn.storagePoolLookupByName(pool_name)
+        pool.refresh(0)
 
 def start_machine_libvirt(hostname, hypervisor):
     conn = get_virtconn(env.host_string, hypervisor)
