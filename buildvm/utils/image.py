@@ -16,7 +16,7 @@ def get_images():
     except urllib2.URLError:
         return None
 
-    return re.findall(r'<a\s+href="(.+?)\.tar\.gz"', image_html)
+    return re.findall(r'<a\s+href="(.+?\.tar\.gz)"', image_html)
 
 def download_image(image):
     url = BASE_URL + image

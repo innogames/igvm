@@ -1,4 +1,5 @@
 import os
+import sys
 from glob import glob
 
 from fabric.api import env, execute, run, prompt
@@ -7,7 +8,7 @@ from buildvm.utils import raise_failure, fail_gracefully
 from buildvm.utils.units import convert_size
 from buildvm.utils.resources import get_meminfo, get_cpuinfo
 from buildvm.utils.storage import prepare_storage, umount_temp, remove_temp
-from buildvm.utils.image import download_image, extract_image
+from buildvm.utils.image import download_image, extract_image, get_images
 from buildvm.utils.preparevm import prepare_vm, copy_postboot_script
 from buildvm.utils.hypervisor import (create_definition, get_hypervisor,
         start_machine)
@@ -34,9 +35,21 @@ def check_config(config):
     if 'disk_size' not in config:
         config['disk_size'] = int(prompt('Disk size (in MiB):',
                 validate=r'^\d+$'))
+    
 
-    if 'image' not in config:
-        config['image'] = prompt('Image:', validate='^[\w_-]+\.tar\.gz$')
+    images = get_images()
+    if 'image' not in config or config['image'] not in images:
+        if 'image' not in config:
+            msg = 'Please specify an image. Available images: '
+        else:
+            msg = 'Image not found. Available images: '
+        print(msg + ' '.join(images))
+        while True:
+            config['image'] = prompt('Image:', validate='^[\w_-]+\.tar\.gz$')
+            if config['image'] in images:
+                break
+            print >> sys.stderr, "Image not found."
+
 
     send_signal('config_finished', config)
 
