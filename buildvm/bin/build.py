@@ -2,8 +2,13 @@ from __future__ import print_function
 
 import argparse
 import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
+    '..')))
 
 import adminapi
+from adminapi.utils import IP
 from adminapi.dataset import DatasetError, query
 
 from buildvm.main import setup
@@ -12,9 +17,9 @@ parser = argparse.ArgumentParser(description='Creates a new virtual machine.')
 parser.add_argument('guest', metavar='guest', help='Hostname of the guest system')
 parser.add_argument('--host', metavar='host', help='Hostname of the host system')
 parser.add_argument('--image', metavar='image', help='Image file for the guest')
-#parser.add_argument('--ip', metavar='intern_ip', help='Internal IP of the guest')
-#parser.add_argument('--addip', metavar='additional_ip', action='append',
-#        help='Additional IPs of the guest. You can use this multiple times.')
+parser.add_argument('--ip', metavar='intern_ip', help='Internal IP of the guest')
+parser.add_argument('--addip', metavar='additional_ip', action='append',
+        help='Additional IPs of the guest. You can use this multiple times.')
 parser.add_argument('--mem', metavar='memory', type=int,
         help='Memory of the guest in MiB')
 parser.add_argument('--numcpu', metavar='numcpu', type=int,
@@ -22,7 +27,6 @@ parser.add_argument('--numcpu', metavar='numcpu', type=int,
 parser.add_argument('--disksize', metavar='disksize', type=int,
         help='Disk size of the guest in MiB')
 parser.add_argument('--boot', action='store_true', help='Boot after setup')
-parser.add_argument('--puppet', action='store_true', help='Run puppet after boot')
 parser.add_argument('--postboot', metavar='postboot_script',
         help='Run postboot_script on the guest after first boot')
 parser.add_argument('-o', metavar='key=value', nargs='+',
@@ -47,6 +51,10 @@ try:
     server = query(hostname=args.guest).get()
 except DatasetError:
     print("Server '{0}' not found".format(args.guest), file=sys.stderr)
+    server = {
+        'intern_ip': IP(args.ip),
+        'additional_ips': set(map(IP, args.addip))
+    }
 
 config['server'] = server
 
@@ -76,5 +84,14 @@ else:
     disk_size = server.get('disk_size')
     if disk_size:
         config['disk_size'] = disk_size
+
+if args.boot:
+    config['boot'] = True
+else:
+    config['boot'] = False
+
+if args.postboot:
+    config['postboot_script'] = args.postboot
+    config['boot'] = True
 
 setup(config)
