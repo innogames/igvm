@@ -1,3 +1,4 @@
+import time
 import socket
 
 from fabric.api import puts
@@ -24,5 +25,6 @@ def wait_until(ip, port=22, timeout=60, waitmsg=None):
         
         if waitmsg:
             puts('Remaining: {0} secs'.format(timeout - sec))
+        time.sleep(1)
 
     return False
