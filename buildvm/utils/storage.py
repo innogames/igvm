@@ -4,7 +4,8 @@ import os
 import re
 
 from fabric.utils import warn
-from fabric.api import run, settings, hide
+from fabric.api import run, settings, hide, puts, prompt
+from fabric.contrib.console import confirm
 
 from buildvm.utils.units import convert_size
 from buildvm.utils import cmd, fail_gracefully, raise_failure
@@ -38,8 +39,20 @@ def get_volume_groups():
     return vgroups
 
 def create_logical_volume(volume_group, name, size_mb):
+    lvs = [lv.strip().split(':') for lv in run('lvdisplay -c').splitlines()]
+    lvs = [lv for lv in lvs if lv[1] == volume_group]
+    volume = os.path.join('/dev', volume_group, name)
+    if volume in [lv[0] for lv in lvs]:
+        rem = confirm('Logical volume already exists. Should I remove it?')
+        if rem:
+            puts('Please remove the VM for this volume if it exists.')
+            prompt('Press any key to continue.')
+            with settings(warn_only=True):
+                run(cmd('umount {0}', volume))
+            run(cmd('lvremove -f {0}', volume))
+
     run(cmd('lvcreate -L {0}M -n {1} {2}', size_mb, name, volume_group))
-    return os.path.join('/dev', volume_group, name)
+    return volume 
 
 def format_device(device):
     run(cmd('mkfs.xfs {0}', device))
