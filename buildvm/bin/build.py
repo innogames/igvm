@@ -85,6 +85,9 @@ else:
     if disk_size:
         config['disk_size'] = disk_size
 
+if args.image:
+    config['image'] = args.image
+
 if args.boot:
     config['boot'] = True
 else:
