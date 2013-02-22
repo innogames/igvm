@@ -50,6 +50,7 @@ def setup(config):
 
     check_config(config)
 
+    env.disable_known_hosts = True
     env.use_ssh_config = True
     env.always_use_pty = False
     env.shell = '/bin/bash -c'
