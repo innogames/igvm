@@ -11,7 +11,8 @@ def find_keys():
     except KeyError:
         return []
 
-    home_dirs = [(user, pwd.getpwnam(user)).pw_dir for user in group.gr_mem]
+    group_members = group[3]
+    home_dirs = [(user, pwd.getpwnam(user))[5] for user in group_members]
     home_dirs.append(('root', '/root'))
 
     keys = []
