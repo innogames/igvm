@@ -7,7 +7,7 @@ def ping_port(ip, port=22, timeout=1):
     s.settimeout(timeout)
     try:
         s.connect((ip, port))
-    except socket.timeout:
+    except (socket.timeout, socket.error):
         return False
     else:
         return True
