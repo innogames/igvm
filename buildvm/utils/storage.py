@@ -55,7 +55,11 @@ def create_logical_volume(volume_group, name, size_mb):
     return volume 
 
 def format_device(device):
-    run(cmd('mkfs.xfs {0}', device))
+    with settings(warn_only=True):
+        status = run(cmd('mkfs.xfs {0}', device))
+    if status.failed:
+        if confirm('Force mkfs.xfs?'):
+            run(cmd('mkfs.xfs -f {0}', device))
 
 def mount_temp(device, suffix=''):
     mount_dir = run(cmd('mktemp -d --suffix {0}', suffix))
