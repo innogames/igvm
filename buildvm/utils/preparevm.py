@@ -61,7 +61,7 @@ def _get_subnet(ip, ranges):
     except IndexError:
         return False
 
-def _get_supnet(ip, ranges, segment=None):
+def _get_uppernet(ip, ranges, segment=None):
     try:
         if segment:
             return [r for r in ranges if r['belongs_to'] is None and
@@ -92,7 +92,7 @@ def create_interfaces(primary_ip, additional_ips, target_dir):
     gateway_found = False
     primary_ranges = ip_api.get_matching_ranges(primary_ip)
     if primary_ip.is_public():
-        net = _get_supnet(primary_ip, primary_ranges)
+        net = _get_uppernet(primary_ip, primary_ranges)
         if net:
             gateway_found = True
             ip_info[ip]['gateway'] = IP(net['gateway'])
@@ -103,7 +103,7 @@ def create_interfaces(primary_ip, additional_ips, target_dir):
     for ip in additional_ips:
         ranges = ip_api.get_matching_ranges(ip)
         if ip.is_public():
-            net = _get_supnet(ip, ranges)
+            net = _get_uppernet(ip, ranges)
             if net:
                 if not gateway_found:
                     gateway_found = True
@@ -117,22 +117,22 @@ def create_interfaces(primary_ip, additional_ips, target_dir):
     routes = []
     if primary_ip.is_private():
         subnet = _get_subnet(primary_ip, primary_ranges)
-        supnet = _get_supnet(primary_ip, primary_ranges, subnet['segment'])
+        uppernet = _get_uppernet(primary_ip, primary_ranges, subnet['segment'])
 
-        if not subnet or not supnet:
+        if not subnet or not uppernet:
             abort('No network found for IP {0}'.format(primary_ip))
 
         if not gateway_found:
             ip_info[primary_ip]['gateway'] = IP(subnet['gateway'])
         
-        netmask = _calc_netmask(supnet)
+        netmask = _calc_netmask(uppernet)
         ip_info[primary_ip]['netmask'] = netmask 
 
         # Route to other segments
         routes.append({
             'ip': '10.0.0.0',
             'netmask': '255.0.0.0',
-            'gw': IP(supnet['gateway'])
+            'gw': IP(uppernet['gateway'])
         })
 
         
