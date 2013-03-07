@@ -117,10 +117,12 @@ def create_interfaces(primary_ip, additional_ips, target_dir):
     routes = []
     if primary_ip.is_private():
         subnet = _get_subnet(primary_ip, primary_ranges)
-        uppernet = _get_uppernet(primary_ip, primary_ranges, subnet['segment'])
-
-        if not subnet or not uppernet:
+        if not subnet:
             abort('No network found for IP {0}'.format(primary_ip))
+
+        uppernet = _get_uppernet(primary_ip, primary_ranges, subnet['segment'])
+        if not uppernet:
+            abort('No upper network found for IP {0}'.format(primary_ip))
 
         if not gateway_found:
             ip_info[primary_ip]['gateway'] = IP(subnet['gateway'])
