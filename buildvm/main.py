@@ -3,6 +3,7 @@ import sys
 from glob import glob
 
 from fabric.api import env, execute, run, prompt
+from fabric.network import disconnect_all
 
 from buildvm.utils import raise_failure, fail_gracefully
 from buildvm.utils.units import convert_size
@@ -13,6 +14,7 @@ from buildvm.utils.preparevm import prepare_vm, copy_postboot_script
 from buildvm.utils.hypervisor import (create_definition, get_hypervisor,
         start_machine)
 from buildvm.utils.portping import wait_until
+from buildvm.utils.virtutils import close_virtconns
 from buildvm.signals import send_signal
 
 
@@ -71,6 +73,8 @@ def setup(config):
     execute(setup_hardware, config)
     env.hosts = [config['hostname']]
     execute(setup_guest, config)
+    close_virtconns()
+    disconnect_all()
 
 def setup_hardware(config, boot=True):
     send_signal('setup_hardware', config, boot)
@@ -129,6 +133,3 @@ def setup_guest(config):
         run('/buildvm-postboot')
         run('rm -f /buildvm-postboot')
 
-
-if __name__ == '__main__':
-    setup(None)
