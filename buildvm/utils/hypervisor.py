@@ -2,16 +2,16 @@ import os
 import uuid
 
 from fabric.api import env, run, puts
-from fabric.contrib.files import exists, upload_template
+from fabric.contrib.files import exists
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, PackageLoader
 
 from buildvm.utils import cmd, fail_gracefully
+from buildvm.utils.template import upload_template
 from buildvm.utils.virtutils import get_virtconn
 
 run = fail_gracefully(run)
 exists = fail_gracefully(exists)
-upload_template = fail_gracefully(upload_template)
 
 class HypervisorError(Exception):
     pass
@@ -26,20 +26,20 @@ def get_hypervisor():
 
 def create_sxp(hostname, num_vcpus, mem_size, max_mem, device):
     dest = os.path.join('/etc/xen/domains', hostname + '.sxp')
-    upload_template('templates/etc/xen/domains/hostname.sxp', dest, {
+    upload_template('etc/xen/domains/hostname.sxp', dest, {
         'hostname': hostname,
         'num_vcpus': num_vcpus,
         'mem_size': mem_size,
         'max_mem': max_mem,
         'device': device,
-    }, use_jinja=True)
+    })
 
 def start_machine_xm(hostname):
     sxp_file = os.path.join('/etc/xen/domains', hostname + '.sxp')
     run(cmd('xm create {0}', sxp_file))
 
 def create_domain_xml(hostname, num_vcpus, mem_size, max_mem, device):
-    jenv = Environment(loader=FileSystemLoader('templates'))
+    jenv = Environment(loader=PackageLoader('buildvm', 'templates'))
     domain_xml = jenv.get_template('libvirt/domain.xml').render(**{
         'hostname': hostname,
         'uuid': uuid.uuid1(),

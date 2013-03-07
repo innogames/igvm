@@ -1,8 +1,15 @@
+import os
 from pipes import quote
-from functools import update_wrapper
+from functools import update_wrapper, partial
 
 from fabric.api import open_shell, prompt, warn
 from fabric.colors import red
+from fabric.contrib.files import upload_template
+
+import buildvm
+
+def get_installdir():
+    return os.path.dirname(buildvm.__file__)
 
 def cmd(cmd, *args, **kwargs):
     escaped_args = [quote(str(arg)) for arg in args]
@@ -37,3 +44,9 @@ def raise_failure(exc_obj):
     warn(red(unicode(exc_obj)))
     raise exc_obj
 raise_failure = fail_gracefully(raise_failure, exc_class=Exception)
+
+
+upload_template = partial(fail_gracefully(upload_template),
+        backup=False,
+        use_jinja=True,
+        template_dir=os.path.join(get_installdir(), 'templates'))

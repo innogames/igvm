@@ -2,17 +2,16 @@ import os
 import math
 
 from fabric.api import run, cd, settings, abort, put
-from fabric.contrib.files import upload_template
 
 from adminapi.utils import IP
 from adminapi import api
 
 from buildvm.utils.sshkeys import create_authorized_keys
+from buildvm.utils.template import upload_template
 from buildvm.utils import fail_gracefully, cmd
 
 run = fail_gracefully(run)
 put = fail_gracefully(put)
-upload_template = fail_gracefully(upload_template)
 
 def set_hostname(target_dir, hostname):
     with cd(target_dir):
@@ -28,17 +27,17 @@ def create_ssh_keys(target_dir):
 
 def create_resolvconf(target_dir, dns_servers):
     with cd(target_dir):
-        upload_template('templates/etc/resolv.conf', 'etc/resolv.conf', {
+        upload_template('etc/resolv.conf', 'etc/resolv.conf', {
             'dns_servers': dns_servers
-        }, use_jinja=True)
+        })
 
 def create_hosts(target_dir):
     with cd(target_dir):
-        upload_template('templates/etc/hosts', 'etc/hosts')
+        upload_template('etc/hosts', 'etc/hosts')
 
 def create_inittab(target_dir):
     with cd(target_dir):
-        upload_template('templates/etc/inittab', 'etc/inittab')
+        upload_template('etc/inittab', 'etc/inittab')
 
 def set_mailname(target_dir, mailname):
     with cd(target_dir):
@@ -50,10 +49,10 @@ def generate_swap(swap_path, size_mb):
 
 def create_fstab(target_dir):
     with cd(target_dir):
-        upload_template('templates/etc/fstab', 'etc/fstab', {
+        upload_template('etc/fstab', 'etc/fstab', {
             'type': 'xfs',
             'mount_options': 'defaults'
-        }, use_jinja=True)
+        })
 
 def _get_subnet(ip, ranges):
     try:
@@ -144,15 +143,15 @@ def create_interfaces(primary_ip, additional_ips, target_dir):
 
     with cd(target_dir):
         run('mkdir -p etc/network')
-        upload_template('templates/etc/network/interfaces', 'etc/network/interfaces', {
+        upload_template('etc/network/interfaces', 'etc/network/interfaces', {
             'iface_primary_ip': iface_primary_ip,
             'iface_additional_ips': iface_additional_ips
-        }, use_jinja=True)
+        })
 
         if routes:
-            upload_template('templates/etc/network/routes', 'etc/network/routes', {
+            upload_template('etc/network/routes', 'etc/network/routes', {
                 'routes': routes
-            }, use_jinja=True)
+            })
 
 def prepare_vm(target_dir, server, mailname, dns_servers, swap_size):
     set_hostname(target_dir, server['hostname'])

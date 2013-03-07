@@ -5,6 +5,9 @@ import argparse
 import sys
 import os
 
+#print('Disabled during the weekend')
+#sys.exit(1)
+
 import adminapi
 from adminapi.utils import IP
 from adminapi.dataset import DatasetError, query
