@@ -12,7 +12,7 @@ class NetworkError(Exception):
     pass
 
 
-_ip_regexp_base = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+_ip_regexp_base = r'(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'
 _ip_regexp = r'^{0}$'.format(_ip_regexp_base)
 _ip_regexp_optional = r'^({0})?$'.format(_ip_regexp_base)
 
@@ -139,15 +139,11 @@ def get_network_config(primary_ip, additional_ips):
             print('Now you can add some routes. Just leave IP empty to quit')
             routes = []
             while True:
-                ip = prompt('IP:', validate=_ip_regexp)
+                ip = prompt('IP:', validate=_ip_regexp_optional)
                 if not ip:
                     break
                 netmask = prompt('Netmask:', validate=_ip_regexp)
-                if not netmask:
-                    break
                 gateway = prompt('Gateway:', validate=_ip_regexp)
-                if not gateway:
-                    break
                 routes.append({
                     'ip': ip,
                     'netmask': netmask,
