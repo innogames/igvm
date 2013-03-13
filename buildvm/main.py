@@ -10,6 +10,7 @@ from buildvm.utils.units import convert_size
 from buildvm.utils.resources import get_meminfo, get_cpuinfo
 from buildvm.utils.storage import prepare_storage, umount_temp, remove_temp
 from buildvm.utils.image import download_image, extract_image, get_images
+from buildvm.utils.network import get_network_config
 from buildvm.utils.preparevm import prepare_vm, copy_postboot_script
 from buildvm.utils.hypervisor import (create_definition, get_hypervisor,
         start_machine)
@@ -52,6 +53,9 @@ def check_config(config):
                 break
             print >> sys.stderr, "Image not found."
 
+    primary_ip = config['server']['intern_ip']
+    additional_ips = config['server']['additional_ips']
+    config['network_config'] = get_network_config(primary_ip, additional_ips)
 
     send_signal('config_finished', config)
 
@@ -103,6 +107,7 @@ def setup_hardware(config, boot=True):
             server=config['server'],
             mailname=config['mailname'],
             dns_servers=config['dns_servers'],
+            network_config=config['network_config'],
             swap_size=config['swap_size'])
 
     if 'postboot_script' in config:

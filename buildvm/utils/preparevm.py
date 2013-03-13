@@ -1,10 +1,7 @@
 import os
-import math
 
-from fabric.api import run, cd, settings, abort, put
+from fabric.api import run, cd, settings, put
 
-from adminapi.utils import IP
-from adminapi import api
 
 from buildvm.utils.sshkeys import create_authorized_keys
 from buildvm.utils.template import upload_template
@@ -54,89 +51,9 @@ def create_fstab(target_dir):
             'mount_options': 'defaults'
         })
 
-def _get_subnet(ip, ranges):
-    try:
-        return [r for r in ranges if r['belongs_to']][0]
-    except IndexError:
-        return False
-
-def _get_uppernet(ip, ranges, segment=None):
-    try:
-        if segment:
-            return [r for r in ranges if r['belongs_to'] is None and
-                    r['segment'] == segment][0]
-        else:
-            return [r for r in ranges if r['belongs_to'] is None][0]
-    except IndexError:
-        return False
-
-def _calc_netmask(iprange):
-    host_bits = int(math.ceil(math.log(iprange['max'] - iprange['min'], 2)))
-    return IP(-1 << host_bits)
-
-def create_interfaces(primary_ip, additional_ips, target_dir):
-    ip_api = api.get('ip')
-
-    ip_info = {}
-    ip_info[primary_ip] = {
-        'gateway': None,
-        'ip': primary_ip
-    }
-    for ip in additional_ips:
-        ip_info[ip] = {
-            'gateway': None,
-            'ip': ip
-        }
-    
-    gateway_found = False
-    primary_ranges = ip_api.get_matching_ranges(primary_ip)
-    if primary_ip.is_public():
-        net = _get_uppernet(primary_ip, primary_ranges)
-        if net:
-            gateway_found = True
-            ip_info[ip]['gateway'] = IP(net['gateway'])
-            ip_info[ip]['netmask'] = _calc_netmask(net)
-        else:
-            abort('No network found for IP {0}'.format(primary_ip))
-
-    for ip in additional_ips:
-        ranges = ip_api.get_matching_ranges(ip)
-        if ip.is_public():
-            net = _get_uppernet(ip, ranges)
-            if net:
-                if not gateway_found:
-                    gateway_found = True
-                    ip_info[ip]['gateway'] = IP(net['gateway'])
-                ip_info[ip]['netmask'] = _calc_netmask(net)
-            else:
-                abort('No network found for IP {0}'.format(ip))
-        else:
-            pass
-
-    routes = []
-    if primary_ip.is_private():
-        subnet = _get_subnet(primary_ip, primary_ranges)
-        if not subnet:
-            abort('No network found for IP {0}'.format(primary_ip))
-
-        uppernet = _get_uppernet(primary_ip, primary_ranges, subnet['segment'])
-        if not uppernet:
-            abort('No upper network found for IP {0}'.format(primary_ip))
-
-        if not gateway_found:
-            ip_info[primary_ip]['gateway'] = IP(subnet['gateway'])
-        
-        netmask = _calc_netmask(uppernet)
-        ip_info[primary_ip]['netmask'] = netmask 
-
-        # Route to other segments
-        routes.append({
-            'ip': '10.0.0.0',
-            'netmask': '255.0.0.0',
-            'gw': IP(uppernet['gateway'])
-        })
-
-        
+def create_interfaces(primary_ip, additional_ips, network_config, target_dir):
+    routes = network_config['routes']
+    ip_info = network_config['ip_info']
 
     iface_primary_ip = ip_info[primary_ip]
     iface_additional_ips = [ip_info[ip] for ip in additional_ips]
@@ -153,12 +70,14 @@ def create_interfaces(primary_ip, additional_ips, target_dir):
                 'routes': routes
             })
 
-def prepare_vm(target_dir, server, mailname, dns_servers, swap_size):
+def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
+               swap_size):
     set_hostname(target_dir, server['hostname'])
     create_ssh_keys(target_dir)
     create_resolvconf(target_dir, dns_servers)
     create_hosts(target_dir)
-    create_interfaces(server['intern_ip'], server['additional_ips'], target_dir)
+    create_interfaces(server['intern_ip'], server['additional_ips'],
+            network_config, target_dir)
     set_mailname(target_dir, mailname)
     
     swap_path = os.path.join(target_dir, 'swap')
