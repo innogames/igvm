@@ -118,7 +118,7 @@ def get_network_config(primary_ip, additional_ips):
     except NetworkError as e:
         print('Could not configure network automatically!')
         print('Make sure that IP ranges are configured correctly in admintool.')
-        print('Error was: ', e)
+        print('Error was: {0}'.format(e))
         
         if confirm('Configure network manually?'):
             ip_info = {}
