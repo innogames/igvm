@@ -12,6 +12,10 @@ class NetworkError(Exception):
     pass
 
 
+_ip_regexp_base = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+_ip_regexp = r'^{0}$'.format(_ip_regexp_base)
+_ip_regexp_optional = r'^({0})?$'.format(_ip_regexp_base)
+
 def _get_subnet(ip, ranges):
     try:
         return [r for r in ranges if r['belongs_to']][0]
@@ -119,8 +123,10 @@ def get_network_config(primary_ip, additional_ips):
         if confirm('Configure network manually?'):
             ip_info = {}
             for ip in chain([primary_ip], additional_ips):
-                netmask = prompt('Netmask for {0}:'.format(ip))
-                gateway = prompt('Gateway for {0}:'.format(ip))
+                netmask = prompt('Netmask for {0}:'.format(ip),
+                        validate=_ip_regexp)
+                gateway = prompt('Gateway for {0}:'.format(ip),
+                        validate=_ip_regexp_optional)
                 ip_info[ip] = {
                     'ip': ip,
                     'netmask': IP(netmask)
@@ -133,10 +139,14 @@ def get_network_config(primary_ip, additional_ips):
             print('Now you can add some routes. Just leave IP empty to quit')
             routes = []
             while True:
-                ip = prompt('IP:')
-                netmask = prompt('Netmask:')
-                gateway = prompt('Gateway:')
-                if not (ip and netmask and gateway):
+                ip = prompt('IP:', validate=_ip_regexp)
+                if not ip:
+                    break
+                netmask = prompt('Netmask:', validate=_ip_regexp)
+                if not netmask:
+                    break
+                gateway = prompt('Gateway:', validate=_ip_regexp)
+                if not gateway:
                     break
                 routes.append({
                     'ip': ip,
@@ -149,6 +159,3 @@ def get_network_config(primary_ip, additional_ips):
             }
         else:
             abort('Could not configure network')
-
-                
-
