@@ -63,7 +63,8 @@ if args.host:
     config['host'] = args.host
 else:
     xen_host = server.get('xen_host')
-    config['host'] = xen_host
+    if xen_host:
+        config['host'] = xen_host
 
 if args.mem:
     config['mem'] = args.mem
