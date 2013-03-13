@@ -109,6 +109,7 @@ def setup_hardware(config, boot=True):
             dns_servers=config['dns_servers'],
             network_config=config['network_config'],
             swap_size=config['swap_size'])
+    send_signal('prepared_vm', config, device, mount_path)
 
     if 'postboot_script' in config:
         copy_postboot_script(mount_path, config['postboot_script'])
@@ -120,6 +121,7 @@ def setup_hardware(config, boot=True):
     hypervisor = get_hypervisor()
     create_definition(server['hostname'], config['num_cpu'], config['mem'],
             config['mem'], device, hypervisor)
+    send_signal('defined_vm', config, hypervisor)
 
     if not boot:
         return
@@ -134,7 +136,8 @@ def setup_hardware(config, boot=True):
 
 
 def setup_guest(config):
+    send_signal('vm_booted', config)
     if 'postboot_script' in config:
         run('/buildvm-postboot')
         run('rm -f /buildvm-postboot')
-
+        send_signal('postboot_executed', config)
