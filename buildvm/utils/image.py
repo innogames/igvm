@@ -30,9 +30,9 @@ def download_image(image):
                 remote_hash = run(cmd('md5sum {0}', image)).split()[0]
         if local_hash != remote_hash:
             run(cmd('rm -f {0}', image))
-            run(cmd('wget {0}', url))
+            run(cmd('wget -nv {0}', url))
     else:
-        run(cmd('wget {0}', url))
+        run(cmd('wget -nv {0}', url))
 
 
 def extract_image(image, target_dir):
