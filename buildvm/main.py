@@ -119,8 +119,12 @@ def setup_hardware(config, boot=True):
 
     server = config['server']
     hypervisor = get_hypervisor()
+    hypervisor_extra = {}
+    for extra in send_signal('hypervisor_extra', config, hypervisor):
+        hypervisor_extra.update(extra)
+   
     create_definition(server['hostname'], config['num_cpu'], config['mem'],
-            config['mem'], device, hypervisor)
+            config['mem'], device, hypervisor, hypervisor_extra)
     send_signal('defined_vm', config, hypervisor)
 
     if not boot:
