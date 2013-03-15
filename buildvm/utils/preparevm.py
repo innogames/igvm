@@ -1,6 +1,6 @@
 import os
 
-from fabric.api import run, cd, settings, put
+from fabric.api import run, cd, put
 
 
 from buildvm.utils.sshkeys import create_authorized_keys
@@ -16,9 +16,8 @@ def set_hostname(target_dir, hostname):
 
 def create_ssh_keys(target_dir):
     with cd(target_dir):
-        with settings(warn_only=True):
-            run('rm etc/ssh/ssh_host_rsa_key')
-            run('rm etc/ssh/ssh_host_dsa_key')
+        run('rm -f etc/ssh/ssh_host_rsa_key')
+        run('rm -f etc/ssh/ssh_host_dsa_key')
         run('ssh-keygen -q -t rsa -N "" -f etc/ssh/ssh_host_rsa_key')
         run('ssh-keygen -q -t dsa -N "" -f etc/ssh/ssh_host_dsa_key')
 
