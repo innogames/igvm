@@ -24,9 +24,11 @@ def get_hypervisor():
     else:
         raise HypervisorError('No hypervisor found')
 
-def create_sxp(hostname, num_vcpus, mem_size, max_mem, device):
+def create_sxp(hostname, num_vcpus, mem_size, max_mem, device, sxp_file=None):
+    if sxp_file is None:
+        sxp_file = 'etc/xen/domains/hostname.sxp'
     dest = os.path.join('/etc/xen/domains', hostname + '.sxp')
-    upload_template('etc/xen/domains/hostname.sxp', dest, {
+    upload_template(sxp_file, dest, {
         'hostname': hostname,
         'num_vcpus': num_vcpus,
         'mem_size': mem_size,
@@ -66,12 +68,13 @@ def start_machine_libvirt(hostname, hypervisor):
     domain = conn.lookupByName(hostname)
     domain.create()
 
-def create_definition(hostname, num_vcpus, mem_size, max_mem, device, hypervisor):
+def create_definition(hostname, num_vcpus, mem_size, max_mem, device, hypervisor, hypervisor_extra):
     if hypervisor == 'libvirt-xen':
         xml = create_domain_xml(hostname, num_vcpus, mem_size, max_mem, device)
         return create_domain(xml, hypervisor)
     elif hypervisor == 'xen':
-        return create_sxp(hostname, num_vcpus, mem_size, max_mem, device)
+        sxp_file = hypervisor_extra.get('sxp_file')
+        return create_sxp(hostname, num_vcpus, mem_size, max_mem, device, sxp_file)
 
 def start_machine(hostname, hypervisor):
     if hypervisor == 'libvirt-xen':
