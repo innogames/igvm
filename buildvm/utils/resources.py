@@ -29,7 +29,8 @@ def get_meminfo():
 def get_cpuinfo():
     """Return a list of dictionaries with info about the CPUs."""
     with hide('everything'):
-        cpuinfo = run('cat /proc/cpuinfo')
+        # Fabric strips all newlines, so we add them again
+        cpuinfo = run('cat /proc/cpuinfo') + '\n\n'
     info = []
     cpu = {}
     for line in cpuinfo.splitlines():
