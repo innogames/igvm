@@ -38,7 +38,7 @@ args = parser.parse_args()
 config = {
     'hostname': args.guest,
     'swap_size': 1024,
-    'mailname': args.guest + 'ig.local',
+    'mailname': args.guest + '.ig.local',
     'dns_servers': ['10.0.0.102', '10.0.0.85', '10.0.0.83']
 }
 
