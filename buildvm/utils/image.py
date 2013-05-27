@@ -6,9 +6,9 @@ from fabric.contrib import files
 
 from buildvm.utils import fail_gracefully, cmd
 
-BASE_URL = 'http://files.innogames.de/'
-PACKET_SERVER = 'packet.ig.local'
-PACKET_DIR = '/www/files.innogames.de/htdocs'
+BASE_URL = 'http://images.ig.local/'
+PACKET_SERVER = 'images.ig.local'
+PACKET_DIR = '/images/domu'
 
 run = fail_gracefully(run)
 

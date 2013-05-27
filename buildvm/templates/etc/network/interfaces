@@ -13,4 +13,6 @@ iface eth0:{{ loop.index }} inet static
     gateway {{ iface_ip.gateway }}{% endif %}
 {% endfor %}
 up . /etc/network/routes
-
+{% if setup_loadbalancer -%}
+up . /etc/network/lb
+{% endif %}

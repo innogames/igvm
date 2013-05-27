@@ -53,9 +53,7 @@ def check_config(config):
                 break
             print >> sys.stderr, "Image not found."
 
-    primary_ip = config['server']['intern_ip']
-    additional_ips = config['server']['additional_ips']
-    config['network_config'] = get_network_config(primary_ip, additional_ips)
+    config['network_config'] = get_network_config(config['server'])
 
     send_signal('config_finished', config)
 

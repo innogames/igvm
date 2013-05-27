@@ -5,6 +5,8 @@ from itertools import chain
 from fabric.contrib.console import confirm
 from fabric.api import prompt, abort
 
+from adminapi.dataset import query
+from adminapi.dataset.exceptions import DatasetError
 from adminapi.utils import IP
 from adminapi import api
 
@@ -112,9 +114,29 @@ def _configure_ips(primary_ip, additional_ips):
         'routes': routes
     }
 
-def get_network_config(primary_ip, additional_ips):
+def get_network_config(server):
+    primary_ip = server['intern_ip']
+    additional_ips = server['additional_ips']
+    network_config = {}
+    
+    network_config['loadbalancer'] = []
+    loadbalancer_successful = True
+    for lb_host in server.get('loadbalancer', set()):
+        try:
+            loadbalancer = query(hostname=lb_host).restrict('intern_ip').get()
+        except DatasetError:
+            print('Could not configure loadbalancer: {0}'.format(lb_host))
+            loadbalancer_successful = False
+        else:
+            network_config['loadbalancer'].append(loadbalancer['intern_ip'])
+
+    if not loadbalancer_successful:
+        if not confirm('Could not configure loadbalancer. Continue?'):
+            abort('Aborting on request')
+
     try:
-        return _configure_ips(primary_ip, additional_ips)
+        network_config.update(_configure_ips(primary_ip, additional_ips))
+        return network_config
     except NetworkError as e:
         print('Could not configure network automatically!')
         print('Make sure that IP ranges are configured correctly in admintool.')
@@ -150,9 +172,8 @@ def get_network_config(primary_ip, additional_ips):
                     'netmask': netmask,
                     'gateway': gateway
                 })
-            return {
-                'ip_info': ip_info,
-                'routes': routes
-            }
+            network_config['ip_info'] = ip_info
+            network_config['routes'] = routes
+            return network_config
         else:
             abort('Could not configure network')
