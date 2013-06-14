@@ -32,13 +32,16 @@ def check_config(config):
     if 'mem' not in config:
         config['mem'] = int(prompt('Memory (in MiB):', validate=r'^\d+$'))
 
+    if 'max_mem' not in config:
+        config['max_mem'] = 16384
+
     if 'num_cpu' not in config:
         config['num_cpu'] = int(prompt('Number of CPUs:', validate='^\d+$'))
 
     if 'disk_size' not in config:
         config['disk_size'] = int(prompt('Disk size (in MiB):',
                 validate=r'^\d+$'))
-    
+
 
     images = get_images()
     if 'image' not in config or config['image'] not in images:
@@ -99,7 +102,7 @@ def setup_hardware(config, boot=True):
 
     download_image(config['image'])
     extract_image(config['image'], mount_path)
-    
+
     send_signal('prepare_vm', config, device, mount_path)
     prepare_vm(mount_path,
             server=config['server'],
@@ -120,9 +123,9 @@ def setup_hardware(config, boot=True):
     hypervisor_extra = {}
     for extra in send_signal('hypervisor_extra', config, hypervisor):
         hypervisor_extra.update(extra)
-   
+
     create_definition(server['hostname'], config['num_cpu'], config['mem'],
-            config['mem'], device, hypervisor, hypervisor_extra)
+            config['max_mem'], device, hypervisor, hypervisor_extra)
     send_signal('defined_vm', config, hypervisor)
 
     if not boot:
