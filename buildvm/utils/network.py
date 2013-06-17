@@ -19,18 +19,20 @@ _ip_regexp = r'^{0}$'.format(_ip_regexp_base)
 _ip_regexp_optional = r'^({0})?$'.format(_ip_regexp_base)
 
 def _get_subnet(ip, ranges):
+    if not ranges:
+        return False
+    
     try:
         return [r for r in ranges if r['belongs_to']][0]
     except IndexError:
-        return False
+        return min(ranges, key=lambda x: x['max'] - x['min'])
 
-def _get_uppernet(ip, ranges, segment=None):
+def _get_uppernet(ip, ranges, subnet=None):
+    if subnet['belongs_to'] is None:
+        return False
     try:
-        if segment:
-            return [r for r in ranges if r['belongs_to'] is None and
-                    r['segment'] == segment][0]
-        else:
-            return [r for r in ranges if r['belongs_to'] is None][0]
+        return [r for r in ranges if r['belongs_to'] is None and
+                subnet['belongs_to'] == r['range_id']][0]
     except IndexError:
         return False
 
@@ -59,7 +61,7 @@ def _configure_ips(primary_ip, additional_ips):
         raise NetworkError('Admintool is down')
 
     if primary_ip.is_public():
-        net = _get_uppernet(primary_ip, primary_ranges)
+        net = _get_subnet(primary_ip, primary_ranges)
         if net:
             gateway_found = True
             ip_info[primary_ip]['gateway'] = IP(net['gateway'])
@@ -91,10 +93,11 @@ def _configure_ips(primary_ip, additional_ips):
         if not subnet:
             raise NetworkError('No network found for IP {0}'.format(primary_ip))
 
-        uppernet = _get_uppernet(primary_ip, primary_ranges, subnet['segment'])
+        uppernet = _get_uppernet(primary_ip, primary_ranges, subnet)
+        add_routes = bool(uppernet)
+        print(" I found uppernet {0}").format(uppernet)
         if not uppernet:
-            raise NetworkError('No upper network found for IP {0}'.format(
-                    primary_ip))
+            uppernet = subnet
 
         if not gateway_found:
             ip_info[primary_ip]['gateway'] = IP(subnet['gateway'])
@@ -103,11 +106,12 @@ def _configure_ips(primary_ip, additional_ips):
         ip_info[primary_ip]['netmask'] = netmask 
 
         # Route to other segments
-        routes.append({
-            'ip': '10.0.0.0',
-            'netmask': '255.0.0.0',
-            'gw': IP(uppernet['gateway'])
-        })
+        if add_routes:
+            routes.append({
+                'ip': '10.0.0.0',
+                'netmask': '255.0.0.0',
+                'gw': IP(uppernet['gateway'])
+            })
 
     return {
         'ip_info': ip_info,
