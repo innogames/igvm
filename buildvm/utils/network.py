@@ -28,7 +28,7 @@ def _get_subnet(ip, ranges):
         return min(ranges, key=lambda x: x['max'] - x['min'])
 
 def _get_uppernet(ip, ranges, subnet=None):
-    if subnet['belongs_to'] is None:
+    if subnet is None or subnet['belongs_to'] is None:
         return False
     try:
         return [r for r in ranges if r['belongs_to'] is None and
@@ -76,7 +76,7 @@ def _configure_ips(primary_ip, additional_ips):
             raise NetworkError('Admintool is down')
         
         if ip.is_public():
-            net = _get_uppernet(ip, ranges)
+            net = _get_subnet(ip, ranges)
             if net:
                 if not gateway_found:
                     gateway_found = True
