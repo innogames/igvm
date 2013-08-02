@@ -30,4 +30,4 @@ def create_authorized_keys(target_dir):
     key_entries = '\n{0}\n'.format('\n'.join(keys))
     with cd(target_dir):
         run('mkdir -p root/.ssh')
-        append('root/.ssh/authorized_keys2', key_entries)
+        append('root/.ssh/authorized_keys', key_entries)
