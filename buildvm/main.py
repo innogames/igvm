@@ -4,6 +4,7 @@ from glob import glob
 
 from fabric.api import env, execute, run, prompt
 from fabric.network import disconnect_all
+from fabric.contrib.console import confirm
 
 from buildvm.utils import raise_failure, fail_gracefully
 from buildvm.utils.units import convert_size
@@ -38,10 +39,15 @@ def check_config(config):
     if 'num_cpu' not in config:
         config['num_cpu'] = int(prompt('Number of CPUs:', validate='^\d+$'))
 
-    if 'disk_size' not in config:
+    correct_disk_size = False
+    if 'disk_size' in config and config.get('check_sanity', True):
+        if config['disk_size'] < 100:
+            question = 'Do you really want a disk size of {0} MiB?'.format(
+                    config['disk_size'])
+            correct_disk_size = not confirm(question)
+    if 'disk_size' not in config or correct_disk_size:
         config['disk_size'] = int(prompt('Disk size (in MiB):',
                 validate=r'^\d+$'))
-
 
     images = get_images()
     if 'image' not in config or config['image'] not in images:
