@@ -6,6 +6,8 @@ from fabric.api import env, execute, run, prompt
 from fabric.network import disconnect_all
 from fabric.contrib.console import confirm
 
+from adminapi.dataset import query
+
 from buildvm.utils import raise_failure, fail_gracefully
 from buildvm.utils.units import convert_size
 from buildvm.utils.resources import get_meminfo, get_cpuinfo
@@ -154,3 +156,27 @@ def setup_guest(config):
         run('/buildvm-postboot')
         run('rm -f /buildvm-postboot')
         send_signal('postboot_executed', config)
+
+def get_config(hostname):
+    server = query(hostname=hostname).get()
+    config = {
+        'hostname': hostname,
+        'swap_size': 1024,
+        'mailname': hostname + '.ig.local',
+        'dns_servers': ['10.0.0.102', '10.0.0.85', '10.0.0.83']
+    }
+    config['server'] = server
+    xen_host = server.get('xen_host')
+    if xen_host:
+        config['host'] = xen_host
+    mem = server.get('memory')
+    if mem:
+        config['mem'] = mem
+    num_cpu = server.get('num_cpu')
+    if num_cpu:
+        config['num_cpu'] = num_cpu
+    disk_size = server.get('disk_size')
+    if disk_size:
+        config['disk_size'] = disk_size
+    
+    return config 
