@@ -85,7 +85,8 @@ def _configure_ips(primary_ip, additional_ips):
             else:
                 raise NetworkError('No network found for IP {0}'.format(ip))
         else:
-            pass
+            net = _get_subnet(ip, ranges)
+            ip_info[ip]['netmask'] = _calc_netmask(net)
 
     routes = []
     if primary_ip.is_private():
