@@ -1,6 +1,8 @@
 import math
 import urllib2
 from itertools import chain
+from socket import inet_ntoa
+from struct import pack
 
 from fabric.contrib.console import confirm
 from fabric.api import prompt, abort
@@ -100,8 +102,10 @@ def _configure_ips(primary_ip, additional_ips):
         if not uppernet:
             uppernet = subnet
 
+        gwdict = ip_api.get_gateway(primary_ip)
+
         if not gateway_found:
-            ip_info[primary_ip]['gateway'] = IP(subnet['gateway'])
+            ip_info[primary_ip]['gateway'] = inet_ntoa(pack('!L',gwdict['default_gateway'][0]))
         
         netmask = _calc_netmask(uppernet)
         ip_info[primary_ip]['netmask'] = netmask 
@@ -111,7 +115,7 @@ def _configure_ips(primary_ip, additional_ips):
             routes.append({
                 'ip': '10.0.0.0',
                 'netmask': '255.0.0.0',
-                'gw': IP(uppernet['gateway'])
+                'gw': inet_ntoa(pack('!L',gwdict['internal_gateway'][0]))
             })
 
     return {
