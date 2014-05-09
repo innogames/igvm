@@ -5,6 +5,9 @@ iface eth0 inet static
     address {{ iface_primary_ip.ip }}
     netmask {{ iface_primary_ip.netmask }}{% if iface_primary_ip.gateway %}
     gateway {{ iface_primary_ip.gateway }}{% endif %}
+    up . /etc/network/routes{% if setup_loadbalancer %}
+    up . /etc/network/lb
+{% endif %}
 {% for iface_ip in iface_additional_ips %}
 auto eth0:{{ loop.index }}
 iface eth0:{{ loop.index }} inet static
@@ -12,7 +15,4 @@ iface eth0:{{ loop.index }} inet static
     netmask {{ iface_ip.netmask }}{% if iface_ip.gateway %}
     gateway {{ iface_ip.gateway }}{% endif %}
 {% endfor %}
-up . /etc/network/routes
-{% if setup_loadbalancer -%}
-up . /etc/network/lb
-{% endif %}
+

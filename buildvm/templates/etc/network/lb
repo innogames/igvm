@@ -1,5 +1,7 @@
+#!/bin/sh
 {% for lb_ip in loadbalancer %}
-ifconfig lo:0 {{ lb_ip }} netmask 255.255.255.255 -arp up
+ip address add {{ lb_ip }} dev lo
 {% endfor %}
 echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
 echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
+
