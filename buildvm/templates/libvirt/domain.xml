@@ -21,6 +21,7 @@
       <target dev='xvda1' bus='xen'/>
     </disk>
     <interface type='ethernet'>
+      <source bridge='br0'/>
       <script path='/etc/xen/scripts/vif-bridge'/>
     </interface>
     <console type='pty' tty='/dev/pts/1'>
