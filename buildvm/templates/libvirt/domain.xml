@@ -21,7 +21,7 @@
       <source dev='{{ device }}'/>
       <target dev='xvda1' bus='xen'/>
     </disk>
-    <interface type='ethernet'>
+    <interface type='bridge'>
       <source bridge='br0'/>
       <script path='/etc/xen/scripts/vif-bridge'/>
     </interface>
