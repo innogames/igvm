@@ -1,13 +1,14 @@
 <domain type='xen'>
   <name>{{ hostname }}</name>
   <uuid>{{ uuid }}</uuid>
-  <memory unit='MiB'>{{ mem_size }}</memory>
+  <memory unit='MiB'>{{ max_mem }}</memory>
   <currentMemory unit='MiB'>{{ mem_size }}</currentMemory>
   <vcpu placement='static' current='{{ num_vcpus }}'>24</vcpu>
   <bootloader></bootloader>
   <os>
     <type>linux</type>
-    <kernel>/boot/vmlinuz-2.6-xenU</kernel>
+    <kernel>/vmlinuz</kernel>
+    <initrd>/initrd.img</initrd>
     <cmdline>root=/dev/xvda1 ro 2 init=/sbin/init console=hvc0 rootflags=allocsize=64k mem={{ max_mem }}M elevator=noop</cmdline>
   </os>
   <clock offset='utc' adjustment='reset'/>
