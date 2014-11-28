@@ -37,6 +37,8 @@ def check_config(config):
 
     if 'max_mem' not in config:
         config['max_mem'] = 16384
+        if config['mem'] > 12288:
+            config['max_mem'] = config['mem'] + 10240
 
     if 'num_cpu' not in config:
         config['num_cpu'] = int(prompt('Number of CPUs:', validate='^\d+$'))
@@ -178,5 +180,5 @@ def get_config(hostname):
     disk_size = server.get('disk_size')
     if disk_size:
         config['disk_size'] = disk_size
-    
-    return config 
+
+    return config
