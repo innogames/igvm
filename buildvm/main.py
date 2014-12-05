@@ -11,7 +11,8 @@ from adminapi.dataset import query
 from buildvm.utils import raise_failure, fail_gracefully
 from buildvm.utils.units import convert_size
 from buildvm.utils.resources import get_meminfo, get_cpuinfo
-from buildvm.utils.storage import prepare_storage, umount_temp, remove_temp
+from buildvm.utils.storage import (prepare_storage, umount_temp,
+        remove_temp, get_vm_block_dev)
 from buildvm.utils.image import download_image, extract_image, get_images
 from buildvm.utils.network import get_network_config
 from buildvm.utils.preparevm import prepare_vm, copy_postboot_script
@@ -97,6 +98,7 @@ def setup_hardware(config, boot=True):
     send_signal('setup_hardware', config, boot)
     meminfo = get_meminfo()
     cpuinfo = get_cpuinfo()
+    hypervisor = get_hypervisor()
 
     mem_free = meminfo['MemFree'] + meminfo['Buffers'] + meminfo['Cached']
     mem_free = convert_size(mem_free, 'B', 'M')
@@ -108,6 +110,8 @@ def setup_hardware(config, boot=True):
     num_cpus = len(cpuinfo)
     if config['num_cpu'] > num_cpus:
         raise_failure(Exception('Not enough CPUs.'))
+
+    config['vm_block_dev'] = get_vm_block_dev(hypervisor)
 
     device, mount_path = prepare_storage(config['hostname'],
             config['disk_size'])
@@ -121,7 +125,8 @@ def setup_hardware(config, boot=True):
             mailname=config['mailname'],
             dns_servers=config['dns_servers'],
             network_config=config['network_config'],
-            swap_size=config['swap_size'])
+            swap_size=config['swap_size'],
+            blk_dev=config['vm_block_dev'])
     send_signal('prepared_vm', config, device, mount_path)
 
     if 'postboot_script' in config:
@@ -131,7 +136,6 @@ def setup_hardware(config, boot=True):
     remove_temp(mount_path)
 
     server = config['server']
-    hypervisor = get_hypervisor()
     hypervisor_extra = {}
     for extra in send_signal('hypervisor_extra', config, hypervisor):
         hypervisor_extra.update(extra)

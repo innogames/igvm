@@ -1,34 +1,46 @@
-<domain type='xen'>
+<domain type='kvm'>
   <name>{{ hostname }}</name>
   <uuid>{{ uuid }}</uuid>
   <memory unit='MiB'>{{ max_mem }}</memory>
   <currentMemory unit='MiB'>{{ mem_size }}</currentMemory>
-  <vcpu placement='static' current='{{ num_vcpus }}'>24</vcpu>
-  <bootloader></bootloader>
+  <vcpu placement='auto' current='{{ num_vcpus }}'>24</vcpu>
   <os>
-    <type>linux</type>
+    <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>
     <kernel>/vmlinuz</kernel>
     <initrd>/initrd.img</initrd>
-    <cmdline>root=/dev/xvda1 ro 2 init=/sbin/init console=hvc0 rootflags=allocsize=64k mem={{ max_mem }}M elevator=noop</cmdline>
+    <cmdline>root=/dev/vda ro 2 console=ttyS0 init=/sbin/init rootflags=allocsize=64k elevator=noop</cmdline>
+    <boot dev='hd'/>
   </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <hap/>
+  </features>
   <clock offset='utc' adjustment='reset'/>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>
-  <on_crash>restart</on_crash>
+  <on_crash>destroy</on_crash>
   <devices>
+    <emulator>/usr/bin/kvm</emulator>
     <disk type='block' device='disk'>
-      <driver name='phy'/>
+      <driver name='qemu' type='raw' cache='none'/>
       <source dev='{{ device }}'/>
-      <target dev='xvda1' bus='xen'/>
+      <target dev='vda' bus='virtio'/>
     </disk>
+    <controller type='pci' index='0' model='pci-root'/>
+    <controller type='virtio-serial' index='0'>
+    </controller>
     <interface type='bridge'>
       <source bridge='br0'/>
-      <script path='/etc/xen/scripts/vif-bridge'/>
+      <model type='virtio'/>
     </interface>
-    <console type='pty' tty='/dev/pts/1'>
-      <source path='/dev/pts/1'/>
-      <target type='xen' port='0'/>
+    <serial type='pty'>
+      <target port='0'/>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
     </console>
+    <memballoon model='virtio'>
+    </memballoon>
   </devices>
 </domain>
-

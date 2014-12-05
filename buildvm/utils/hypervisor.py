@@ -18,7 +18,7 @@ class HypervisorError(Exception):
 
 def get_hypervisor():
     if exists('/var/lib/libvirt'):
-        return 'libvirt-xen'
+        return 'libvirt-kvm'
     elif exists('/proc/xen'):
         return 'xen'
     else:

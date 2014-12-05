@@ -43,9 +43,10 @@ def generate_swap(swap_path, size_mb):
     run(cmd('dd if=/dev/zero of={0} bs=1M count={1}', swap_path, size_mb))
     run(cmd('/sbin/mkswap {0}', swap_path))
 
-def create_fstab(target_dir):
+def create_fstab(target_dir, blk_dev):
     with cd(target_dir):
         upload_template('etc/fstab', 'etc/fstab', {
+            'blk_dev' : blk_dev,
             'type': 'xfs',
             'mount_options': 'defaults'
         })
@@ -76,7 +77,7 @@ def create_interfaces(primary_ip, additional_ips, network_config, target_dir):
             })
 
 def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
-               swap_size):
+               swap_size, blk_dev):
     set_hostname(target_dir, server['hostname'])
     create_ssh_keys(target_dir)
     create_resolvconf(target_dir, dns_servers)
@@ -88,7 +89,7 @@ def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
     swap_path = os.path.join(target_dir, 'swap')
     generate_swap(swap_path, swap_size)
 
-    create_fstab(target_dir)
+    create_fstab(target_dir, blk_dev)
     create_inittab(target_dir)
     create_authorized_keys(target_dir)
 

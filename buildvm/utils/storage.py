@@ -72,6 +72,14 @@ def umount_temp(device_or_path):
 def remove_temp(mount_path):
     run(cmd('rm -rf {0}', mount_path))
 
+def get_vm_block_dev(hypervisor):
+    if hypervisor == 'xen':
+        return 'xvda1'
+    elif hypervisor == 'libvirt-kvm'
+        return 'vda'
+    else:
+        raise_failure(StorageError("VM block device name unknown for hypervisor {0}".format(hypervisor)))
+
 def get_storage_type():
     with settings(warn_only=True), hide('everything'):
         result = run('which santool')
