@@ -77,9 +77,9 @@ def create_definition(hostname, num_vcpus, mem_size, max_mem, device, hypervisor
         return create_sxp(hostname, num_vcpus, mem_size, max_mem, device, sxp_file)
 
 def start_machine(hostname, hypervisor):
-    if hypervisor == 'libvirt-xen':
+    if hypervisor == 'libvirt-kvm':
         start_machine_libvirt(hostname, hypervisor)
     elif hypervisor == 'xen':
         start_machine_xm(hostname)
-
-
+    else:
+        raise ValueError('No valid hypervisor {0}'.format(hypervisor))
