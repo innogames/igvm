@@ -69,12 +69,14 @@ def start_machine_libvirt(hostname, hypervisor):
     domain.create()
 
 def create_definition(hostname, num_vcpus, mem_size, max_mem, device, hypervisor, hypervisor_extra):
-    if hypervisor == 'libvirt-xen':
+    if hypervisor == 'libvirt-kvm':
         xml = create_domain_xml(hostname, num_vcpus, mem_size, max_mem, device)
         return create_domain(xml, hypervisor)
     elif hypervisor == 'xen':
         sxp_file = hypervisor_extra.get('sxp_file')
         return create_sxp(hostname, num_vcpus, mem_size, max_mem, device, sxp_file)
+    else:
+        raise ValueError('Not a valid hypervisor: {0}'.format(hypervisor))
 
 def start_machine(hostname, hypervisor):
     if hypervisor == 'libvirt-kvm':
@@ -82,4 +84,4 @@ def start_machine(hostname, hypervisor):
     elif hypervisor == 'xen':
         start_machine_xm(hostname)
     else:
-        raise ValueError('No valid hypervisor {0}'.format(hypervisor))
+        raise ValueError('Not a valid hypervisor: {0}'.format(hypervisor))
