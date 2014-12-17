@@ -23,11 +23,13 @@
   <devices>
     <emulator>/usr/bin/kvm</emulator>
     <disk type='block' device='disk'>
-      <driver name='qemu' type='raw' cache='none'/>
+      <driver name='qemu' type='raw' cache='none' io='native'/>
       <source dev='{{ device }}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
     <controller type='pci' index='0' model='pci-root'/>
+    <!-- usb can only be disabled with model none -->
+    <controller type='usb' index='0' model='none'/>
     <controller type='virtio-serial' index='0'>
     </controller>
     <interface type='bridge'>
