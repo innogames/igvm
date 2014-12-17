@@ -13,7 +13,7 @@
   </os>
   <features>
     <acpi/>
-    <apic/>
+    <apic eoi='on'/>
     <hap/>
   </features>
   <clock offset='utc' adjustment='reset'/>
