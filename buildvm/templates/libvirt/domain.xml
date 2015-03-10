@@ -34,7 +34,7 @@
     </controller>
     <interface type='bridge'>
       <source bridge='br0'/>
-      <virtualport type='openvswitch' />
+      <virtualport type='openvswitch'/>
       <model type='virtio'/>
     </interface>
     <serial type='pty'>
