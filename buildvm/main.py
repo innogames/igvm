@@ -10,7 +10,7 @@ from adminapi.dataset import query
 
 from buildvm.utils import raise_failure, fail_gracefully
 from buildvm.utils.units import convert_size
-from buildvm.utils.resources import get_meminfo, get_cpuinfo
+from buildvm.utils.resources import get_meminfo, get_cpuinfo, get_ssh_keytypes
 from buildvm.utils.storage import (prepare_storage, umount_temp,
         remove_temp, get_vm_block_dev)
 from buildvm.utils.image import download_image, extract_image, get_images
@@ -127,7 +127,8 @@ def setup_hardware(config, boot=True):
             dns_servers=config['dns_servers'],
             network_config=config['network_config'],
             swap_size=config['swap_size'],
-            blk_dev=config['vm_block_dev'])
+            blk_dev=config['vm_block_dev'],
+            ssh_keytypes=get_ssh_keytypes(config['os']))
     send_signal('prepared_vm', config, device, mount_path)
 
     if 'postboot_script' in config:

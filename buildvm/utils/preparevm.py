@@ -14,12 +14,11 @@ def set_hostname(target_dir, hostname):
     with cd(target_dir):
         run(cmd('echo {0} > etc/hostname', hostname))
 
-def create_ssh_keys(target_dir):
+def create_ssh_keys(target_dir, ssh_keytypes):
     with cd(target_dir):
-        run('rm -f etc/ssh/ssh_host_rsa_key')
-        run('rm -f etc/ssh/ssh_host_dsa_key')
-        run('ssh-keygen -q -t rsa -N "" -f etc/ssh/ssh_host_rsa_key')
-        run('ssh-keygen -q -t dsa -N "" -f etc/ssh/ssh_host_dsa_key')
+        for typ in ssh_keytypes:
+            run('rm -f etc/ssh/ssh_host_{0}_key'.format(typ))
+            run('ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'.format(typ))
 
 def create_resolvconf(target_dir, dns_servers):
     with cd(target_dir):
@@ -77,9 +76,9 @@ def create_interfaces(primary_ip, additional_ips, network_config, target_dir):
             })
 
 def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
-               swap_size, blk_dev):
+               swap_size, blk_dev, ssh_keytypes):
     set_hostname(target_dir, server['hostname'])
-    create_ssh_keys(target_dir)
+    create_ssh_keys(target_dir, ssh_keytypes)
     create_resolvconf(target_dir, dns_servers)
     create_hosts(target_dir)
     create_interfaces(server['intern_ip'], server['additional_ips'],

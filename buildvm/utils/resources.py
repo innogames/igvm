@@ -53,3 +53,13 @@ def get_cpuinfo():
         cpu[key] = value
 
     return info
+
+def get_ssh_keytypes(os):
+    if os == 'squeeze':
+        return ['dsa', 'rsa']
+    elif os == 'wheezy':
+        return ['dsa', 'rsa', 'ecdsa']
+    elif os == 'jessie':
+        return ['dsa', 'rsa', 'ecdsa', 'ed25519']
+    else:
+        return ['dsa', 'rsa']
