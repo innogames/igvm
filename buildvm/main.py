@@ -44,6 +44,9 @@ def check_config(config):
     if 'num_cpu' not in config:
         config['num_cpu'] = int(prompt('Number of CPUs:', validate='^\d+$'))
 
+    if 'os' not in config:
+        config['os'] = prompt('OS:', validate='^[A-Za-z0-9_-]+$')
+
     correct_disk_size = False
     if 'disk_size' in config and config.get('check_sanity', True):
         if config['disk_size'] < 100:
@@ -128,7 +131,7 @@ def setup_hardware(config, boot=True):
             network_config=config['network_config'],
             swap_size=config['swap_size'],
             blk_dev=config['vm_block_dev'],
-            ssh_keytypes=get_ssh_keytypes(config['os']))
+            ssh_keytypes=get_ssh_keytypes())
     send_signal('prepared_vm', config, device, mount_path)
 
     if 'postboot_script' in config:
@@ -186,5 +189,8 @@ def get_config(hostname):
     disk_size = server.get('disk_size')
     if disk_size:
         config['disk_size'] = disk_size
+    os = server.get('os')
+    if os:
+        config['os'] = os
 
     return config
