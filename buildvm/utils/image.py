@@ -35,5 +35,8 @@ def download_image(image):
         run(cmd('wget -nv {0}', url))
 
 
-def extract_image(image, target_dir):
-    run(cmd('tar xfz {0} -C {1}', image, target_dir))
+def extract_image(image, target_dir, hw_os):
+    if hw_os == 'squeeze':
+        run(cmd('tar xfz {0} -C {1}', image, target_dir))
+    else:
+        run(cmd("tar --xattrs --xattrs-include='*' -xzf {0} -C {1}", image, target_dir))

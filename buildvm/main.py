@@ -99,6 +99,7 @@ def setup_hardware(config, boot=True):
     meminfo = get_meminfo()
     cpuinfo = get_cpuinfo()
     hypervisor = get_hypervisor()
+    hw_server = query(hostname=config['host']).get()
 
     mem_free = meminfo['MemFree'] + meminfo['Buffers'] + meminfo['Cached']
     mem_free = convert_size(mem_free, 'B', 'M')
@@ -117,7 +118,7 @@ def setup_hardware(config, boot=True):
             config['disk_size'])
 
     download_image(config['image'])
-    extract_image(config['image'], mount_path)
+    extract_image(config['image'], mount_path, hw_server.get('os', ""))
 
     send_signal('prepare_vm', config, device, mount_path)
     prepare_vm(mount_path,
