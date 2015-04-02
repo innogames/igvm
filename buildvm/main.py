@@ -131,7 +131,7 @@ def setup_hardware(config, boot=True):
             network_config=config['network_config'],
             swap_size=config['swap_size'],
             blk_dev=config['vm_block_dev'],
-            ssh_keytypes=get_ssh_keytypes())
+            ssh_keytypes=get_ssh_keytypes(config['os']))
     send_signal('prepared_vm', config, device, mount_path)
 
     if 'postboot_script' in config:
