@@ -18,4 +18,7 @@ def get_virtconn(host, hypervisor):
 
 def close_virtconns():
     for conn in _conns.values():
-        conn.close()
+        try:
+            conn.close()
+        except libvirt.libvirtError:
+            pass
