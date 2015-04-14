@@ -26,6 +26,9 @@ def get_volume_groups():
     vgroups = []
     for line in lvminfo.splitlines():
         parts = line.strip().split(':')
+        if len(parts) < 16:
+            print("LVM: {}".format(line))
+            continue
         volume_group = parts[0]
         size = int(parts[11]) * 1024
         free = int(parts[15]) * 1024
