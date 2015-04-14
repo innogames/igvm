@@ -8,4 +8,4 @@ maxvcpus=24
 disk=['phy:{{ device }},xvda1,w']
 vif=['']
 extra="2 init=/sbin/init console=hvc0 rootflags=allocsize=64k mem={{ max_mem }}M elevator=noop"
-#ramdisk="/boot/initrd.img-3.2.0-0.bpo.4-amd64"
+ramdisk="/boot/initrd.img-3.6.6-xenu-ig7"
