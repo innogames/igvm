@@ -16,14 +16,6 @@ exists = fail_gracefully(exists)
 class HypervisorError(Exception):
     pass
 
-def get_hypervisor():
-    if exists('/var/lib/libvirt'):
-        return 'libvirt-kvm'
-    elif exists('/proc/xen'):
-        return 'xen'
-    else:
-        raise HypervisorError('No hypervisor found')
-
 def create_sxp(hostname, num_vcpus, mem_size, max_mem, device, sxp_file=None):
     if sxp_file is None:
         sxp_file = 'etc/xen/domains/hostname.sxp'
@@ -69,7 +61,7 @@ def start_machine_libvirt(hostname, hypervisor):
     domain.create()
 
 def create_definition(hostname, num_vcpus, mem_size, max_mem, device, hypervisor, hypervisor_extra):
-    if hypervisor == 'libvirt-kvm':
+    if hypervisor == 'kvm':
         xml = create_domain_xml(hostname, num_vcpus, mem_size, max_mem, device)
         return create_domain(xml, hypervisor)
     elif hypervisor == 'xen':
@@ -79,7 +71,7 @@ def create_definition(hostname, num_vcpus, mem_size, max_mem, device, hypervisor
         raise ValueError('Not a valid hypervisor: {0}'.format(hypervisor))
 
 def start_machine(hostname, hypervisor):
-    if hypervisor == 'libvirt-kvm':
+    if hypervisor == 'kvm':
         start_machine_libvirt(hostname, hypervisor)
     elif hypervisor == 'xen':
         start_machine_xm(hostname)

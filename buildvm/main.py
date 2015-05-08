@@ -16,8 +16,7 @@ from buildvm.utils.storage import (prepare_storage, umount_temp,
 from buildvm.utils.image import download_image, extract_image, get_images
 from buildvm.utils.network import get_network_config
 from buildvm.utils.preparevm import prepare_vm, copy_postboot_script
-from buildvm.utils.hypervisor import (create_definition, get_hypervisor,
-        start_machine)
+from buildvm.utils.hypervisor import (create_definition, start_machine)
 from buildvm.utils.portping import wait_until
 from buildvm.utils.virtutils import close_virtconns
 from buildvm.signals import send_signal
@@ -101,8 +100,8 @@ def setup_hardware(config, boot=True):
     send_signal('setup_hardware', config, boot)
     meminfo = get_meminfo()
     cpuinfo = get_cpuinfo()
-    hypervisor = get_hypervisor()
     hw_server = query(hostname=config['host']).get()
+    hypervisor = hw_server.get('hypervisor', "")
 
     mem_free = meminfo['MemFree'] + meminfo['Buffers'] + meminfo['Cached']
     mem_free = convert_size(mem_free, 'B', 'M')

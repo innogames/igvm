@@ -78,7 +78,7 @@ def remove_temp(mount_path):
 def get_vm_block_dev(hypervisor):
     if hypervisor == 'xen':
         return 'xvda1'
-    elif hypervisor == 'libvirt-kvm':
+    elif hypervisor == 'kvm':
         return 'vda'
     else:
         raise_failure(StorageError("VM block device name unknown for hypervisor {0}".format(hypervisor)))
