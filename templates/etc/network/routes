@@ -1,0 +1,5 @@
+#!/bin/sh
+{% for route in routes %}
+route add -net {{ route.ip }} netmask {{ route.netmask }} gw {{ route.gw }}
+{% endfor %}
+
