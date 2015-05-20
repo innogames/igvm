@@ -1,7 +1,0 @@
-#!/bin/sh
-{% for lb_ip in loadbalancer %}
-ip address add {{ lb_ip }} dev lo
-{% endfor %}
-echo 1 > /proc/sys/net/ipv4/conf/all/arp_ignore
-echo 2 > /proc/sys/net/ipv4/conf/all/arp_announce
-
