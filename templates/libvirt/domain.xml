@@ -1,7 +1,7 @@
 <domain type='kvm'>
   <name>{{ hostname }}</name>
   <uuid>{{ uuid }}</uuid>
-  <memory unit='MiB'>{{ max_mem }}</memory>
+  <memory unit='MiB'>{{ mem_size }}</memory>
   <currentMemory unit='MiB'>{{ mem_size }}</currentMemory>
   <vcpu placement='auto' current='{{ num_vcpus }}'>24</vcpu>
   <os>
