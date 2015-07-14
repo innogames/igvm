@@ -1,0 +1,55 @@
+<domain type='kvm'>
+  <name>{{ hostname }}</name>
+  <uuid>{{ uuid }}</uuid>
+  <maxMemory slots='16' unit='MiB'>{{ max_mem }}</maxMemory>
+  <memory unit='MiB'>{{ mem_size }}</memory>
+  <currentMemory unit='MiB'>{{ mem_size }}</currentMemory>
+  <vcpu placement='auto' current='{{ num_vcpus }}'>24</vcpu>
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>
+    <kernel>/vmlinuz</kernel>
+    <initrd>/initrd.img</initrd>
+    <cmdline>root=/dev/vda ro 2 console=ttyS0 init=/sbin/init rootflags=allocsize=64k elevator=noop</cmdline>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic eoi='on'/>
+    <hap/>
+  </features>
+  <cpu>
+    <numa>
+      <cell id='0' cpus='0-{{ num_vcpus-1 }}' memory='{{ mem_size }}' unit='MiB'/>
+    </numa>
+  </cpu>
+  <clock offset='utc' adjustment='reset'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/usr/bin/kvm</emulator>
+    <disk type='block' device='disk'>
+      <driver name='qemu' type='raw' cache='none' io='native'/>
+      <source dev='{{ device }}'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <controller type='pci' index='0' model='pci-root'/>
+    <!-- usb can only be disabled with model none -->
+    <controller type='usb' index='0' model='none'/>
+    <controller type='virtio-serial' index='0'>
+    </controller>
+    <interface type='bridge'>
+      <source bridge='br0'/>
+      <virtualport type='openvswitch'/>
+      <model type='virtio'/>
+    </interface>
+    <serial type='pty'>
+      <target port='0'/>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+    <memballoon model='none'>
+    </memballoon>
+  </devices>
+</domain>
