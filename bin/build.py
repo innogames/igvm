@@ -54,6 +54,7 @@ try:
 except DatasetError:
     print("Server '{0}' not found".format(args.guest), file=sys.stderr)
     server = {
+        'hostname': args.guest,
         'intern_ip': IP(args.ip),
         'additional_ips': set(map(IP, args.addip))
     }
