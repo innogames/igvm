@@ -6,12 +6,9 @@ from fabric.api import cd, run
 from fabric.contrib.files import append
 
 def find_keys():
-    try:
-        group = grp.getgrnam('sysadmins')
-    except KeyError:
-        return []
 
-    home_dirs = [(user, pwd.getpwnam(user).pw_dir) for user in group.gr_mem]
+    user = os.getlogin()
+    home_dirs = [(user, pwd.getpwnam(user).pw_dir)]
     home_dirs.append(('root', '/root'))
 
     keys = []
