@@ -37,14 +37,13 @@ def download_image(image):
 
     if files.exists(image):
         local_hash = run(cmd('md5sum {0}', image)).split()[0]
-        if not sysadmin:
-            break
-        with settings(host_string=PACKET_SERVER):
-            with cd(PACKET_DIR):
-                remote_hash = run(cmd('md5sum {0}', image)).split()[0]
-        if local_hash != remote_hash:
-            run(cmd('rm -f {0}', image))
-            run(cmd('wget -nv {0}', url))
+        if sysadmin:
+            with settings(host_string=PACKET_SERVER):
+                with cd(PACKET_DIR):
+                    remote_hash = run(cmd('md5sum {0}', image)).split()[0]
+            if local_hash != remote_hash:
+                run(cmd('rm -f {0}', image))
+                run(cmd('wget -nv {0}', url))
     else:
         run(cmd('wget -nv {0}', url))
 
