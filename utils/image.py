@@ -1,5 +1,7 @@
 import urllib2
+import grp
 import re
+import os
 
 from fabric.api import run, cd, settings
 from fabric.contrib import files
@@ -23,17 +25,26 @@ def get_images():
 def download_image(image):
     url = BASE_URL + image
     
+    try:
+        group = grp.getgrnam('sysadmins')
+    except: 
+        group = []
+
+    if os.getlogin() in group.gr_mem:
+        sysadmin = True
+    else:
+        sysadmin = False
+
     if files.exists(image):
         local_hash = run(cmd('md5sum {0}', image)).split()[0]
-        try:
-            with settings(host_string=PACKET_SERVER):
-                with cd(PACKET_DIR):
-                    remote_hash = run(cmd('md5sum {0}', image)).split()[0]
-            if local_hash != remote_hash:
-                run(cmd('rm -f {0}', image))
-                run(cmd('wget -nv {0}', url))
-        except:
-            pass
+        if not sysadmin:
+            break
+        with settings(host_string=PACKET_SERVER):
+            with cd(PACKET_DIR):
+                remote_hash = run(cmd('md5sum {0}', image)).split()[0]
+        if local_hash != remote_hash:
+            run(cmd('rm -f {0}', image))
+            run(cmd('wget -nv {0}', url))
     else:
         run(cmd('wget -nv {0}', url))
 
