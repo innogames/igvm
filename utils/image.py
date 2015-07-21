@@ -1,5 +1,6 @@
 import urllib2
 import grp
+import pwd
 import re
 import os
 
@@ -30,7 +31,9 @@ def download_image(image):
     except: 
         group = []
 
-    if os.getlogin() in group.gr_mem:
+    user = pwd.getpwuid(os.geteuid()).pw_name
+
+    if user in group.gr_mem:
         sysadmin = True
     else:
         sysadmin = False
