@@ -34,6 +34,11 @@
     </controller>
     <interface type='bridge'>
       <source bridge='br0'/>
+{% if vlan %}
+      <vlan>
+        <tag id='{{ vlan }}'/>
+      </vlan>
+{% endif %}
       <virtualport type='openvswitch'/>
       <model type='virtio'/>
     </interface>

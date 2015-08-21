@@ -50,30 +50,13 @@ def create_fstab(target_dir, blk_dev):
             'mount_options': 'defaults'
         })
 
-def create_interfaces(primary_ip, additional_ips, network_config, target_dir):
-    routes = network_config['routes']
-    ip_info = network_config['ip_info']
-    loadbalancer = network_config['loadbalancer']
-
-    iface_primary_ip = ip_info[primary_ip]
-    iface_additional_ips = [ip_info[ip] for ip in additional_ips]
+def create_interfaces(network_config, target_dir):
 
     with cd(target_dir):
         run('mkdir -p etc/network')
         upload_template('etc/network/interfaces', 'etc/network/interfaces', {
-            'iface_primary_ip': iface_primary_ip,
-            'iface_additional_ips': iface_additional_ips,
-            'setup_loadbalancer': loadbalancer
+            'network_config': network_config,
         })
-        if loadbalancer:
-            upload_template('etc/network/lb', 'etc/network/lb', {
-                'loadbalancer': loadbalancer
-            })
-
-        if routes:
-            upload_template('etc/network/routes', 'etc/network/routes', {
-                'routes': routes
-            })
 
 def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
                swap_size, blk_dev, ssh_keytypes):
@@ -81,8 +64,7 @@ def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
     create_ssh_keys(target_dir, ssh_keytypes)
     create_resolvconf(target_dir, dns_servers)
     create_hosts(target_dir)
-    create_interfaces(server['intern_ip'], server['additional_ips'],
-            network_config, target_dir)
+    create_interfaces(network_config, target_dir)
     set_mailname(target_dir, mailname)
     
     swap_path = os.path.join(target_dir, 'swap')

@@ -15,122 +15,52 @@ from adminapi import api
 class NetworkError(Exception):
     pass
 
-
-_ip_regexp_base = r'(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'
-_ip_regexp = r'^{0}$'.format(_ip_regexp_base)
-_ip_regexp_optional = r'^({0})?$'.format(_ip_regexp_base)
-
-def _get_subnet(ip, ranges):
-    if not ranges:
-        return False
-    
-    try:
-        return [r for r in ranges if r['belongs_to']][0]
-    except IndexError:
-        return min(ranges, key=lambda x: x['max'] - x['min'])
-
-def _calc_netmask(iprange):
-    host_bits = int(math.ceil(math.log(iprange['max'] - iprange['min'], 2)))
-    return IP(-1 << host_bits)
-
-def _configure_ips(primary_ip, additional_ips):
+def get_network_config(server, hv_vlans):
     ip_api = api.get('ip')
-    
-    ip_info = {}
-    ip_info[primary_ip] = {
-        'gateway': None,
-        'ip': primary_ip
-    }
-    for ip in additional_ips:
-        ip_info[ip] = {
-            'gateway': None,
-            'ip': ip
-        }
-    
-    gateway_found = False
-    try:
-        primary_ranges = ip_api.get_matching_ranges(primary_ip)
-    except urllib2.URLError:
-        raise NetworkError('Admintool is down')
 
-    routes = []
-    net = ip_api.get_network_settings(primary_ip)
-    ip_info[primary_ip]['gateway'] = net['default_gateway']
-    ip_info[primary_ip]['netmask'] = net['netmask']
-
-    # Route to other segments
-    if net['default_gateway']:
-        routes.append({
-            'ip': '10.0.0.0',
-            'netmask': '255.0.0.0',
-            'gw': net['default_gateway'],
-        })
-
-    return {
-        'ip_info': ip_info,
-        'routes': routes
+    ip_info = {
+        'address4': server['intern_ip'] if 'intern_ip' in server else None,
+        'netmask4': None,
+        'gateway4': None,
+        'address6': server['primary_ip6'] if 'primary_ip6' in server else None,
+        'netmask6': None,
+        'gateway6': None,
+        'vlan':     None,
     }
 
-def get_network_config(server):
-    primary_ip = server['intern_ip']
-    additional_ips = server['additional_ips']
-    network_config = {}
-    
-    network_config['loadbalancer'] = []
-    loadbalancer_successful = True
-    for lb_host in server.get('loadbalancer', set()):
+    if ip_info['address4']:
         try:
-            loadbalancer = query(hostname=lb_host).restrict('intern_ip').get()
-        except DatasetError:
-            print('Could not configure loadbalancer: {0}'.format(lb_host))
-            loadbalancer_successful = False
+            net4 = ip_api.get_network_settings(ip_info['address4'])
+        except urllib2.URLError:
+            raise NetworkError('Admintool is down')
+        except Exception as e:
+            print('Could not configure network automatically!')
+            print('Make sure that IP ranges are configured correctly in admintool.')
+            abort('Error was: {0}'.format(e))
         else:
-            network_config['loadbalancer'].append(loadbalancer['intern_ip'])
+            # Copy settings from Admintool. Use only internal gateway, it should be enough for installation.
+            ip_info['netmask4'] = net4['prefix_hi']
+            ip_info['gateway4'] = net4['internal_gateway']
 
-    if not loadbalancer_successful:
-        if not confirm('Could not configure loadbalancer. Continue?'):
-            abort('Aborting on request')
-
-    try:
-        network_config.update(_configure_ips(primary_ip, additional_ips))
-        return network_config
-    except NetworkError as e:
-        print('Could not configure network automatically!')
-        print('Make sure that IP ranges are configured correctly in admintool.')
-        print('You should have a *.scope-internal ip range in your segment.')
-        print('Error was: {0}'.format(e))
-        
-        if confirm('Configure network manually?'):
-            ip_info = {}
-            for ip in chain([primary_ip], additional_ips):
-                netmask = prompt('Netmask for {0}:'.format(ip),
-                        validate=_ip_regexp)
-                gateway = prompt('Gateway for {0}:'.format(ip),
-                        validate=_ip_regexp_optional)
-                ip_info[ip] = {
-                    'ip': ip,
-                    'netmask': IP(netmask)
-                }
-                if gateway:
-                    ip_info[ip]['gateway'] = IP(gateway)
-                else:
-                    ip_info[ip]['gateway'] = None
-            print('Thanks for IP configuration!')
-            print('Now you can add some routes. Just leave IP empty to quit')
-            routes = []
-            while True:
-                ip = prompt('IP:', validate=_ip_regexp_optional)
-                if not ip:
-                    break
-                netmask = prompt('Netmask:', validate=_ip_regexp)
-                gateway = prompt('Gateway:', validate=_ip_regexp)
-                routes.append({
-                    'ip': ip,
-                    'netmask': netmask,
-                    'gateway': gateway
-                })
-            network_config['ip_info'] = ip_info
-            network_config['routes'] = routes
-            return network_config
+    if ip_info['address6']:
+        try:
+            net6 = ip_api.get_network_settings(ip_info['address6'])
+        except urllib2.URLError:
+            raise NetworkError('Admintool is down')
+        except Exception as e:
+            print('Could not configure network automatically!')
+            print('Make sure that IP ranges are configured correctly in admintool.')
+            abort('Error was: {0}'.format(e))
         else:
-            abort('Could not configure network')
+            # Copy settings from Admintool. Use only internal gateway, it should be enough for installation.
+            ip_info['netmask6'] = net6['prefix_hi']
+            ip_info['gateway6'] = net6['internal_gateway']
+
+    # Configure VLAN on Hypervisor.
+    if net4 and 'vlan' in net4 and hv_vlans:
+        if net4['vlan'] not in hv_vlans:
+            abort("The Hypervisor on which you try to create this VM has VLAN support but no VLAN {0} configured!".format(net4['vlan']))
+        ip_info['vlan'] = net4['vlan']
+
+    return ip_info
+

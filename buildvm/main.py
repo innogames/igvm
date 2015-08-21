@@ -67,7 +67,9 @@ def check_config(config):
                 break
             print >> sys.stderr, "Image not found."
 
-    config['network_config'] = get_network_config(config['server'])
+    hw_server = query(hostname=config['host']).get()
+    hv_vlans = hw_server['network_vlans'] if 'network_vlans' in hw_server else None
+    config['network_config'] = get_network_config(config['server'], hv_vlans)
 
     send_signal('config_finished', config)
 
@@ -142,7 +144,8 @@ def setup_hardware(config, boot=True):
         hypervisor_extra.update(extra)
    
     create_definition(server['hostname'], config['num_cpu'], config['mem'],
-            config['max_mem'], device, hypervisor, hypervisor_extra)
+            config['max_mem'], config['network_config']['vlan'],
+            device, hypervisor, hypervisor_extra)
     send_signal('defined_vm', config, hypervisor)
 
     if not boot:
