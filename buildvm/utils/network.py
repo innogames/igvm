@@ -29,15 +29,6 @@ def _get_subnet(ip, ranges):
     except IndexError:
         return min(ranges, key=lambda x: x['max'] - x['min'])
 
-def _get_uppernet(ip, ranges, subnet=None):
-    if subnet is None or subnet['belongs_to'] is None:
-        return False
-    try:
-        return [r for r in ranges if r['belongs_to'] is None and
-                subnet['belongs_to'] == r['range_id']][0]
-    except IndexError:
-        return False
-
 def _calc_netmask(iprange):
     host_bits = int(math.ceil(math.log(iprange['max'] - iprange['min'], 2)))
     return IP(-1 << host_bits)
@@ -62,61 +53,18 @@ def _configure_ips(primary_ip, additional_ips):
     except urllib2.URLError:
         raise NetworkError('Admintool is down')
 
-    if primary_ip.is_public():
-        net = _get_subnet(primary_ip, primary_ranges)
-        if net:
-            gateway_found = True
-            ip_info[primary_ip]['gateway'] = IP(net['gateway'])
-            ip_info[primary_ip]['netmask'] = _calc_netmask(net)
-        else:
-            raise NetworkError('No network found for IP {0}'.format(primary_ip))
-
-    for ip in additional_ips:
-        try:
-            ranges = ip_api.get_matching_ranges(ip)
-        except urllib2.URLError:
-            raise NetworkError('Admintool is down')
-        
-        if ip.is_public():
-            net = _get_subnet(ip, ranges)
-            if net:
-                if not gateway_found:
-                    gateway_found = True
-                    ip_info[ip]['gateway'] = IP(net['gateway'])
-                ip_info[ip]['netmask'] = _calc_netmask(net)
-            else:
-                raise NetworkError('No network found for IP {0}'.format(ip))
-        else:
-            net = _get_subnet(ip, ranges)
-            ip_info[ip]['netmask'] = _calc_netmask(net)
-
     routes = []
-    if primary_ip.is_private():
-        subnet = _get_subnet(primary_ip, primary_ranges)
-        if not subnet:
-            raise NetworkError('No network found for IP {0}'.format(primary_ip))
+    net = ip_api.get_network_settings(primary_ip)
+    ip_info[primary_ip]['gateway'] = net['default_gateway']
+    ip_info[primary_ip]['netmask'] = net['netmask']
 
-        uppernet = _get_uppernet(primary_ip, primary_ranges, subnet)
-        add_routes = bool(uppernet)
-        print(" I found uppernet {0}").format(uppernet)
-        if not uppernet:
-            uppernet = subnet
-
-        gwdict = ip_api.get_gateway(primary_ip)
-
-        if not gateway_found:
-            ip_info[primary_ip]['gateway'] = inet_ntoa(pack('!L',gwdict['default_gateway'][0]))
-        
-        netmask = _calc_netmask(uppernet)
-        ip_info[primary_ip]['netmask'] = netmask 
-
-        # Route to other segments
-        if add_routes:
-            routes.append({
-                'ip': '10.0.0.0',
-                'netmask': '255.0.0.0',
-                'gw': inet_ntoa(pack('!L',gwdict['internal_gateway'][0]))
-            })
+    # Route to other segments
+    if net['default_gateway']:
+        routes.append({
+            'ip': '10.0.0.0',
+            'netmask': '255.0.0.0',
+            'gw': net['default_gateway'],
+        })
 
     return {
         'ip_info': ip_info,
