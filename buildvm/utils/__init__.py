@@ -43,10 +43,6 @@ def fail_gracefully(fn, exc_class=SystemExit):
 def raise_failure(exc_obj):
     warn(red(unicode(exc_obj)))
     raise exc_obj
+
 raise_failure = fail_gracefully(raise_failure, exc_class=Exception)
 
-
-upload_template = partial(fail_gracefully(upload_template),
-        backup=False,
-        use_jinja=True,
-        template_dir=os.path.join(get_installdir(), 'templates'))

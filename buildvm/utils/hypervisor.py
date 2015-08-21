@@ -33,7 +33,7 @@ def start_machine_xm(hostname):
     run(cmd('xm create {0}', sxp_file))
 
 def create_domain_xml(hostname, num_vcpus, mem_size, max_mem, device):
-    jenv = Environment(loader=PackageLoader('buildvm', 'templates'))
+    jenv = Environment(loader=PackageLoader('buildvm', '../templates'))
     domain_xml = jenv.get_template('libvirt/domain.xml').render(**{
         'hostname': hostname,
         'uuid': uuid.uuid1(),
