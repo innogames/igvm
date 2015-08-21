@@ -64,7 +64,6 @@ def start_machine_libvirt(hostname, hypervisor):
 def create_definition(hostname, num_vcpus, mem_size, max_mem, vlan, device, hypervisor, hypervisor_extra):
     if hypervisor == 'kvm':
         xml = create_domain_xml(hostname, num_vcpus, mem_size, max_mem, vlan, device)
-        print xml
         return create_domain(xml, hypervisor)
     elif hypervisor == 'xen':
         sxp_file = hypervisor_extra.get('sxp_file')

@@ -15,7 +15,7 @@ from buildvm.utils.storage import (prepare_storage, umount_temp,
         remove_temp, get_vm_block_dev)
 from buildvm.utils.image import download_image, extract_image, get_images
 from buildvm.utils.network import get_network_config
-from buildvm.utils.preparevm import prepare_vm, copy_postboot_script
+from buildvm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet
 from buildvm.utils.hypervisor import (create_definition, start_machine)
 from buildvm.utils.portping import wait_until
 from buildvm.utils.virtutils import close_virtconns
@@ -82,16 +82,22 @@ def setup(config):
 
     check_config(config)
 
+    # Configuration of Fabric:
     env.disable_known_hosts = True
     env.use_ssh_config = True
     env.always_use_pty = False
     env.forward_agent = True
     env.user = 'root'
     env.shell = '/bin/bash -c'
+
+    # Perform operations on Hypervisor
     env.hosts = [config['host']]
     execute(setup_hardware, config)
+
+    # Perform operations on Virtual Machine
     env.hosts = [config['hostname']]
     execute(setup_guest, config)
+
     close_virtconns()
     disconnect_all()
 
@@ -131,6 +137,9 @@ def setup_hardware(config, boot=True):
             blk_dev=config['vm_block_dev'],
             ssh_keytypes=get_ssh_keytypes(config['os']))
     send_signal('prepared_vm', config, device, mount_path)
+
+    if config['runpuppet']:
+        run_puppet(mount_path, config['server']['hostname'])
 
     if 'postboot_script' in config:
         copy_postboot_script(mount_path, config['postboot_script'])

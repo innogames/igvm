@@ -1,6 +1,6 @@
 import os
 
-from fabric.api import run, cd, put
+from fabric.api import run, cd, put, settings
 
 
 from buildvm.utils.sshkeys import create_authorized_keys
@@ -77,3 +77,10 @@ def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
 def copy_postboot_script(target_dir, script):
     with cd(target_dir):
         put(script, 'buildvm-postboot', mode=755)
+
+def run_puppet(target_dir, hostname):
+    with settings(host_string='master.puppet.ig.local'):
+        run('/usr/bin/puppet cert clean {0}.ig.local'.format(hostname))
+    with cd(target_dir):
+        run('chroot . /usr/bin/puppet agent -v --fqdn={}.ig.local --waitforcert 60 --onetime --no-daemonize'.format(hostname))
+

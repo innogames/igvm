@@ -29,6 +29,8 @@ parser.add_argument('--disksize', metavar='disksize', type=int,
 parser.add_argument('--boot', action='store_true', help='Boot after setup')
 parser.add_argument('--postboot', metavar='postboot_script',
         help='Run postboot_script on the guest after first boot')
+parser.add_argument('--nopuppet', action='store_true',
+        help='Skip running puppet in chroot before powering up',)
 parser.add_argument('-o', metavar='key=value', nargs='+',
         type=lambda x: x.split('=', 1), help='Sets an option')
 
@@ -95,6 +97,11 @@ else:
 
 if args.image:
     config['image'] = args.image
+
+if args.nopuppet:
+    config['runpuppet'] = False
+else:
+    config['runpuppet'] = True
 
 if args.boot:
     config['boot'] = True
