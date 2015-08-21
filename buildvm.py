@@ -20,8 +20,6 @@ parser.add_argument('--host', metavar='host', help='Hostname of the host system'
 parser.add_argument('--image', metavar='image', help='Image file for the guest')
 parser.add_argument('--ip', metavar='intern_ip', help='Internal IP of the guest')
 parser.add_argument('--os', metavar='os', help='operating system of the guest')
-parser.add_argument('--addip', metavar='additional_ip', action='append',
-        help='Additional IPs of the guest. You can use this multiple times.')
 parser.add_argument('--mem', metavar='memory', type=int,
         help='Memory of the guest in MiB')
 parser.add_argument('--numcpu', metavar='numcpu', type=int,
@@ -56,7 +54,6 @@ except DatasetError:
     server = {
         'hostname': args.guest,
         'intern_ip': IP(args.ip),
-        'additional_ips': set(map(IP, args.addip))
     }
 
 config['server'] = server
