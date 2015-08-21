@@ -7,7 +7,7 @@ from fabric.contrib.files import append
 
 def find_keys():
 
-    user = os.getlogin()
+    user = pwd.getpwuid(os.getuid())[0]
     home_dirs = [(user, pwd.getpwnam(user).pw_dir)]
     home_dirs.append(('root', '/root'))
 
