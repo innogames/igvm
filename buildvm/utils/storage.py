@@ -23,7 +23,7 @@ def get_volume_groups():
     if lvminfo.failed:
         warn("No LVM found")
         raise_failure(StorageError("No LVM found"))
-    
+
     vgroups = []
     for line in lvminfo.splitlines():
         parts = line.strip().split(':')
@@ -33,7 +33,7 @@ def get_volume_groups():
         volume_group = parts[0]
         size = int(parts[11]) * 1024
         free = int(parts[15]) * 1024
-        
+
         vgroups.append({
             'name': volume_group,
             'size_total': size,
@@ -56,7 +56,7 @@ def create_logical_volume(volume_group, name, size_mb):
             run(cmd('lvremove -f {0}', volume))
 
     run(cmd('lvcreate -L {0}M -n {1} {2}', size_mb, name, volume_group))
-    return volume 
+    return volume
 
 def format_device(device):
     with settings(warn_only=True):
@@ -112,7 +112,7 @@ def get_san_arrays():
                 array['num_total'] = int(match.group(2))
     if array:
         arrays.append(array)
-    
+
     return arrays
 
 def choose_array(arrays):
@@ -122,7 +122,7 @@ def create_san_raid(name, array):
     run(cmd('santool --build-raid -u {0} --array-number {1}', name, array))
     return os.path.join('/dev', 'san', 'raid', name)
 
-def prepare_storage(hostname, disk_size):
+def prepare_storage(hostname, disk_size_gib):
     storage_type = get_storage_type()
     if storage_type == 'san':
         san_arrays = get_san_arrays()
@@ -134,9 +134,9 @@ def prepare_storage(hostname, disk_size):
             raise_failure(StorageError('No volume groups found'))
         volume_group = volume_groups[0]
         volume = volume_group['name']
-        if convert_size(volume_group['size_free'], 'B', 'M') < disk_size:
+        if convert_size(volume_group['size_free'], 'B', 'G') < disk_size_gib:
             raise_failure(StorageError('No enough free space'))
-        device = create_logical_volume(volume, hostname, disk_size)
+        device = create_logical_volume(volume, hostname, disk_size_gib)
 
     format_device(device)
     mount_path = mount_temp(device, suffix='-' + hostname)

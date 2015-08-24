@@ -20,12 +20,12 @@ parser.add_argument('--host', metavar='host', help='Hostname of the host system'
 parser.add_argument('--image', metavar='image', help='Image file for the guest')
 parser.add_argument('--ip', metavar='intern_ip', help='Internal IP of the guest')
 parser.add_argument('--os', metavar='os', help='operating system of the guest')
-parser.add_argument('--mem', metavar='memory', type=int,
+parser.add_argument('--mem', metavar='MiB', type=int,
         help='Memory of the guest in MiB')
-parser.add_argument('--numcpu', metavar='numcpu', type=int,
+parser.add_argument('--numcpu', metavar='n', type=int,
         help='Number of CPUs for the guest')
-parser.add_argument('--disksize', metavar='disksize', type=int,
-        help='Disk size of the guest in MiB')
+parser.add_argument('--disk', metavar='GiB', type=int,
+        help='Disk size of the guest in GiB')
 parser.add_argument('--boot', action='store_true', help='Boot after setup')
 parser.add_argument('--postboot', metavar='postboot_script',
         help='Run postboot_script on the guest after first boot')
@@ -88,12 +88,12 @@ else:
     if num_cpu:
         config['num_cpu'] = num_cpu
 
-if args.disksize:
-    config['disk_size'] = args.disksize
+if args.disk:
+    config['disk_size_gib'] = args.disk
 else:
-    disk_size = server.get('disk_size')
-    if disk_size:
-        config['disk_size'] = disk_size
+    disk_size_mib = server.get('disk_size_mib')
+    if disk_size_mib:
+        config['disk_size_mib'] = disk_size_mib
 
 if args.image:
     config['image'] = args.image

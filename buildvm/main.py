@@ -55,11 +55,11 @@ def check_config(config):
     if 'os' not in config:
         raise_failure(Exception('"os" is not set.'))
 
-    if 'disk_size' not in config:
-        raise_failure(Exception('"disk_size" is not set.'))
+    if 'disk_size_gib' not in config:
+        raise_failure(Exception('"disk_size_gib" is not set.'))
 
-    if config['disk_size'] < 100:
-        raise_failure(Exception('"disk_size" is less then 100 MiB.'))
+    if config['disk_size_gib'] > 0:
+        raise_failure(Exception('"disk_size_gib" is not positive.'))
 
     if 'image' not in config:
         config['image'] = config['os'] + '-base.tar.gz'
@@ -124,7 +124,7 @@ def setup_hardware(config, boot=True):
     config['vm_block_dev'] = get_vm_block_dev(hypervisor)
 
     device, mount_path = prepare_storage(config['hostname'],
-            config['disk_size'])
+            config['disk_size_gib'])
 
     download_image(config['image'])
     extract_image(config['image'], mount_path, hw_server.get('os', ""))
@@ -196,9 +196,9 @@ def get_config(hostname):
     num_cpu = server.get('num_cpu')
     if num_cpu:
         config['num_cpu'] = num_cpu
-    disk_size = server.get('disk_size')
-    if disk_size:
-        config['disk_size'] = disk_size
+    disk_size_gib = server.get('disk_size_gib')
+    if disk_size_gib:
+        config['disk_size_gib'] = disk_size_gib
     os = server.get('os')
     if os:
         config['os'] = os
