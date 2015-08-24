@@ -1,8 +1,7 @@
-import os
-import sys
+import os, sys, re
 from glob import glob
 
-from fabric.api import env, execute, run, prompt
+from fabric.api import env, execute, run
 from fabric.network import disconnect_all
 from fabric.contrib.console import confirm
 
@@ -27,45 +26,48 @@ def check_config(config):
     send_signal('config_created', config)
 
     if 'host' not in config:
-        config['host'] = prompt('Hostname for dom0:',
-                validate=r'^[a-z][a-z0-9_-]+')
-    
+        raise_failure(Exception('"host" is not set.'))
+
+    if re.match('^[a-z][a-z0-9_-]+', config['host']):
+        raise_failure(Exception('"host" does not fit the pattern.'))
+
     if 'mem' not in config:
-        config['mem'] = int(prompt('Memory (in MiB):', validate=r'^\d+$'))
+        raise_failure(Exception('"mem" is not set.'))
+
+    if config['mem'] > 0:
+        raise_failure(Exception('"mem" is not positive.'))
 
     if 'max_mem' not in config:
-        config['max_mem'] = 16384
         if config['mem'] > 12288:
             config['max_mem'] = config['mem'] + 10240
-    
+        else:
+            config['max_mem'] = 16384
+
+    if config['max_mem'] > 0:
+        raise_failure(Exception('"max_mem" is not positive.'))
+
     if 'num_cpu' not in config:
-        config['num_cpu'] = int(prompt('Number of CPUs:', validate='^\d+$'))
+        raise_failure(Exception('"num_cpu" is not set.'))
+
+    if config['num_cpu'] > 0:
+        raise_failure(Exception('"num_cpu" is not positive.'))
 
     if 'os' not in config:
-        config['os'] = prompt('OS:', validate='^[A-Za-z0-9_-]+$')
+        raise_failure(Exception('"os" is not set.'))
 
-    correct_disk_size = False
-    if 'disk_size' in config and config.get('check_sanity', True):
-        if config['disk_size'] < 100:
-            question = 'Do you really want a disk size of {0} MiB?'.format(
-                    config['disk_size'])
-            correct_disk_size = not confirm(question)
-    if 'disk_size' not in config or correct_disk_size:
-        config['disk_size'] = int(prompt('Disk size (in MiB):',
-                validate=r'^\d+$'))
+    if 'disk_size' not in config:
+        raise_failure(Exception('"disk_size" is not set.'))
+
+    if config['disk_size'] < 100:
+        raise_failure(Exception('"disk_size" is less then 100 MiB.'))
+
+    if 'image' not in config:
+        config['image'] = config['os'] + '-base.tar.gz'
 
     images = get_images()
-    if 'image' not in config or config['image'] not in images:
-        if 'image' not in config:
-            msg = 'Please specify an image. Available images: '
-        else:
-            msg = 'Image not found. Available images: '
-        print(msg + ' '.join(images))
-        while True:
-            config['image'] = prompt('Image:', validate='^[\w_-]+\.tar\.gz$')
-            if config['image'] in images:
-                break
-            print >> sys.stderr, "Image not found."
+    if config['image'] not in images:
+        raise_failure(Exception('Image not found. Available images: ' +
+                                ' '.join(images)))
 
     hw_server = query(hostname=config['host']).get()
     hv_vlans = hw_server['network_vlans'] if 'network_vlans' in hw_server else None
@@ -126,7 +128,7 @@ def setup_hardware(config, boot=True):
 
     download_image(config['image'])
     extract_image(config['image'], mount_path, hw_server.get('os', ""))
-    
+
     send_signal('prepare_vm', config, device, mount_path)
     prepare_vm(mount_path,
             server=config['server'],
@@ -146,12 +148,12 @@ def setup_hardware(config, boot=True):
 
     umount_temp(device)
     remove_temp(mount_path)
-    
+
     server = config['server']
     hypervisor_extra = {}
     for extra in send_signal('hypervisor_extra', config, hypervisor):
         hypervisor_extra.update(extra)
-   
+
     create_definition(server['hostname'], config['num_cpu'], config['mem'],
             config['max_mem'], config['network_config']['vlan'],
             device, hypervisor, hypervisor_extra)
@@ -179,12 +181,12 @@ def setup_guest(config):
 def get_config(hostname):
     server = query(hostname=hostname).get()
     config = {
+        'server': server,
         'hostname': hostname,
         'swap_size': 1024,
         'mailname': hostname + '.ig.local',
-        'dns_servers': ['10.0.0.102', '10.0.0.85', '10.0.0.83']
+        'dns_servers': ['10.0.0.102', '10.0.0.85', '10.0.0.83'],
     }
-    config['server'] = server
     xen_host = server.get('xen_host')
     if xen_host:
         config['host'] = xen_host
@@ -201,4 +203,4 @@ def get_config(hostname):
     if os:
         config['os'] = os
 
-    return config 
+    return config
