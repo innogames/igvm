@@ -16,7 +16,7 @@ from buildvm.main import setup
 
 parser = argparse.ArgumentParser(description='Creates a new virtual machine.')
 parser.add_argument('guest', metavar='guest', help='Hostname of the guest system')
-parser.add_argument('--host', metavar='host', help='Hostname of the host system')
+parser.add_argument('--hvhost', metavar='hv_host', help='Hostname of hypervisor')
 parser.add_argument('--image', metavar='image', help='Image file for the guest')
 parser.add_argument('--ip', metavar='intern_ip', help='Internal IP of the guest')
 parser.add_argument('--os', metavar='os', help='operating system of the guest')
@@ -60,12 +60,12 @@ except DatasetError:
 
 config['server'] = server
 
-if args.host:
-    config['host'] = args.host
+if args.hvhost:
+    config['hv_host'] = args.hvhost
 else:
     xen_host = server.get('xen_host')
     if xen_host:
-        config['host'] = xen_host
+        config['hv_host'] = xen_host
 
 if args.mem:
     config['mem'] = args.mem
@@ -91,9 +91,9 @@ else:
 if args.disk:
     config['disk_size_gib'] = args.disk
 else:
-    disk_size_mib = server.get('disk_size_mib')
-    if disk_size_mib:
-        config['disk_size_mib'] = disk_size_mib
+    disk_size_gib = server.get('disk_size_gib')
+    if disk_size_gib:
+        config['disk_size_gib'] = disk_size_gib
 
 if args.image:
     config['image'] = args.image

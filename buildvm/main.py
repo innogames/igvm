@@ -25,11 +25,11 @@ run = fail_gracefully(run)
 def check_config(config):
     send_signal('config_created', config)
 
-    if 'host' not in config:
-        raise_failure(Exception('"host" is not set.'))
+    if 'hv_host' not in config:
+        raise_failure(Exception('"hvhost" is not set.'))
 
-    if not re.match('^[a-z][a-z0-9-]+$', config['host']):
-        raise_failure(Exception('"host" does not fit the pattern.'))
+    if not re.match('^[a-z][a-z0-9-]+$', config['hv_host']):
+        raise_failure(Exception('"hvhost" does not fit the pattern.'))
 
     if 'mem' not in config:
         raise_failure(Exception('"mem" is not set.'))
@@ -69,7 +69,7 @@ def check_config(config):
         raise_failure(Exception('Image not found. Available images: ' +
                                 ' '.join(images)))
 
-    hw_server = query(hostname=config['host']).get()
+    hw_server = query(hostname=config['hv_host']).get()
     hv_vlans = hw_server['network_vlans'] if 'network_vlans' in hw_server else None
     config['network_config'] = get_network_config(config['server'], hv_vlans)
 
@@ -93,7 +93,7 @@ def setup(config):
     env.shell = '/bin/bash -c'
 
     # Perform operations on Hypervisor
-    env.hosts = [config['host']]
+    env.hosts = [config['hv_host']]
     execute(setup_hardware, config)
 
     # Perform operations on Virtual Machine
@@ -107,7 +107,7 @@ def setup_hardware(config, boot=True):
     send_signal('setup_hardware', config, boot)
     meminfo = get_meminfo()
     cpuinfo = get_cpuinfo()
-    hw_server = query(hostname=config['host']).get()
+    hw_server = query(hostname=config['hv_host']).get()
     hypervisor = hw_server.get('hypervisor', "")
 
     mem_free = meminfo['MemFree'] + meminfo['Buffers'] + meminfo['Cached']
@@ -189,7 +189,7 @@ def get_config(hostname):
     }
     xen_host = server.get('xen_host')
     if xen_host:
-        config['host'] = xen_host
+        config['hv_host'] = xen_host
     mem = server.get('memory')
     if mem:
         config['mem'] = mem
