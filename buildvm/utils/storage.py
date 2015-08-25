@@ -24,6 +24,7 @@ def get_volume_groups():
         warn("No LVM found")
         raise_failure(StorageError("No LVM found"))
 
+
     vgroups = []
     for line in lvminfo.splitlines():
         parts = line.strip().split(':')
@@ -42,7 +43,7 @@ def get_volume_groups():
 
     return vgroups
 
-def create_logical_volume(volume_group, name, size_mb):
+def create_logical_volume(volume_group, name, size_GiB):
     lvs = [lv.strip().split(':') for lv in run('lvdisplay -c').splitlines()]
     lvs = [lv for lv in lvs if lv[1] == volume_group]
     volume = os.path.join('/dev', volume_group, name)
@@ -55,7 +56,7 @@ def create_logical_volume(volume_group, name, size_mb):
                 run(cmd('umount {0}', volume))
             run(cmd('lvremove -f {0}', volume))
 
-    run(cmd('lvcreate -L {0}M -n {1} {2}', size_mb, name, volume_group))
+    run(cmd('lvcreate -L {0}G -n {1} {2}', size_GiB, name, volume_group))
     return volume
 
 def format_device(device):

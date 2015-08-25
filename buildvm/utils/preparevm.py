@@ -38,8 +38,8 @@ def set_mailname(target_dir, mailname):
     with cd(target_dir):
         run(cmd('echo {0} > etc/mailname', mailname))
 
-def generate_swap(swap_path, size_mb):
-    run(cmd('dd if=/dev/zero of={0} bs=1M count={1}', swap_path, size_mb))
+def generate_swap(swap_path, size_MiB):
+    run(cmd('dd if=/dev/zero of={0} bs=1M count={1}', swap_path, size_MiB))
     run(cmd('/sbin/mkswap {0}', swap_path))
 
 def create_fstab(target_dir, blk_dev):
