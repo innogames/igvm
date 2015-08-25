@@ -28,7 +28,7 @@ def check_config(config):
     if 'host' not in config:
         raise_failure(Exception('"host" is not set.'))
 
-    if re.match('^[a-z][a-z0-9_-]+', config['host']):
+    if not re.match('^[a-z][a-z0-9-]+$', config['host']):
         raise_failure(Exception('"host" does not fit the pattern.'))
 
     if 'mem' not in config:
