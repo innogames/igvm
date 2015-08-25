@@ -34,8 +34,8 @@ def check_config(config):
     if 'mem' not in config:
         raise_failure(Exception('"mem" is not set.'))
 
-    if config['mem'] > 0:
-        raise_failure(Exception('"mem" is not positive.'))
+    if config['mem'] < 1:
+        raise_failure(Exception('"mem" is not greater than 0.'))
 
     if 'max_mem' not in config:
         if config['mem'] > 12288:
@@ -43,14 +43,14 @@ def check_config(config):
         else:
             config['max_mem'] = 16384
 
-    if config['max_mem'] > 0:
-        raise_failure(Exception('"max_mem" is not positive.'))
+    if config['max_mem'] < 1:
+        raise_failure(Exception('"max_mem" is not greater than 0.'))
 
     if 'num_cpu' not in config:
         raise_failure(Exception('"num_cpu" is not set.'))
 
-    if config['num_cpu'] > 0:
-        raise_failure(Exception('"num_cpu" is not positive.'))
+    if config['num_cpu'] < 1:
+        raise_failure(Exception('"num_cpu" is not greater than 0'))
 
     if 'os' not in config:
         raise_failure(Exception('"os" is not set.'))
@@ -58,8 +58,8 @@ def check_config(config):
     if 'disk_size_gib' not in config:
         raise_failure(Exception('"disk_size_gib" is not set.'))
 
-    if config['disk_size_gib'] > 0:
-        raise_failure(Exception('"disk_size_gib" is not positive.'))
+    if config['disk_size_gib'] < 1:
+        raise_failure(Exception('"disk_size_gib" is not greater than 0'))
 
     if 'image' not in config:
         config['image'] = config['os'] + '-base.tar.gz'
