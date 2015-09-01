@@ -14,7 +14,7 @@ from buildvm.utils.storage import (prepare_storage, umount_temp,
         remove_temp, get_vm_block_dev)
 from buildvm.utils.image import download_image, extract_image, get_images
 from buildvm.utils.network import get_network_config
-from buildvm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet
+from buildvm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet, block_autostart, unblock_autostart
 from buildvm.utils.hypervisor import (create_definition, start_machine)
 from buildvm.utils.portping import wait_until
 from buildvm.utils.virtutils import close_virtconns
@@ -141,7 +141,9 @@ def setup_hardware(config, boot=True):
     send_signal('prepared_vm', config, device, mount_path)
 
     if config['runpuppet']:
+        block_autostart(mount_path)
         run_puppet(mount_path, config['server']['hostname'])
+        unblock_autostart(mount_path)
 
     if 'postboot_script' in config:
         copy_postboot_script(mount_path, config['postboot_script'])

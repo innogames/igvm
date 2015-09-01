@@ -58,6 +58,16 @@ def create_interfaces(network_config, target_dir):
             'network_config': network_config,
         })
 
+def block_autostart(target_dir):
+    with cd(target_dir):
+        run(cmd('echo "#!/bin/sh" >> usr/sbin/policy-rc.d' ))
+        run(cmd('echo "exit 101"  >> usr/sbin/policy-rc.d' ))
+        run(cmd('chmod +x usr/sbin/policy-rc.d' ))
+
+def unblock_autostart(target_dir):
+    with cd(target_dir):
+        run(cmd('rm usr/sbin/policy-rc.d' ))
+
 def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
                swap_size, blk_dev, ssh_keytypes):
     set_hostname(target_dir, server['hostname'])
