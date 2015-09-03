@@ -8,7 +8,7 @@ from jinja2 import Environment, PackageLoader
 
 from buildvm.utils import cmd, fail_gracefully
 from buildvm.utils.template import upload_template
-from buildvm.utils.virtutils import get_virtconn
+from buildvm.utils.virtutils import get_virtconn, close_virtconns
 
 run = fail_gracefully(run)
 exists = fail_gracefully(exists)
@@ -78,3 +78,14 @@ def start_machine(hostname, hypervisor):
         start_machine_xm(hostname)
     else:
         raise ValueError('Not a valid hypervisor: {0}'.format(hypervisor))
+
+def check_hv_mem(hw_server, client_config):
+    if 'hypervisor' in hw_server:
+        if hw_server['hypervisor'] == 'kvm':
+            conn = get_virtconn(hw_server['hostname'], 'kvm')
+            free_mb = conn.getFreeMemory() / 1024 / 1024
+            if client_config['mem'] > (free_mb - 2048):
+                # Avoid ugly error messages
+                close_virtconns()
+                raise HypervisorError('HW Server does not have enough memory to run this host')
+    # Add statements to check hypervisor different than kvm

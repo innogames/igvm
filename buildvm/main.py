@@ -15,7 +15,7 @@ from buildvm.utils.storage import (prepare_storage, umount_temp,
 from buildvm.utils.image import download_image, extract_image, get_images
 from buildvm.utils.network import get_network_config
 from buildvm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet, block_autostart, unblock_autostart
-from buildvm.utils.hypervisor import (create_definition, start_machine)
+from buildvm.utils.hypervisor import (create_definition, start_machine, check_hv_mem)
 from buildvm.utils.portping import wait_until
 from buildvm.utils.virtutils import close_virtconns
 from buildvm.signals import send_signal
@@ -71,6 +71,7 @@ def check_config(config):
 
     hw_server = query(hostname=config['hv_host']).get()
     hv_vlans = hw_server['network_vlans'] if 'network_vlans' in hw_server else None
+    check_hv_mem(hw_server, config)
     config['network_config'] = get_network_config(config['server'], hv_vlans)
 
     send_signal('config_finished', config)
