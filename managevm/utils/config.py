@@ -46,7 +46,7 @@ def get_dsthv(hostname):
     return dsthv
 
 
-def import_vm_config(config):
+def import_vm_config_from_kvm(config):
     """ Import configuration from Hypervisor currently hosting the VM.
         
         Returns nothing, data is stored in 'config' dictionary."""
@@ -68,6 +68,18 @@ def import_vm_config(config):
         if lv['name'].split('/')[3] == config['vm_hostname']:
             config['disk_size_gib'] = int(lv['size_MiB'] / 1024)
 
+def import_vm_config_from_admintool(config):
+    # Some values have hardcoded defaults
+    config['swap_size'] = 1024
+    config['mailname'] = config['vm_hostname'] + '.ig.local'
+    config['dns_servers']=['10.0.0.102', '10.0.0.85', '10.0.0.83']
+
+    # Some can be imported from Admintool
+    # TODO: Use those values directly instead of importing them
+    config['mem'] = config['vm']['memory']
+    config['num_cpu'] = config['vm']['num_cpu']
+    config['os'] = config['vm']['os']
+    config['disk_size_gib'] = config['vm']['disk_size_gib']
 
 def check_vm_config(config):
     send_signal('config_created', config)

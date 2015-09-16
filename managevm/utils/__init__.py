@@ -6,7 +6,7 @@ from fabric.api import open_shell, prompt, warn
 from fabric.colors import red
 from fabric.contrib.files import upload_template
 
-import buildvm
+import managevm
 
 def get_installdir():
     return os.path.dirname(managevm.__file__)

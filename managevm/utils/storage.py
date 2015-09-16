@@ -179,7 +179,7 @@ def create_storage(hostname, disk_size_gib):
 
     return device
 
-def mount_storage(device):
+def mount_storage(device, hostname):
     format_device(device)
     mount_path = mount_temp(device, suffix='-' + hostname)
-    return device, mount_path
+    return mount_path

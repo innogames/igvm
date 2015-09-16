@@ -16,16 +16,7 @@ from managevm.buildvm import buildvm
 
 parser = argparse.ArgumentParser(description='Creates a new virtual machine.')
 parser.add_argument('guest', metavar='guest', help='Hostname of the guest system')
-parser.add_argument('--hvhost', metavar='hv_host', help='Hostname of hypervisor')
 parser.add_argument('--image', metavar='image', help='Image file for the guest')
-parser.add_argument('--ip', metavar='intern_ip', help='Internal IP of the guest')
-parser.add_argument('--os', metavar='os', help='operating system of the guest')
-parser.add_argument('--mem', metavar='MiB', type=int,
-        help='Memory of the guest in MiB')
-parser.add_argument('--numcpu', metavar='n', type=int,
-        help='Number of CPUs for the guest')
-parser.add_argument('--disk', metavar='GiB', type=int,
-        help='Disk size of the guest in GiB')
 parser.add_argument('--boot', action='store_true', help='Boot after setup')
 parser.add_argument('--postboot', metavar='postboot_script',
         help='Run postboot_script on the guest after first boot')
@@ -36,64 +27,12 @@ parser.add_argument('-o', metavar='key=value', nargs='+',
 
 args = parser.parse_args()
 
-config = {
-    'hostname': args.guest,
-    'swap_size': 1024,
-    'mailname': args.guest + '.ig.local',
-    'dns_servers': ['10.0.0.102', '10.0.0.85', '10.0.0.83']
-}
-
-if args.o:
-    for key, value in args.o:
-        config[key] = value
+config = {}
 
 adminapi.auth()
 
-try:
-    server = query(hostname=args.guest).get()
-except DatasetError:
-    print("Server '{0}' not found".format(args.guest), file=sys.stderr)
-    server = {
-        'hostname': args.guest,
-        'intern_ip': IP(args.ip),
-    }
-
-config['server'] = server
-
-if args.hvhost:
-    config['hv_host'] = args.hvhost
-else:
-    xen_host = server.get('xen_host')
-    if xen_host:
-        config['hv_host'] = xen_host
-
-if args.mem:
-    config['mem'] = args.mem
-else:
-    mem = server.get('memory')
-    if mem:
-        config['mem'] = mem
-
-if args.os:
-    config['os'] = args.os
-else:
-    os = server.get('os')
-    if os:
-        config['os'] = os
-
-if args.numcpu:
-    config['num_cpu'] = args.numcpu
-else:
-    num_cpu = server.get('num_cpu')
-    if num_cpu:
-        config['num_cpu'] = num_cpu
-
-if args.disk:
-    config['disk_size_gib'] = args.disk
-else:
-    disk_size_gib = server.get('disk_size_gib')
-    if disk_size_gib:
-        config['disk_size_gib'] = disk_size_gib
+if args.guest:
+    config['vm_hostname'] = args.guest
 
 if args.image:
     config['image'] = args.image
@@ -112,4 +51,4 @@ if args.postboot:
     config['postboot_script'] = args.postboot
     config['boot'] = True
 
-setup(config)
+buildvm(config)
