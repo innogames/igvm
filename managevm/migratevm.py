@@ -33,6 +33,30 @@ def setup_dsthv(config):
 
     device = create_storage(config['vm_hostname'], config['disk_size_gib'])
 
+def migrate_virsh(config):
+    migrate_cmd = ('virsh migrate'
+            + ' --live' # Do it live!
+            + ' --copy-storage-all'
+            + ' --persistent' # Define the VM on the new host
+            + ' --undefinesource' # Undefine the VM on the old host
+            + ' --change-protection' # Don't let the VM configuration to be changed
+            + ' --auto-converge' # Force convergence, otherwise migrations never end
+            + ' --domain {vm_hostname}'
+            + ' --abort-on-error' # Don't tolerate soft errors
+            + ' --desturi qemu+ssh://{dsthv_hostname}/system' # We need SSH agent forwarding
+            + ' --timeout ' + str(10 * 60) # Force guest to suspend after 10 minutes
+            + ' --verbose'
+            )
+
+    with settings(user='root', forward_agent=True):
+        migrate_cmd = migrate_cmd.format(
+                    vm_hostname    = config['vm_hostname'],
+                    dsthv_hostname = config['dsthv_hostname'],
+                )
+        # Ensure that virsh does not complain
+        run('ssh-keyscan -t rsa {0} >> .ssh/known_hosts'.format(config['dsthv_hostname']))
+        run(migrate_cmd)
+
 def migratevm(config):
     if not set(['vm_hostname', 'dsthv_hostname', 'runpuppet']) == set(config.keys()):
         raise Exception("vm_hostname, dsthv_hostname, runpuppet must be specified in config!")
@@ -59,55 +83,16 @@ def migratevm(config):
             config['dsthv_conn'] = get_virtconn(config['dsthv']['hostname'], 'kvm')
 
             # Import configuration from source Hypervisor
-            env.hosts = [config['srchv']['hostname']]
-            execute(import_vm_config, config)
+            execute(import_vm_config_from_kvm, config, hosts=[config['srchv']['hostname']])
             check_vm_config(config) 
 
             # Create all things necessary on destination Hypervisor
-            env.hosts = [config['dsthv']['hostname']]
-            execute(setup_dsthv, config)
-            # Finally migrate the VM
-# This will work only when we fix ssh key forwarding or enable TCP connections between Hypervisors.
-#         
-#            vm_obj = config['srchv_conn'].lookupByName(config['vm_hostname'])
-#            flags = libvirt.VIR_MIGRATE_LIVE | \
-#                    libvirt.VIR_MIGRATE_PEER2PEER | \
-#                    libvirt.VIR_MIGRATE_PERSIST_DEST | \
-#                    libvirt.VIR_MIGRATE_UNDEFINE_SOURCE | \
-#                    libvirt.VIR_MIGRATE_NON_SHARED_DISK | \
-#                    libvirt.VIR_MIGRATE_CHANGE_PROTECTION | \
-#                    libvirt.VIR_MIGRATE_ABORT_ON_ERROR | \
-#                    libvirt.VIR_MIGRATE_AUTO_CONVERGE
-#
-#            vm_obj.migrate2(
-#                    dconn = config['dsthv_conn'],
-#                    flags = flags,
-#                    )
+            execute(setup_dsthv, config, hosts=[config['dsthv']['hostname']])
 
             # Connect to source Hypervisor again to perform migration
-            migrate_cmd = ('virsh migrate'
-                    + ' --live' # Do it live!
-                    + ' --copy-storage-all'
-                    + ' --persistent' # Define the VM on the new host
-                    + ' --undefinesource' # Undefine the VM on the old host
-                    + ' --change-protection' # Don't let the VM configuration to be changed
-                    + ' --auto-converge' # Force convergence, otherwise migrations never end
-                    + ' --domain {vm_hostname}'
-                    + ' --abort-on-error' # Don't tolerate soft errors
-                    + ' --desturi qemu+ssh://{dsthv_hostname}/system' # We need SSH agent forwarding
-                    + ' --timeout ' + str(10 * 60) # Force guest to suspend after 10 minutes
-                    + ' --verbose'
-                    )
-            with settings(user='root', forward_agent=True):
+            execute(migrate_virsh, config, hosts=[config['srchv']['hostname']])
 
-                env.hosts = [config['srchv']['hostname']]
-                migrate_cmd = migrate_cmd.format(
-                            vm_hostname    = config['vm_hostname'],
-                            dsthv_hostname = config['dsthv_hostname'],
-                        )
-                execute(run, 'ssh-keyscan -t rsa {0} >> .ssh/known_hosts'.format(config['dsthv_hostname']))
-                execute(run, migrate_cmd)
-
+            # Update admintool information
             config['vm']['xen_host'] = config['dsthv']['hostname']
             config['vm'].commit()
         else:
