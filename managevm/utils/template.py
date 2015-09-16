@@ -1,7 +1,7 @@
 import os
 from fabric.contrib.files import upload_template as _upload_template
 
-from buildvm.utils import get_installdir, fail_gracefully
+from managevm.utils import get_installdir, fail_gracefully
 
 _template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'templates')
 

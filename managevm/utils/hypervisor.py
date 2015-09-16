@@ -6,10 +6,10 @@ from fabric.contrib.files import exists
 
 from jinja2 import Environment, PackageLoader
 
-from buildvm.utils import cmd, fail_gracefully
-from buildvm.utils.template import upload_template
-from buildvm.utils.virtutils import get_virtconn, close_virtconns
-from buildvm.utils.resources import get_cpuinfo
+from managevm.utils import cmd, fail_gracefully
+from managevm.utils.template import upload_template
+from managevm.utils.virtutils import get_virtconn, close_virtconns
+from managevm.utils.resources import get_cpuinfo
 
 run = fail_gracefully(run)
 exists = fail_gracefully(exists)

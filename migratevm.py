@@ -9,7 +9,7 @@ import adminapi
 from adminapi.utils import IP
 from adminapi.dataset import DatasetError, query
 
-from buildvm.migratevm import migratevm
+from managevm.migratevm import migratevm
 
 parser = argparse.ArgumentParser(description='Migrate a virtual machine.')
 parser.add_argument('guest',   metavar='guest', help='Hostname of the guest system')

@@ -12,7 +12,7 @@ import adminapi
 from adminapi.utils import IP
 from adminapi.dataset import DatasetError, query
 
-from buildvm.main import setup
+from managevm.buildvm import buildvm
 
 parser = argparse.ArgumentParser(description='Creates a new virtual machine.')
 parser.add_argument('guest', metavar='guest', help='Hostname of the guest system')

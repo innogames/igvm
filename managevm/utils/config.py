@@ -1,12 +1,12 @@
 import os, sys, re
 from glob import glob
 
-from buildvm.signals import send_signal
+from managevm.signals import send_signal
 from adminapi.dataset import query, DatasetError
-from buildvm.utils.virtutils import get_virtconn
-from buildvm.utils.storage import get_volume_groups, get_logical_volumes
-from buildvm.utils.network import get_network_config
-from buildvm.utils.hypervisor import check_dsthv_mem
+from managevm.utils.virtutils import get_virtconn
+from managevm.utils.storage import get_volume_groups, get_logical_volumes
+from managevm.utils.network import get_network_config
+from managevm.utils.hypervisor import check_dsthv_mem
 
 def get_vm(hostname):
     """ Get VM from admintool by config['guest'] hostname.

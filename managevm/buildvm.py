@@ -7,83 +7,29 @@ from fabric.contrib.console import confirm
 
 from adminapi.dataset import query
 
-from buildvm.utils import raise_failure, fail_gracefully
-from buildvm.utils.units import convert_size
-from buildvm.utils.resources import get_meminfo, get_cpuinfo, get_ssh_keytypes
-from buildvm.utils.storage import (prepare_storage, umount_temp,
+from managevm.utils import raise_failure, fail_gracefully
+from managevm.utils.units import convert_size
+from managevm.utils.resources import get_meminfo, get_cpuinfo, get_ssh_keytypes
+from managevm.utils.storage import (prepare_storage, umount_temp,
         remove_temp, get_vm_block_dev)
-from buildvm.utils.image import download_image, extract_image, get_images
-from buildvm.utils.network import get_network_config
-from buildvm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet, block_autostart, unblock_autostart
-from buildvm.utils.hypervisor import (create_definition, start_machine, check_hv_mem)
-from buildvm.utils.portping import wait_until
-from buildvm.utils.virtutils import close_virtconns
-from buildvm.signals import send_signal
+from managevm.utils.image import download_image, extract_image, get_images
+from managevm.utils.network import get_network_config
+from managevm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet, block_autostart, unblock_autostart
+from managevm.utils.hypervisor import (create_definition, start_machine, check_hv_mem)
+from managevm.utils.portping import wait_until
+from managevm.utils.virtutils import close_virtconns
+from managevm.signals import send_signal
 
 run = fail_gracefully(run)
 
-def check_config(config):
-    send_signal('config_created', config)
-
-    if 'hv_host' not in config:
-        raise_failure(Exception('"hvhost" is not set.'))
-
-    if not re.match('^[a-z][a-z0-9-]+$', config['hv_host']):
-        raise_failure(Exception('"hvhost" does not fit the pattern.'))
-
-    if 'mem' not in config:
-        raise_failure(Exception('"mem" is not set.'))
-
-    if config['mem'] < 1:
-        raise_failure(Exception('"mem" is not greater than 0.'))
-
-    if 'max_mem' not in config:
-        if config['mem'] > 12288:
-            config['max_mem'] = config['mem'] + 10240
-        else:
-            config['max_mem'] = 16384
-
-    if config['max_mem'] < 1:
-        raise_failure(Exception('"max_mem" is not greater than 0.'))
-
-    if 'num_cpu' not in config:
-        raise_failure(Exception('"num_cpu" is not set.'))
-
-    if config['num_cpu'] < 1:
-        raise_failure(Exception('"num_cpu" is not greater than 0'))
-
-    if 'os' not in config:
-        raise_failure(Exception('"os" is not set.'))
-
-    if 'disk_size_gib' not in config:
-        raise_failure(Exception('"disk_size_gib" is not set.'))
-
-    if config['disk_size_gib'] < 1:
-        raise_failure(Exception('"disk_size_gib" is not greater than 0'))
-
-    if 'image' not in config:
-        config['image'] = config['os'] + '-base.tar.gz'
-
-    images = get_images()
-    if config['image'] not in images:
-        raise_failure(Exception('Image not found. Available images: ' +
-                                ' '.join(images)))
-
-    hw_server = query(hostname=config['hv_host']).get()
-    hv_vlans = hw_server['network_vlans'] if 'network_vlans' in hw_server else None
-    check_hv_mem(hw_server, config)
-    config['network_config'] = get_network_config(config['server'], hv_vlans)
-
-    send_signal('config_finished', config)
-
-def setup(config):
+def buildvm(config):
     hooks = glob(os.path.join(os.path.dirname(__file__), 'hooks', '*.py'))
     for hook in hooks:
         if hook == '__init__.py':
             continue
         execfile(hook, {})
 
-    check_config(config)
+    check_vm_config(config)
 
     # Configuration of Fabric:
     env.disable_known_hosts = True

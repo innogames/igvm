@@ -9,18 +9,18 @@ from fabric.contrib.console import confirm
 #
 from adminapi.dataset import query, DatasetError
 #
-from buildvm.utils import raise_failure, fail_gracefully
-from buildvm.utils.config import *
-from buildvm.utils.units import convert_size
-from buildvm.utils.resources import get_meminfo, get_cpuinfo, get_ssh_keytypes
-from buildvm.utils.storage import get_vm_block_dev, create_storage
-#from buildvm.utils.image import download_image, extract_image, get_images
-#from buildvm.utils.network import get_network_config
-#from buildvm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet, block_autostart, unblock_autostart
-from buildvm.utils.hypervisor import *
-#from buildvm.utils.portping import wait_until
-from buildvm.utils.virtutils import close_virtconns
-from buildvm.signals import send_signal
+from managevm.utils import raise_failure, fail_gracefully
+from managevm.utils.config import *
+from managevm.utils.units import convert_size
+from managevm.utils.resources import get_meminfo, get_cpuinfo, get_ssh_keytypes
+from managevm.utils.storage import get_vm_block_dev, create_storage
+#from managevm.utils.image import download_image, extract_image, get_images
+#from managevm.utils.network import get_network_config
+#from managevm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet, block_autostart, unblock_autostart
+from managevm.utils.hypervisor import *
+#from managevm.utils.portping import wait_until
+from managevm.utils.virtutils import close_virtconns
+from managevm.signals import send_signal
 
 run = fail_gracefully(run)
 

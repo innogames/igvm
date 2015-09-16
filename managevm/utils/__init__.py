@@ -9,7 +9,7 @@ from fabric.contrib.files import upload_template
 import buildvm
 
 def get_installdir():
-    return os.path.dirname(buildvm.__file__)
+    return os.path.dirname(managevm.__file__)
 
 def cmd(cmd, *args, **kwargs):
     escaped_args = [quote(str(arg)) for arg in args]

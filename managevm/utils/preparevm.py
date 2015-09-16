@@ -3,9 +3,9 @@ import os
 from fabric.api import run, cd, put, settings
 
 
-from buildvm.utils.sshkeys import create_authorized_keys
-from buildvm.utils.template import upload_template
-from buildvm.utils import fail_gracefully, cmd
+from managevm.utils.sshkeys import create_authorized_keys
+from managevm.utils.template import upload_template
+from managevm.utils import fail_gracefully, cmd
 
 run = fail_gracefully(run)
 put = fail_gracefully(put)
