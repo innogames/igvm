@@ -9,6 +9,7 @@ from jinja2 import Environment, PackageLoader
 from buildvm.utils import cmd, fail_gracefully
 from buildvm.utils.template import upload_template
 from buildvm.utils.virtutils import get_virtconn, close_virtconns
+from buildvm.utils.resources import get_cpuinfo
 
 run = fail_gracefully(run)
 exists = fail_gracefully(exists)
@@ -79,13 +80,19 @@ def start_machine(hostname, hypervisor):
     else:
         raise ValueError('Not a valid hypervisor: {0}'.format(hypervisor))
 
-def check_hv_mem(hw_server, client_config):
-    if 'hypervisor' in hw_server:
-        if hw_server['hypervisor'] == 'kvm':
-            conn = get_virtconn(hw_server['hostname'], 'kvm')
-            free_mb = conn.getFreeMemory() / 1024 / 1024
-            if client_config['mem'] > (free_mb - 2048):
-                # Avoid ugly error messages
-                close_virtconns()
-                raise HypervisorError('HW Server does not have enough memory to run this host')
+def check_dsthv_mem(config):
+    if config['dsthv']['hypervisor'] == 'kvm':
+        conn = config['dsthv_conn']
+        # Always keep extra 2GiB free
+        free_MiB = (conn.getFreeMemory() / 1024 / 1024) - 2048
+        if config['mem'] > (free_MiB):
+            # Avoid ugly error messages
+            close_virtconns()
+            raise HypervisorError('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
     # Add statements to check hypervisor different than kvm
+
+def check_dsthv_cpu(config):
+    cpuinfo = get_cpuinfo()
+    num_cpus = len(cpuinfo)
+    if config['num_cpu'] > num_cpus:
+        raise Exception('Not enough CPUs. Destination Hypervisor has {0} but VM requires {1}.'.format(num_cpus, config['num_cpu']))
