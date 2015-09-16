@@ -15,7 +15,7 @@ from adminapi import api
 class NetworkError(Exception):
     pass
 
-def get_network_config(server, hv_vlans):
+def get_network_config(server):
     ip_api = api.get('ip')
 
     ip_info = {
@@ -56,11 +56,7 @@ def get_network_config(server, hv_vlans):
             ip_info['netmask6'] = net6['prefix_hi']
             ip_info['gateway6'] = net6['internal_gateway']
 
-    # Configure VLAN on Hypervisor.
-    if net4 and 'vlan' in net4 and hv_vlans:
-        if net4['vlan'] not in hv_vlans:
-            abort("The Hypervisor on which you try to create this VM has VLAN support but no VLAN {0} configured!".format(net4['vlan']))
-        ip_info['vlan'] = net4['vlan']
+    ip_info['vlan'] = net4['vlan']
 
     return ip_info
 
