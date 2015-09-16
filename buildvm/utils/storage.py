@@ -28,20 +28,58 @@ def get_volume_groups():
     vgroups = []
     for line in lvminfo.splitlines():
         parts = line.strip().split(':')
-        if len(parts) < 16:
-            print("LVM: {0}".format(line))
+        if len(parts) != 17:
+            print("Badly formatted vgdisplay output: {0}".format(line))
             continue
         volume_group = parts[0]
-        size = int(parts[11]) * 1024
-        free = int(parts[15]) * 1024
+        size_KiB    = int(parts[11])
+        size_MiB    = int(size_KiB / 1024)
+        pe_size_KiB = int(parts[12])
+        free_exts   = int(parts[15])
+        free_MiB    = int(free_exts * pe_size_KiB / 1024)
 
         vgroups.append({
             'name': volume_group,
-            'size_total': size,
-            'size_free': free
+            'size_total_MiB': size_MiB,
+            'size_free_MiB': free_MiB,
+            'pe_size_KiB': pe_size_KiB,
         })
 
     return vgroups
+
+def get_logical_volumes():
+    vgs = get_volume_groups()
+
+    with settings(warn_only=True):
+        lvminfo = run('lvdisplay -c')
+
+    if lvminfo.failed:
+        warn("No LVM found")
+        raise_failure(StorageError("No LVM found"))
+
+    lvolumes = []
+    for line in lvminfo.splitlines():
+        parts = line.strip().split(':')
+        if len(parts) != 13:
+            print("Badly formatted lvdisplay output: {0}".format(line))
+            continue
+        logical_volume = parts[0]
+        volume_group   = parts[1]
+
+        for volume_group_test in vgs:
+            if volume_group_test['name'] == volume_group:
+                pe_size_KiB = volume_group_test['pe_size_KiB']
+
+        size_KiB = int(parts[7]) * pe_size_KiB
+        size_MiB = int(size_KiB / 1024)
+
+        lvolumes.append({
+            'name': logical_volume,
+            'size_MiB': size_MiB,
+        })
+
+    return lvolumes
+
 
 def create_logical_volume(volume_group, name, size_GiB):
     lvs = [lv.strip().split(':') for lv in run('lvdisplay -c').splitlines()]
@@ -123,7 +161,7 @@ def create_san_raid(name, array):
     run(cmd('santool --build-raid -u {0} --array-number {1}', name, array))
     return os.path.join('/dev', 'san', 'raid', name)
 
-def prepare_storage(hostname, disk_size_gib):
+def create_storage(hostname, disk_size_gib):
     storage_type = get_storage_type()
     if storage_type == 'san':
         san_arrays = get_san_arrays()
@@ -135,10 +173,13 @@ def prepare_storage(hostname, disk_size_gib):
             raise_failure(StorageError('No volume groups found'))
         volume_group = volume_groups[0]
         volume = volume_group['name']
-        if convert_size(volume_group['size_free'], 'B', 'G') < disk_size_gib:
+        if convert_size(volume_group['size_free_MiB'], 'M', 'G') < disk_size_gib:
             raise_failure(StorageError('No enough free space'))
         device = create_logical_volume(volume, hostname, disk_size_gib)
 
+    return device
+
+def mount_storage(device):
     format_device(device)
     mount_path = mount_temp(device, suffix='-' + hostname)
     return device, mount_path
