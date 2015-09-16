@@ -12,8 +12,8 @@ from adminapi.dataset import DatasetError, query
 from managevm.migratevm import migratevm
 
 parser = argparse.ArgumentParser(description='Migrate a virtual machine.')
-parser.add_argument('guest',   metavar='guest', help='Hostname of the guest system')
-parser.add_argument('--dsthv', metavar='dsthv', help='Hostname of destination hypervisor')
+parser.add_argument('guest',   metavar='hostname', help='Hostname of the guest system')
+parser.add_argument('--dsthv', metavar='hostname', help='Hostname of destination hypervisor')
 parser.add_argument('--nopuppet', action='store_true',
         help='Skip running puppet in chroot before powering up',)
 
