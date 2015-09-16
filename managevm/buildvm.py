@@ -48,12 +48,10 @@ def buildvm(config):
     env.shell = '/bin/bash -c'
 
     # Perform operations on Hypervisor
-    env.hosts = [config['dsthv_hostname']]
-    execute(setup_dsthv, config)
+    execute(setup_dsthv, config, hosts=[config['dsthv_hostname']])
 
     # Perform operations on Virtual Machine
-    env.hosts = [config['vm_hostname']]
-    execute(setup_vm, config)
+    execute(setup_vm, config, hosts=[config['vm_hostname']])
 
     close_virtconns()
     disconnect_all()
