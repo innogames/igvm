@@ -58,7 +58,6 @@ def add_dsthv_to_ssh(config):
 def migrate_offline(config):
     add_dsthv_to_ssh(config)
     execute(shutdown_vm, config['vm'], config['srchv']['hypervisor'], hosts=config['srchv']['hostname'])
-    # Using DD lowers load on device with big enough Block Size
     execute(device_to_netcat, config['src_device'], config['disk_size_gib']*1024*1024*1024, config['dsthv_hostname'], config['nc_port'], hosts=config['srchv']['hostname'])
 
 def start_offline_vm(config):
