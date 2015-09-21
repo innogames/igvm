@@ -6,7 +6,6 @@ from adminapi.dataset import query, DatasetError
 from managevm.utils.virtutils import get_virtconn
 from managevm.utils.storage import get_volume_groups, get_logical_volumes
 from managevm.utils.network import get_network_config
-from managevm.utils.hypervisor import check_dsthv_mem
 
 def get_vm(hostname):
     """ Get VM from admintool by config['guest'] hostname.
@@ -45,13 +44,42 @@ def get_dsthv(hostname):
 
     return dsthv
 
-
-def import_vm_config_from_kvm(config):
-    """ Import configuration from Hypervisor currently hosting the VM.
+def init_vm_config(config):
+    """ Put some hardcoded defaults into config dictionary.
+        Those parameters are required only for new VM.
         
         Returns nothing, data is stored in 'config' dictionary."""
 
-    # Some parameters must be retrieved from KVM
+    config['swap_size'] = 1024
+    config['mailname'] = config['vm_hostname'] + '.ig.local'
+    config['dns_servers']=['10.0.0.102', '10.0.0.85', '10.0.0.83']
+
+def import_vm_disk(config):
+    lvs = get_logical_volumes()
+    for lv in lvs:
+        if lv['name'].split('/')[3] == config['vm_hostname']:
+            config['src_device'] = lv['name']
+            config['disk_size_gib'] = int(lv['size_MiB'] / 1024)
+
+
+def import_vm_config_from_admintool(config):
+    """ Import configuration from Admintool.
+
+        Returns nothing, data is stored in 'config' dictionary."""
+
+    # TODO: Use those values directly instead of importing them
+    config['mem'] = config['vm']['memory']
+    config['num_cpu'] = config['vm']['num_cpu']
+    config['os'] = config['vm']['os']
+    config['disk_size_gib'] = config['vm']['disk_size_gib']
+
+def import_vm_config_from_kvm(config):
+    """ Import configuration from Hypervisor currently hosting the VM.
+
+        Returns nothing, data is stored in 'config' dictionary."""
+
+    # Some parameters must be retrieved from KVM.
+    # Live migration will be performed, so they must be accurate.
     vm_obj = config['srchv_conn'].lookupByName(config['vm_hostname'])
     vm_info = vm_obj.info()
     config['max_mem'] = int(vm_info[1] / 1024)
@@ -63,23 +91,19 @@ def import_vm_config_from_kvm(config):
     config['network'] = get_network_config(config['vm'])
 
     # And some must be retrieved from running source hypervisor OS
-    lvs = get_logical_volumes()
-    for lv in lvs:
-        if lv['name'].split('/')[3] == config['vm_hostname']:
-            config['disk_size_gib'] = int(lv['size_MiB'] / 1024)
+    import_vm_disk(config)
 
-def import_vm_config_from_admintool(config):
-    # Some values have hardcoded defaults
-    config['swap_size'] = 1024
-    config['mailname'] = config['vm_hostname'] + '.ig.local'
-    config['dns_servers']=['10.0.0.102', '10.0.0.85', '10.0.0.83']
+def import_vm_config_from_xen(config):
+    """ Import configuration from Hypervisor currently hosting the VM.
 
-    # Some can be imported from Admintool
-    # TODO: Use those values directly instead of importing them
-    config['mem'] = config['vm']['memory']
-    config['num_cpu'] = config['vm']['num_cpu']
-    config['os'] = config['vm']['os']
-    config['disk_size_gib'] = config['vm']['disk_size_gib']
+        Returns nothing, data is stored in 'config' dictionary."""
+
+    # Trust some from Admintool
+    import_vm_config_from_admintool(config)
+    config['network'] = get_network_config(config['vm'])
+
+    # But not for disk size
+    import_vm_disk(config)
 
 def check_vm_config(config):
     send_signal('config_created', config)
@@ -120,7 +144,7 @@ def check_vm_config(config):
     if 'network' not in config:
         raise Exception('No network configuration of VM was found.')
     else:
-        if 'network_vlans' in config['dsthv']:
+        if config['dsthv']['network_vlans']:
             if config['network']['vlan'] not in config['dsthv']['network_vlans']:
                 raise Exception('Destination Hypervisor does not support VLAN {0}.'.format(config['network']['vlan']))
         else:

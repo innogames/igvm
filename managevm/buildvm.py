@@ -35,6 +35,7 @@ def buildvm(config):
     config['dsthv'] = get_dsthv(config['dsthv_hostname'])
     config['network'] = get_network_config(config['vm'])
 
+    init_vm_config(config)
     import_vm_config_from_admintool(config)
 
     check_vm_config(config)
@@ -93,7 +94,7 @@ def setup_dsthv(config, boot=True):
 
     if config['runpuppet']:
         block_autostart(mount_path)
-        run_puppet(mount_path, config['vm_hostname'])
+        run_puppet(mount_path, config['vm_hostname'], True)
         unblock_autostart(mount_path)
 
     if 'postboot_script' in config:

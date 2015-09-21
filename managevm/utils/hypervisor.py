@@ -1,7 +1,12 @@
 import os
+import time
 import uuid
+from StringIO import StringIO
+
+from icinga_utils import downtimer
 
 from fabric.api import env, run, puts
+from fabric.context_managers import hide
 from fabric.contrib.files import exists
 
 from jinja2 import Environment, PackageLoader
@@ -80,19 +85,41 @@ def start_machine(hostname, hypervisor):
     else:
         raise ValueError('Not a valid hypervisor: {0}'.format(hypervisor))
 
-def check_dsthv_mem(config):
-    if config['dsthv']['hypervisor'] == 'kvm':
-        conn = config['dsthv_conn']
-        # Always keep extra 2GiB free
-        free_MiB = (conn.getFreeMemory() / 1024 / 1024) - 2048
-        if config['mem'] > (free_MiB):
-            # Avoid ugly error messages
-            close_virtconns()
-            raise HypervisorError('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
-    # Add statements to check hypervisor different than kvm
+def shutdown_vm_xen(vm):
+    run('xm shutdown {0}'.format(vm['hostname']))
 
-def check_dsthv_cpu(config):
-    cpuinfo = get_cpuinfo()
-    num_cpus = len(cpuinfo)
-    if config['num_cpu'] > num_cpus:
-        raise Exception('Not enough CPUs. Destination Hypervisor has {0} but VM requires {1}.'.format(num_cpus, config['num_cpu']))
+    found = False
+    for i in range(10, 1, -1):
+        print("Waiting for VM to shutdown {0}".format(i))
+        xmList = StringIO()
+        with hide('running'):
+            run("xm list", stdout=xmList)
+        xmList.seek(0)
+        found = False
+        for xmEntry in xmList.readlines():
+            if xmEntry.split(' ')[2] == vm['hostname']:
+                found = True
+        if found == False:
+            break
+        time.sleep(1)
+
+    if found == True:
+        print("WARNING: VM did not shutdown, I'm destroying it by force!")
+        run('xm destroy {0}'.format(vm['hostname']))
+    else:
+        print("VM is shutdown.")
+
+    run('mv /etc/xen/domains/{0}.sxp /etc/xen/domains/{0}.sxp.old'.format(vm['hostname']))
+
+def shutdown_vm_kvm(vm):
+    pass
+
+def shutdown_vm(vm, hypervisor):
+    if hypervisor == "xen":
+        shutdown_vm_xen(vm)
+    elif hypervisor == "kvm":
+        shutdown_vm_kvm(vm)
+    else:
+        raise Exception("Not a valid hypervisor: {0}".format(hypervisor))
+    downtimer.call_icinga("down", vm['hostname'], duration=600)
+
