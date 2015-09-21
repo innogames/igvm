@@ -17,34 +17,17 @@ from managevm.utils.config import *
 from managevm.utils.hypervisor import *
 from managevm.utils.portping import wait_until
 from managevm.utils.preparevm import run_puppet
-from managevm.utils.resources import get_meminfo, get_cpuinfo, get_ssh_keytypes
+from managevm.utils.resources import get_ssh_keytypes
 from managevm.utils.storage import *
 from managevm.utils.units import convert_size
 from managevm.utils.virtutils import close_virtconns
 
 run = fail_gracefully(run)
 
-def check_dsthv_mem(config):
-    if config['dsthv']['hypervisor'] == 'kvm':
-        conn = config['dsthv_conn']
-        # Always keep extra 2GiB free
-        free_MiB = (conn.getFreeMemory() / 1024 / 1024) - 2048
-        if config['mem'] > (free_MiB):
-            # Avoid ugly error messages
-            close_virtconns()
-            raise HypervisorError('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
-    # Add statements to check hypervisor different than kvm
-
-def check_dsthv_cpu(config):
-    cpuinfo = get_cpuinfo()
-    num_cpus = len(cpuinfo)
-    if config['num_cpu'] > num_cpus:
-        raise Exception('Not enough CPUs. Destination Hypervisor has {0} but VM requires {1}.'.format(num_cpus, config['num_cpu']))
-
 def setup_dsthv(config):
     send_signal('setup_hardware', config)
-    check_dsthv_mem(config)
     check_dsthv_cpu(config)
+    check_dsthv_mem(config, config['dsthv']['hypervisor'])
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
     config['dst_device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
 

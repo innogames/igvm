@@ -16,7 +16,7 @@ from managevm.utils.storage import (create_storage, mount_storage, umount_temp,
 from managevm.utils.image import download_image, extract_image, get_images
 from managevm.utils.network import get_network_config
 from managevm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet, block_autostart, unblock_autostart
-from managevm.utils.hypervisor import (create_definition, start_machine, check_dsthv_mem)
+from managevm.utils.hypervisor import (create_definition, start_machine)
 from managevm.utils.portping import wait_until
 from managevm.utils.virtutils import close_virtconns
 from managevm.signals import send_signal

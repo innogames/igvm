@@ -6,6 +6,7 @@ from adminapi.dataset import query, DatasetError
 from managevm.utils.virtutils import get_virtconn
 from managevm.utils.storage import get_volume_groups, get_logical_volumes
 from managevm.utils.network import get_network_config
+from managevm.utils.resources import get_meminfo, get_cpuinfo
 
 def get_vm(hostname):
     """ Get VM from admintool by config['guest'] hostname.
@@ -104,6 +105,19 @@ def import_vm_config_from_xen(config):
 
     # But not for disk size
     import_vm_disk(config)
+
+def check_dsthv_cpu(config):
+    cpuinfo = get_cpuinfo()
+    num_cpus = len(cpuinfo)
+    if config['num_cpu'] > num_cpus:
+        raise Exception('Not enough CPUs. Destination Hypervisor has {0} but VM requires {1}.'.format(num_cpus, config['num_cpu']))
+
+def check_dsthv_mem(config, hypervisor):
+    if hypervisor == 'kvm':
+        # Always keep extra 2GiB free
+        free_MiB = (config['dsthv_conn'].getFreeMemory() / 1024 / 1024) - 2048
+        if config['mem'] > (free_MiB):
+            raise Exception('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
 
 def check_vm_config(config):
     send_signal('config_created', config)
