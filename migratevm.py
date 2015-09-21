@@ -16,6 +16,7 @@ parser.add_argument('guest',      metavar='hostname',   help='Hostname of the gu
 parser.add_argument('--dsthv',    metavar='hostname',   help='Hostname of destination hypervisor')
 parser.add_argument('--newip',    metavar='IP address', help='IP address to move VM to, in case you migrate between segments')
 parser.add_argument('--nopuppet', action='store_true',  help='Skip running puppet in chroot before powering up')
+parser.add_argument('--lbdowntime', action='store_true',  help='Use testtool\'s downtime feature during migration')
 
 args = parser.parse_args()
 
@@ -36,6 +37,11 @@ if args.nopuppet:
     config['runpuppet'] = False
 else:
     config['runpuppet'] = True
+
+if args.lbdowntime:
+    config['lbdowntime'] = True
+else:
+    config['lbdowntime'] = False
 
 migratevm(config)
 

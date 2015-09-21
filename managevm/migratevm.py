@@ -9,6 +9,7 @@ from fabric.network import disconnect_all
 from fabric.contrib.console import confirm
 
 from adminapi.dataset import query, DatasetError
+from adminapi import api
 
 from managevm.signals import send_signal
 from managevm.utils import raise_failure, fail_gracefully
@@ -112,13 +113,17 @@ def migratevm(config):
     config['srchv'] = get_srchv(config['vm']['xen_host'])
     config['dsthv'] = get_dsthv(config['dsthv_hostname'])
 
+    lb_api = api.get('lbadmin')
+
     if 'vm_new_ip' in config:
         config['vm']['intern_ip'] = config['vm_new_ip']
         # Verify if this IP can get its configuration.
         # VLAN will be used if any is found.
         config['network'] = get_network_config(config['vm'])
-        # Update IP address in Admintool, commit is at the end of code, if nothing else has failed.
+        # Update IP address in Admintool, if nothing else has failed.
+        # Machine is reconfigured via Puppet and he reads the data from Admintool
         config['vm']['intern_ip'] = config['network']['address4']
+        config['vm']['segment'] = config['network']['segment']
         config['vm'].commit()
         print("Machine will be moved to new network:")
         print("Segment: {0}, IP address: {1}, VLAN: {2}".format(config['network']['segment'], config['network']['address4'], config['network']['vlan']))
@@ -158,6 +163,11 @@ def migratevm(config):
     else:
         raise Exception("Migration to Hypervisor type {0} is not supported".format(config['dsthv']['hypervisor']))
 
+    if 'lbdowntime' in config:
+        config['vm']['testtool_downtime'] = True
+        config['vm'].commit()
+        lbapi.downtime_segment_push(config['vm']['segment'])
+        
     if config['migration_type'] == 'offline':
         execute(migrate_offline, config, hosts=[config['srchv']['hostname']])
         execute(start_offline_vm, config, hosts=[config['dsthv']['hostname']])
@@ -165,6 +175,11 @@ def migratevm(config):
         execute(migrate_virsh, config, hosts=[config['srchv']['hostname']])
     else:
         raise Exception("Migration type {0} is not supported".format(config['migration_type']))
+
+    if 'lbdowntime' in config:
+        config['vm']['testtool_downtime'] = False
+        config['vm'].commit()
+        lbapi.downtime_segment_push(config['vm']['segment'])
 
     # Update admintool information
     config['vm']['xen_host'] = config['dsthv']['hostname']
