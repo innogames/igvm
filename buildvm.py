@@ -15,15 +15,12 @@ from adminapi.dataset import DatasetError, query
 from managevm.buildvm import buildvm
 
 parser = argparse.ArgumentParser(description='Creates a new virtual machine.')
-parser.add_argument('guest', metavar='guest', help='Hostname of the guest system')
-parser.add_argument('--image', metavar='image', help='Image file for the guest')
-parser.add_argument('--boot', action='store_true', help='Boot after setup')
-parser.add_argument('--postboot', metavar='postboot_script',
-        help='Run postboot_script on the guest after first boot')
-parser.add_argument('--nopuppet', action='store_true',
-        help='Skip running puppet in chroot before powering up',)
-parser.add_argument('-o', metavar='key=value', nargs='+',
-        type=lambda x: x.split('=', 1), help='Sets an option')
+parser.add_argument('guest',      metavar='guest',           help='Hostname of the guest system')
+parser.add_argument('--image',    metavar='image',           help='Image file for the guest')
+parser.add_argument('--boot',     action='store_true',       help='Boot after setup')
+parser.add_argument('--postboot', metavar='postboot_script', help='Run postboot_script on the guest after first boot')
+parser.add_argument('--nopuppet', action='store_true',       help='Skip running puppet in chroot before powering up',)
+parser.add_argument('-o', metavar='key=value', nargs='+', type=lambda x: x.split('=', 1), help='Sets an option')
 
 args = parser.parse_args()
 
