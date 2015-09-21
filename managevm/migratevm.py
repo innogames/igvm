@@ -178,6 +178,8 @@ def migratevm(config):
 
     # Update admintool information
     config['vm']['xen_host'] = config['dsthv']['hostname']
+    config['vm']['num_cpu'] = config['num_cpu']
+    config['vm']['memory'] = config['mem']
     config['vm'].commit()
 
     close_virtconns()
