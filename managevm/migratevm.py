@@ -2,6 +2,7 @@ import os, sys, re, time
 from glob import glob
 
 import libvirt
+from time import strftime
 
 from fabric.api import env, execute, run, settings
 from fabric.context_managers import hide
@@ -23,6 +24,11 @@ from managevm.utils.units import convert_size
 from managevm.utils.virtutils import close_virtconns
 
 run = fail_gracefully(run)
+
+
+def cleanup_srchv(config):
+    rename_old_vm(config['vm'], config['date'], config['srchv']['hypervisor'])
+    rename_logical_volume(config['src_device'], config['vm_hostname'], config['date'])
 
 def setup_dsthv(config):
     send_signal('setup_hardware', config)
@@ -89,6 +95,9 @@ def migrate_virsh(config):
         run(migrate_cmd)
 
 def migratevm(config):
+    # Character : is invalid for LV name, use - instead.
+    config['date'] = strftime("%Y-%m-%d_%H-%M-%S")
+
     if not set(['vm_hostname', 'dsthv_hostname', 'runpuppet']) <= set(config.keys()):
         raise Exception("vm_hostname, dsthv_hostname, runpuppet must be specified in config!")
 
@@ -163,6 +172,9 @@ def migratevm(config):
         config['vm']['testtool_downtime'] = False
         config['vm'].commit()
         lb_api.downtime_segment_push(config['vm']['segment'])
+
+    # Rename resources on source hypervisor.
+    execute(cleanup_srchv, config, hosts=[config['srchv']['hostname']])
 
     # Update admintool information
     config['vm']['xen_host'] = config['dsthv']['hostname']

@@ -109,8 +109,6 @@ def shutdown_vm_xen(vm):
     else:
         print("VM is shutdown.")
 
-    run('mv /etc/xen/domains/{0}.sxp /etc/xen/domains/{0}.sxp.old'.format(vm['hostname']))
-
 def shutdown_vm_kvm(vm):
     pass
 
@@ -122,4 +120,8 @@ def shutdown_vm(vm, hypervisor):
     else:
         raise Exception("Not a valid hypervisor: {0}".format(hypervisor))
     downtimer.call_icinga("down", vm['hostname'], duration=600)
+
+def rename_old_vm(vm, date, hypervisor):
+    if hypervisor == "xen":
+        run('mv /etc/xen/domains/{0}.sxp /etc/xen/domains/{0}.sxp.migrated.{1}'.format(vm['hostname'], date))
 
