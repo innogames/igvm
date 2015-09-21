@@ -122,7 +122,7 @@ def migratevm(config):
         config['vm']['intern_ip'] = config['network']['address4']
         config['vm'].commit()
         print("Machine will be moved to new network:")
-        print("IP address: {0}, VLAN: {1}".format(config['network']['address4'], config['network']['vlan']))
+        print("Segment: {0}, IP address: {1}, VLAN: {2}".format(config['network']['segment'], config['network']['address4'], config['network']['vlan']))
 
     if config['srchv']['hostname'] == config['dsthv']['hostname']:
         raise Exception("Source and destination Hypervisor is the same machine {0}!".format(config['srchv']['hostname']))

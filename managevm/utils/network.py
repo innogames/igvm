@@ -26,11 +26,14 @@ def get_network_config(server):
         'netmask6': None,
         'gateway6': None,
         'vlan':     None,
+        'segment':  None,
     }
 
     if ip_info['address4']:
         try:
             net4 = ip_api.get_network_settings(ip_info['address4'])
+            ranges4 = ip_api.get_matching_ranges(ip_info['address4'])
+            ip_info['segment']=ranges4[0]['segment']
         except urllib2.URLError:
             raise NetworkError('Admintool is down')
         except Exception as e:
