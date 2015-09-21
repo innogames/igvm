@@ -1,8 +1,9 @@
 import os, sys, re
 from glob import glob
 
-from managevm.signals import send_signal
 from adminapi.dataset import query, DatasetError
+from fabric.api import run, settings, hide, puts, prompt
+from managevm.signals import send_signal
 from managevm.utils.virtutils import get_virtconn
 from managevm.utils.storage import get_volume_groups, get_logical_volumes
 from managevm.utils.network import get_network_config
@@ -99,8 +100,14 @@ def import_vm_config_from_xen(config):
 
         Returns nothing, data is stored in 'config' dictionary."""
 
-    # Trust some from Admintool
-    import_vm_config_from_admintool(config)
+    # Some parameters must be retrieved from KVM.
+    # Data in Admintool is currently known to be inaccurate
+    config['num_cpu'] = run('xm list --long {0} | grep \'(online_vcpus \' | sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''.format(config['vm_hostname']))
+    config['mem'] =     run('xm list --long {0} | grep \'(memory \' | sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''.format(config['vm_hostname']))
+    config['max_mem'] = config['mem']
+
+    # Some we trust from Admintool
+    config['os']      = config['srchv']['os']
     config['network'] = get_network_config(config['vm'])
 
     # But not for disk size
