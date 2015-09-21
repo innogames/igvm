@@ -115,19 +115,6 @@ def migratevm(config):
 
     lb_api = api.get('lbadmin')
 
-    if 'vm_new_ip' in config:
-        config['vm']['intern_ip'] = config['vm_new_ip']
-        # Verify if this IP can get its configuration.
-        # VLAN will be used if any is found.
-        config['network'] = get_network_config(config['vm'])
-        # Update IP address in Admintool, if nothing else has failed.
-        # Machine is reconfigured via Puppet and he reads the data from Admintool
-        config['vm']['intern_ip'] = config['network']['address4']
-        config['vm']['segment'] = config['network']['segment']
-        config['vm'].commit()
-        print("Machine will be moved to new network:")
-        print("Segment: {0}, IP address: {1}, VLAN: {2}".format(config['network']['segment'], config['network']['address4'], config['network']['vlan']))
-
     if config['srchv']['hostname'] == config['dsthv']['hostname']:
         raise Exception("Source and destination Hypervisor is the same machine {0}!".format(config['srchv']['hostname']))
    
@@ -163,10 +150,23 @@ def migratevm(config):
     else:
         raise Exception("Migration to Hypervisor type {0} is not supported".format(config['dsthv']['hypervisor']))
 
+    if 'vm_new_ip' in config:
+        config['vm']['intern_ip'] = config['vm_new_ip']
+        # Verify if this IP can get its configuration.
+        # VLAN will be used if any is found.
+        config['network'] = get_network_config(config['vm'])
+        # Update IP address in Admintool, if nothing else has failed.
+        # Machine is reconfigured via Puppet and he reads the data from Admintool
+        config['vm']['intern_ip'] = config['network']['address4']
+        config['vm']['segment'] = config['network']['segment']
+        config['vm'].commit()
+        print("Machine will be moved to new network:")
+        print("Segment: {0}, IP address: {1}, VLAN: {2}".format(config['network']['segment'], config['network']['address4'], config['network']['vlan']))
+
     if 'lbdowntime' in config:
         config['vm']['testtool_downtime'] = True
         config['vm'].commit()
-        lbapi.downtime_segment_push(config['vm']['segment'])
+        lb_api.downtime_segment_push(config['vm']['segment'])
         
     if config['migration_type'] == 'offline':
         execute(migrate_offline, config, hosts=[config['srchv']['hostname']])
@@ -179,7 +179,7 @@ def migratevm(config):
     if 'lbdowntime' in config:
         config['vm']['testtool_downtime'] = False
         config['vm'].commit()
-        lbapi.downtime_segment_push(config['vm']['segment'])
+        lb_api.downtime_segment_push(config['vm']['segment'])
 
     # Update admintool information
     config['vm']['xen_host'] = config['dsthv']['hostname']
