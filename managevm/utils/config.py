@@ -102,8 +102,8 @@ def import_vm_config_from_xen(config):
 
     # Some parameters must be retrieved from KVM.
     # Data in Admintool is currently known to be inaccurate
-    config['num_cpu'] = run('xm list --long {0} | grep \'(online_vcpus \' | sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''.format(config['vm_hostname']))
-    config['mem'] =     run('xm list --long {0} | grep \'(memory \' | sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''.format(config['vm_hostname']))
+    config['num_cpu'] = int(run('xm list --long {0} | grep \'(online_vcpus \' | sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''.format(config['vm_hostname'])))
+    config['mem'] =     int(run('xm list --long {0} | grep \'(memory \' | sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''.format(config['vm_hostname'])))
     config['max_mem'] = config['mem']
 
     # Some we trust from Admintool
