@@ -89,7 +89,7 @@ def shutdown_vm_xen(vm):
     run('xm shutdown {0}'.format(vm['hostname']))
 
     found = False
-    for i in range(10, 1, -1):
+    for i in range(60, 1, -1):
         print("Waiting for VM to shutdown {0}".format(i))
         xmList = StringIO()
         with hide('running'):
