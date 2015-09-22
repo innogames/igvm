@@ -23,14 +23,20 @@ from managevm.signals import send_signal
 
 run = fail_gracefully(run)
 
-def buildvm(config):
+def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
     hooks = glob(os.path.join(os.path.dirname(__file__), 'hooks', '*.py'))
     for hook in hooks:
         if hook == '__init__.py':
             continue
         execfile(hook, {})
 
-    config['vm'] = get_vm(config['vm_hostname'])
+    config = {'vm_hostname': vm_hostname}
+    if image != None:
+        config['image'] = image
+    config['runpuppet'] = not nopuppet
+    if postboot != None:
+        config['postboot_script'] = postboot
+    config['vm'] = get_vm(vm_hostname)
     config['dsthv_hostname'] = config['vm']['xen_host']
     config['dsthv'] = get_dsthv(config['dsthv_hostname'])
     config['network'] = get_network_config(config['vm'])
