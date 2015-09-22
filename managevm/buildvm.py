@@ -57,8 +57,8 @@ def buildvm(config):
     close_virtconns()
     disconnect_all()
 
-def setup_dsthv(config, boot=True):
-    send_signal('setup_hardware', config, boot)
+def setup_dsthv(config):
+    send_signal('setup_hardware', config)
     meminfo = get_meminfo()
     cpuinfo = get_cpuinfo()
 
@@ -112,9 +112,6 @@ def setup_dsthv(config, boot=True):
             device, config['dsthv']['hypervisor'], hypervisor_extra)
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 
-    if not boot:
-        return
-
     start_machine(config['vm_hostname'], config['dsthv']['hypervisor'])
 
     host_up = wait_until(config['vm']['intern_ip'].as_ip(),
@@ -123,12 +120,9 @@ def setup_dsthv(config, boot=True):
     if not host_up:
         raise_failure(Exception('Guest did not boot.'))
 
-
 def setup_vm(config):
     send_signal('vm_booted', config)
     if 'postboot_script' in config:
         run('/buildvm-postboot')
         run('rm -f /buildvm-postboot')
         send_signal('postboot_executed', config)
-
-
