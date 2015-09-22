@@ -1,5 +1,8 @@
+from __future__ import division
+
 import os, sys, re
 from glob import glob
+import math
 
 from adminapi.dataset import query, DatasetError
 from fabric.api import run, settings, hide, puts, prompt
@@ -61,8 +64,7 @@ def import_vm_disk(config):
     for lv in lvs:
         if lv['name'].split('/')[3] == config['vm_hostname']:
             config['src_device'] = lv['name']
-            config['disk_size_gib'] = int(lv['size_MiB'] / 1024)
-
+            config['disk_size_gib'] = int(math.ceil(lv['size_MiB'] / 1024))
 
 def import_vm_config_from_admintool(config):
     """ Import configuration from Admintool.
