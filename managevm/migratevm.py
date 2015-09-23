@@ -82,7 +82,7 @@ def migrate_virsh(config):
             + ' --domain {vm_hostname}'
             + ' --abort-on-error' # Don't tolerate soft errors
             + ' --desturi qemu+ssh://{dsthv_hostname}/system' # We need SSH agent forwarding
-            + ' --timeout ' + str(10 * 60) # Force guest to suspend after 10 minutes
+            + ' --timeout 30'  # Force guest to suspend after 30 seconds
             + ' --verbose'
             )
 
