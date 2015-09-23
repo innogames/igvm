@@ -97,7 +97,7 @@ def shutdown_vm_xen(vm):
         xmList.seek(0)
         found = False
         for xmEntry in xmList.readlines():
-            if xmEntry.split(' ')[2] == vm['hostname']:
+            if xmEntry.split()[2] == vm['hostname']:
                 found = True
         if found == False:
             break
@@ -110,7 +110,28 @@ def shutdown_vm_xen(vm):
         print("VM is shutdown.")
 
 def shutdown_vm_kvm(vm):
-    pass
+    run('virsh shutdown {0}'.format(vm['hostname']))
+
+    found = False
+    for i in range(60, 1, -1):
+        print("Waiting for VM to shutdown {0}".format(i))
+        xmList = StringIO()
+        with hide('running'):
+            run("virsh list", stdout=xmList)
+        xmList.seek(0)
+        found = False
+        for xmEntry in xmList.readlines():
+            if len(xmEntry.split())>=4 and xmEntry.split()[3] == vm['hostname']:
+                found = True
+        if found == False:
+            break
+        time.sleep(1)
+
+    if found == True:
+        print("WARNING: VM did not shutdown, I'm destroying it by force!")
+        run('virsh destroy {0}'.format(vm['hostname']))
+    else:
+        print("VM is shutdown.")
 
 def shutdown_vm(vm, hypervisor):
     if hypervisor == "xen":
