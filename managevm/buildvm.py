@@ -23,14 +23,20 @@ from managevm.signals import send_signal
 
 run = fail_gracefully(run)
 
-def buildvm(config):
+def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
     hooks = glob(os.path.join(os.path.dirname(__file__), 'hooks', '*.py'))
     for hook in hooks:
         if hook == '__init__.py':
             continue
         execfile(hook, {})
 
-    config['vm'] = get_vm(config['vm_hostname'])
+    config = {'vm_hostname': vm_hostname}
+    if image != None:
+        config['image'] = image
+    config['runpuppet'] = not nopuppet
+    if postboot != None:
+        config['postboot_script'] = postboot
+    config['vm'] = get_vm(vm_hostname)
     config['dsthv_hostname'] = config['vm']['xen_host']
     config['dsthv'] = get_dsthv(config['dsthv_hostname'])
     config['network'] = get_network_config(config['vm'])
@@ -57,8 +63,8 @@ def buildvm(config):
     close_virtconns()
     disconnect_all()
 
-def setup_dsthv(config, boot=True):
-    send_signal('setup_hardware', config, boot)
+def setup_dsthv(config):
+    send_signal('setup_hardware', config)
     meminfo = get_meminfo()
     cpuinfo = get_cpuinfo()
 
@@ -112,9 +118,6 @@ def setup_dsthv(config, boot=True):
             device, config['dsthv']['hypervisor'], hypervisor_extra)
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 
-    if not boot:
-        return
-
     start_machine(config['vm_hostname'], config['dsthv']['hypervisor'])
 
     host_up = wait_until(config['vm']['intern_ip'].as_ip(),
@@ -123,12 +126,9 @@ def setup_dsthv(config, boot=True):
     if not host_up:
         raise_failure(Exception('Guest did not boot.'))
 
-
 def setup_vm(config):
     send_signal('vm_booted', config)
     if 'postboot_script' in config:
         run('/buildvm-postboot')
         run('rm -f /buildvm-postboot')
         send_signal('postboot_executed', config)
-
-
