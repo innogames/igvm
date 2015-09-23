@@ -30,14 +30,14 @@ def cleanup_srchv(config):
     rename_old_vm(config['vm'], config['date'], config['srchv']['hypervisor'])
     rename_logical_volume(config['src_device'], config['vm_hostname'], config['date'])
 
-def setup_dsthv(config):
+def setup_dsthv(config, offline):
     send_signal('setup_hardware', config)
     check_dsthv_cpu(config)
     check_dsthv_mem(config, config['dsthv']['hypervisor'])
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
     config['dst_device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
 
-    if config['migration_type'] == 'offline':
+    if offline:
         config['nc_port'] = netcat_to_device(config['dst_device'])
 
 def add_dsthv_to_ssh(config):
@@ -94,16 +94,18 @@ def migrate_virsh(config):
                 )
         run(migrate_cmd)
 
-def migratevm(config):
-    # Character : is invalid for LV name, use - instead.
-    config['date'] = strftime("%Y-%m-%d_%H-%M-%S")
+def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):
+    config = {
+        'vm_hostname': vm_hostname,
+        # Character : is invalid for LV name, use - instead.
+        'date': strftime("%Y-%m-%d_%H-%M-%S"),
+        'dsthv_hostname': dsthv_hostname,
+        'runpuppet': not nopuppet,
+    }
 
-    if not set(['vm_hostname', 'dsthv_hostname', 'runpuppet']) <= set(config.keys()):
-        raise Exception("vm_hostname, dsthv_hostname, runpuppet must be specified in config!")
-
-    config['vm'] = get_vm(config['vm_hostname'])
+    config['vm'] = get_vm(vm_hostname)
     config['srchv'] = get_srchv(config['vm']['xen_host'])
-    config['dsthv'] = get_dsthv(config['dsthv_hostname'])
+    config['dsthv'] = get_dsthv(dsthv_hostname)
 
     lb_api = api.get('lbadmin')
 
@@ -118,8 +120,8 @@ def migratevm(config):
     env.user = 'root'
     env.shell = '/bin/bash -c'
 
-    if 'vm_new_ip' in config:
-        config['vm']['intern_ip'] = config['vm_new_ip']
+    if newip:
+        config['vm']['intern_ip'] = newip
         # Verify if this IP can get its configuration.
         # VLAN will be used if any is found.
         config['network'] = get_network_config(config['vm'])
@@ -131,11 +133,10 @@ def migratevm(config):
         print("Segment: {0}, IP address: {1}, VLAN: {2}".format(config['network']['segment'], config['network']['address4'], config['network']['vlan']))
 
     # Determine method of migration:
-    config['migration_type'] = 'online'
-    if 'vm_new_ip' in config:
-        config['migration_type'] = 'offline'
+    if newip:
+        offline = True
     if config['srchv']['hypervisor'] == "xen" or config['dsthv']['hypervisor'] == "xen":
-        config['migration_type'] = 'offline'
+        offline = True
 
     if config['srchv']['hypervisor'] == 'xen':
         execute(import_vm_config_from_xen, config, hosts=[config['srchv']['hostname']])
@@ -147,31 +148,31 @@ def migratevm(config):
     check_vm_config(config)
 
     if config['dsthv']['hypervisor'] == 'xen':
-        execute(setup_dsthv, config, hosts=[config['dsthv']['hostname']])
+        execute(setup_dsthv, config, offline, hosts=[config['dsthv']['hostname']])
     elif config['dsthv']['hypervisor'] == 'kvm':
         config['dsthv_conn'] = get_virtconn(config['dsthv']['hostname'], 'kvm')
-        execute(setup_dsthv, config, hosts=[config['dsthv']['hostname']])
+        execute(setup_dsthv, config, offline, hosts=[config['dsthv']['hostname']])
     else:
         raise Exception("Migration to Hypervisor type {0} is not supported".format(config['dsthv']['hypervisor']))
 
-    if 'vm_new_ip' in config:
+    if newip:
         # Commit previously changed IP address and segment.
         config['vm'].commit()
 
-    if 'lbdowntime' in config:
+    if not nolbdowntime:
+        print "Downtiming testtool"
         config['vm']['testtool_downtime'] = True
         config['vm'].commit()
         lb_api.downtime_segment_push(config['vm']['segment'])
         
-    if config['migration_type'] == 'offline':
+    if offline:
         execute(migrate_offline, config, hosts=[config['srchv']['hostname']])
         execute(start_offline_vm, config, hosts=[config['dsthv']['hostname']])
-    elif config['migration_type'] == 'online':
-        execute(migrate_virsh, config, hosts=[config['srchv']['hostname']])
     else:
-        raise Exception("Migration type {0} is not supported".format(config['migration_type']))
+        execute(migrate_virsh, config, hosts=[config['srchv']['hostname']])
 
-    if 'lbdowntime' in config:
+    if not nolbdowntime:
+        print "Removing testtool downtime"
         config['vm']['testtool_downtime'] = False
         config['vm'].commit()
         lb_api.downtime_segment_push(config['vm']['segment'])
