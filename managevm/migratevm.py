@@ -82,7 +82,7 @@ def migrate_virsh(config):
             + ' --domain {vm_hostname}'
             + ' --abort-on-error' # Don't tolerate soft errors
             + ' --desturi qemu+ssh://{dsthv_hostname}/system' # We need SSH agent forwarding
-            + ' --timeout ' + (config['disk_size_gib']*1024 / 50) # Force guest to suspend after copying of disk at 50MB/s
+            + ' --timeout ' + str(config['disk_size_gib']*1024 / 50) # Force guest to suspend after copying of disk at 50MB/s
             + ' --verbose'
             )
 
