@@ -142,10 +142,10 @@ def shutdown_vm(vm, hypervisor):
         raise Exception("Not a valid hypervisor: {0}".format(hypervisor))
     downtimer.call_icinga("down", vm['hostname'], duration=600)
 
-def rename_old_vm(vm, date, hypervisor):
+def rename_old_vm(vm, date, offline, hypervisor):
     if hypervisor == "xen":
         run('mv /etc/xen/domains/{0}.sxp /etc/xen/domains/{0}.sxp.migrated.{1}'.format(vm['hostname'], date))
-    elif hypervisor == "kvm":
+    elif hypervisor == "kvm" and offline == True:
         run('virsh dumpxml {0} > /etc/libvirt/qemu/{0}.xml.migrated.{1}'.format(vm['hostname'], date))
         run('virsh undefine {0}'.format(vm['hostname']))
 

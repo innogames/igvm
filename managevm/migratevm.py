@@ -26,8 +26,8 @@ from managevm.utils.virtutils import close_virtconns
 run = fail_gracefully(run)
 
 
-def cleanup_srchv(config):
-    rename_old_vm(config['vm'], config['date'], config['srchv']['hypervisor'])
+def cleanup_srchv(config, offline):
+    rename_old_vm(config['vm'], config['date'], offline, config['srchv']['hypervisor'])
     rename_logical_volume(config['src_device'], config['vm_hostname'], config['date'])
 
 def setup_dsthv(config, offline):
@@ -183,7 +183,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         lb_api.downtime_segment_push(config['vm']['segment'])
 
     # Rename resources on source hypervisor.
-    execute(cleanup_srchv, config, hosts=[config['srchv']['hostname']])
+    execute(cleanup_srchv, config, offline, hosts=[config['srchv']['hostname']])
 
     # Update admintool information
     config['vm']['xen_host'] = config['dsthv']['hostname']
