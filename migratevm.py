@@ -23,5 +23,5 @@ args = vars(parser.parse_args())
 
 adminapi.auth()
 
-migratevm(args.pop('guest'), args.pop('dsthv'), **args)
+migratevm(args.pop('vm_hostname'), args.pop('dsthv_hostname'), **args)
 
