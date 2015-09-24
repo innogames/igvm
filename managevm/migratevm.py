@@ -138,6 +138,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     if config['srchv']['hypervisor'] == "xen" or config['dsthv']['hypervisor'] == "xen":
         offline = True
 
+    # Import information about VM from source Hypervisor
     if config['srchv']['hypervisor'] == 'xen':
         execute(import_vm_config_from_xen, config, hosts=[config['srchv']['hostname']])
     elif config['srchv']['hypervisor'] == 'kvm':
@@ -145,8 +146,11 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         execute(import_vm_config_from_kvm, config, hosts=[config['srchv']['hostname']])
     else:
         raise Exception("Migration from Hypervisor type {0} is not supported".format(config['srchv']['hypervisor']))
+
+    # Verify if config contains all the needed parameters
     check_vm_config(config)
 
+    # Setup destination Hypervisor
     if config['dsthv']['hypervisor'] == 'xen':
         execute(setup_dsthv, config, offline, hosts=[config['dsthv']['hostname']])
     elif config['dsthv']['hypervisor'] == 'kvm':
@@ -155,8 +159,8 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     else:
         raise Exception("Migration to Hypervisor type {0} is not supported".format(config['dsthv']['hypervisor']))
 
+    # Commit previously changed IP address and segment.
     if newip:
-        # Commit previously changed IP address and segment.
         config['vm'].commit()
 
     if not nolbdowntime:
@@ -165,6 +169,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         config['vm'].commit()
         lb_api.downtime_segment_push(config['vm']['segment'])
         
+    # Finally migrate the VM
     if offline:
         execute(migrate_offline, config, hosts=[config['srchv']['hostname']])
         execute(start_offline_vm, config, hosts=[config['dsthv']['hostname']])
