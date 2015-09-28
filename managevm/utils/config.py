@@ -174,6 +174,8 @@ def check_vm_config(config):
             hv_network = get_network_config(config['dsthv'])
             if config['network']['vlan'] != hv_network['vlan']:
                 raise Exception('Destination Hypervisor is not on same VLAN {0} as VM.'.format(config['network']['vlan']))
+            # Remove VLAN information, for untagged Hypervisors VM must be untagged too
+            config['network']['vlan'] = None
 
     send_signal('config_finished', config)
 
