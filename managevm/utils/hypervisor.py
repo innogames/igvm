@@ -97,7 +97,7 @@ def shutdown_vm_xen(vm):
         xmList.seek(0)
         found = False
         for xmEntry in xmList.readlines():
-            if xmEntry.split()[2] == vm['hostname']:
+            if len(xmEntry.split())>=3 and xmEntry.split()[2] == vm['hostname']:
                 found = True
         if found == False:
             break
