@@ -17,8 +17,10 @@ def get_virtconn(host, hypervisor):
     return _conns[index]
 
 def close_virtconns():
-    for conn in _conns.values():
-        try:
-            conn.close()
-        except libvirt.libvirtError:
-            pass
+    print "Here I'd kill the connection to Hypervisor, but I will not."
+    print "Ask Henning why do we do it and why it fails on Basti's scripts."
+#    for conn in _conns.values():
+#        try:
+#            conn.close()
+#        except libvirt.libvirtError:
+#            pass
