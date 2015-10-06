@@ -46,7 +46,7 @@ def get_cpuinfo():
 
         key = parts[0]
         value = parts[1]
-        
+
         if key == 'flags':
             value = set(value.split())
 

@@ -25,10 +25,10 @@ def get_images():
 
 def download_image(image):
     url = BASE_URL + image
-    
+
     try:
         group = grp.getgrnam('sysadmins')
-    except: 
+    except:
         group = []
 
     user = pwd.getpwuid(os.geteuid()).pw_name

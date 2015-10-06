@@ -22,10 +22,10 @@ def get_images():
 
 def download_image(image):
     url = BASE_URL + image
-    
+
     if files.exists(image):
         local_hash = run(cmd('md5sum {0}', image)).split()[0]
-        
+
         try:
             with settings(host_string=PACKET_SERVER):
                 with cd(PACKET_DIR):

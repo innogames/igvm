@@ -112,7 +112,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
 
     if config['srchv']['hostname'] == config['dsthv']['hostname']:
         raise Exception("Source and destination Hypervisor is the same machine {0}!".format(config['srchv']['hostname']))
-   
+
     # Configuration of Fabric:
     env.disable_known_hosts = True
     env.use_ssh_config = True
@@ -162,7 +162,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         config['vm']['testtool_downtime'] = True
         config['vm'].commit()
         lb_api.downtime_segment_push(config['vm']['segment'])
-        
+
     # Finally migrate the VM
     if offline:
         execute(migrate_offline, config, hosts=[config['srchv']['hostname']])

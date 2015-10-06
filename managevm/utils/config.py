@@ -27,7 +27,7 @@ def get_vm(hostname):
 
 def get_srchv(hostname):
     """ Get source Hypervisor from admintool by config['srchv'] hostname.
-        
+
         Returns admintool object."""
 
     try:
@@ -39,7 +39,7 @@ def get_srchv(hostname):
 
 def get_dsthv(hostname):
     """ Get destination Hypervisor from admintool by config['dsthv'] hostname.
-        
+
         Returns admintool object."""
 
     try:
@@ -52,7 +52,7 @@ def get_dsthv(hostname):
 def init_vm_config(config):
     """ Put some hardcoded defaults into config dictionary.
         Those parameters are required only for new VM.
-        
+
         Returns nothing, data is stored in 'config' dictionary."""
 
     config['swap_size'] = 1024

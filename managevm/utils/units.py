@@ -10,11 +10,11 @@ _size_factors = {
 }
 def parse_size(size):
     match = re.match('(\d+(.\d+)?)\s*(G|M|K)?', size, re.IGNORECASE)
-    
+
     if match:
         unit = match.group(3)
         factor = _size_factors.get(unit, 1)
-        
+
         if match.group(2):
             size_number = float(match.group(1))
         else:

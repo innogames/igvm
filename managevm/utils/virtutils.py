@@ -13,7 +13,7 @@ def get_virtconn(host, hypervisor):
         url = 'qemu+ssh://{0}/system'.format(host)
         puts('Connecting to libvirt at ' + url)
         _conns[index] = libvirt.open(url)
-    
+
     return _conns[index]
 
 def close_virtconns():

@@ -18,11 +18,11 @@ def ping_port(ip, port=22, timeout=1):
 def wait_until(ip, port=22, timeout=60, waitmsg=None):
     if waitmsg:
         puts(waitmsg)
-    
+
     for sec in xrange(timeout):
         if ping_port(ip, port):
             return True
-        
+
         if waitmsg:
             puts('Remaining: {0} secs'.format(timeout - sec))
         time.sleep(1)

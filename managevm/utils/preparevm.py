@@ -76,7 +76,7 @@ def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
     create_hosts(target_dir)
     create_interfaces(network_config, target_dir)
     set_mailname(target_dir, mailname)
-    
+
     swap_path = os.path.join(target_dir, 'swap')
     generate_swap(swap_path, swap_size)
 

@@ -13,7 +13,7 @@ def get_installdir():
 
 def cmd(cmd, *args, **kwargs):
     escaped_args = [quote(str(arg)) for arg in args]
-    
+
     escaped_kwargs = {}
     for key, value in kwargs.iteritems():
         escaped_kwargs[key] = quote(str(value))
