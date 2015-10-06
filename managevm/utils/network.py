@@ -96,4 +96,7 @@ def get_vlan_info(vm, srchv, dsthv, newip):
         # Remove VLAN information, for untagged Hypervisors VM must be untagged too
         vm_net['vlan'] = None
 
+    if offline_flag:
+        print "VLAN configuration change enforces offline migration"
+
     return (vm_net['vlan'], offline_flag)

@@ -126,7 +126,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
 
     # Configure network
     (config['vlan_tag'], offline_flag)= get_vlan_info(config['vm'], config['srchv'], config['dsthv'], newip)
-    offline &= offline_flag
+    offline |= offline_flag
 
     # Enforce offline migration of one of Hypervisors is XEN
     if config['srchv']['hypervisor'] == "xen" or config['dsthv']['hypervisor'] == "xen":
