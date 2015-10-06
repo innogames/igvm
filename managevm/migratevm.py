@@ -73,25 +73,39 @@ def start_offline_vm(config):
     start_machine(config['vm_hostname'], config['dsthv']['hypervisor'])
 
 def migrate_virsh(config):
+
+    # Unfortunately, virsh provides a global timeout, but what we need it to
+    # timeout if it is catching up the dirtied memory.  To be in this stage,
+    # it should have coped the initial disk and memory and changes on them.
+    timeout = sum((
+            # We assume the disk can be copied at 50 MBp/s;
+            config['disk_size_gib'] * 1024 / 50,
+            # the memroy at 100 MBp/s;
+            config['mem'] / 100,
+            # and 5 minutes more for other operations.
+            5 * 60,
+        ))
+
     migrate_cmd = ('virsh migrate'
-            + ' --live' # Do it live!
-            + ' --copy-storage-all'
-            + ' --persistent' # Define the VM on the new host
-            + ' --undefinesource' # Undefine the VM on the old host
-            + ' --change-protection' # Don't let the VM configuration to be changed
-            + ' --auto-converge' # Force convergence, otherwise migrations never end
-            + ' --domain {vm_hostname}'
-            + ' --abort-on-error' # Don't tolerate soft errors
-            + ' --desturi qemu+ssh://{dsthv_hostname}/system' # We need SSH agent forwarding
-            + ' --timeout ' + str(config['disk_size_gib']*1024 / 50) # Force guest to suspend after copying of disk at 50MB/s
-            + ' --verbose'
-            )
+            ' --live' # Do it live!
+            ' --copy-storage-all'
+            ' --persistent' # Define the VM on the new host
+            ' --undefinesource' # Undefine the VM on the old host
+            ' --change-protection' # Don't let the VM configuration to be changed
+            ' --auto-converge' # Force convergence, otherwise migrations never end
+            ' --domain {vm_hostname}'
+            ' --abort-on-error' # Don't tolerate soft errors
+            ' --desturi qemu+ssh://{dsthv_hostname}/system' # We need SSH agent forwarding
+            ' --timeout {timeout}' # Force guest to suspend, if noting else helped
+            ' --verbose'
+        )
 
     add_dsthv_to_ssh(config)
     with settings(user='root', forward_agent=True):
         migrate_cmd = migrate_cmd.format(
                     vm_hostname    = config['vm_hostname'],
                     dsthv_hostname = config['dsthv_hostname'],
+                    timeout        = timeout,
                 )
         run(migrate_cmd)
 
