@@ -63,3 +63,37 @@ def get_network_config(server):
 
     return ip_info
 
+def get_vlan_info(vm, srchv, dsthv, newip):
+    # Prepare return value
+    offline_flag = False
+
+    # Handle changing of IP address
+    if newip:
+        offline_flag = True
+        vm['intern_ip'] = newip
+
+    # Get network configuration of all machines
+    vm_net    = get_network_config(vm)
+    dsthv_net = get_network_config(dsthv)
+
+    if newip:
+        vm['segment'] = vm_net['segment']
+
+        print("Machine will be moved to new network, this enforces offline migration.")
+        print("Segment: {0}, IP address: {1}, VLAN: {2}".format(vm['segment'], vm['intern_ip'], vm_net['vlan']))
+
+    if dsthv['network_vlans']:
+        if not srchv['network_vlans']:
+            offline_flag = True
+        if vm_net['vlan'] not in dsthv['network_vlans']:
+            raise Exception('Destination Hypervisor does not support VLAN {0}.'.format(vm_net['vlan']))
+    else:
+        if srchv['network_vlans']:
+            offline_flag = True
+        if vm_net['vlan'] != dsthv_net['vlan']:
+            raise Exception('Destination Hypervisor is not on same VLAN {0} as VM {1}.'.format(dsthv_net['vlan'], vm_net['vlan']))
+
+        # Remove VLAN information, for untagged Hypervisors VM must be untagged too
+        vm_net['vlan'] = None
+
+    return (vm_net['vlan'], offline_flag)

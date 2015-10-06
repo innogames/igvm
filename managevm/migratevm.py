@@ -16,6 +16,7 @@ from managevm.signals import send_signal
 from managevm.utils import raise_failure, fail_gracefully
 from managevm.utils.config import *
 from managevm.utils.hypervisor import *
+from managevm.utils.network import get_vlan_info
 from managevm.utils.portping import wait_until
 from managevm.utils.preparevm import run_puppet
 from managevm.utils.resources import get_ssh_keytypes
@@ -64,7 +65,7 @@ def start_offline_vm(config):
         hypervisor_extra.update(extra)
 
     create_definition(config['vm_hostname'], config['num_cpu'], config['mem'],
-            config['max_mem'], config['network']['vlan'],
+            config['max_mem'], config['vlan_tag'],
             config['dst_device'], config['dsthv']['hypervisor'], hypervisor_extra)
 
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
@@ -122,19 +123,12 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
 
     if newip:
         config['vm']['intern_ip'] = newip
-        # Verify if this IP can get its configuration.
-        # VLAN will be used if any is found.
-        config['network'] = get_network_config(config['vm'])
-        # Set new IP address and segment but don't commit yet.
-        # Some checks might still fail and commit should be done only just before migration starts.
-        config['vm']['intern_ip'] = config['network']['address4']
-        config['vm']['segment'] = config['network']['segment']
-        print("Machine will be moved to new network:")
-        print("Segment: {0}, IP address: {1}, VLAN: {2}".format(config['network']['segment'], config['network']['address4'], config['network']['vlan']))
 
-    # Determine method of migration:
-    if newip:
-        offline = True
+    # Configure network
+    (config['vlan_tag'], offline_flag)= get_vlan_info(config['vm'], config['srchv'], config['dsthv'], newip)
+    offline &= offline_flag
+
+    # Enforce offline migration of one of Hypervisors is XEN
     if config['srchv']['hypervisor'] == "xen" or config['dsthv']['hypervisor'] == "xen":
         offline = True
 

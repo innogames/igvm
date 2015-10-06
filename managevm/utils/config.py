@@ -92,7 +92,6 @@ def import_vm_config_from_kvm(config):
 
     # Some we trust from Admintool
     config['os']      = config['srchv']['os']
-    config['network'] = get_network_config(config['vm'])
 
     # And some must be retrieved from running source hypervisor OS
     import_vm_disk(config)
@@ -110,7 +109,6 @@ def import_vm_config_from_xen(config):
 
     # Some we trust from Admintool
     config['os']      = config['srchv']['os']
-    config['network'] = get_network_config(config['vm'])
 
     # But not for disk size
     import_vm_disk(config)
@@ -163,19 +161,6 @@ def check_vm_config(config):
 
     if 'image' not in config:
         config['image'] = config['os'] + '-base.tar.gz'
-
-    if 'network' not in config:
-        raise Exception('No network configuration of VM was found.')
-    else:
-        if config['dsthv']['network_vlans']:
-            if config['network']['vlan'] not in config['dsthv']['network_vlans']:
-                raise Exception('Destination Hypervisor does not support VLAN {0}.'.format(config['network']['vlan']))
-        else:
-            hv_network = get_network_config(config['dsthv'])
-            if config['network']['vlan'] != hv_network['vlan']:
-                raise Exception('Destination Hypervisor is not on same VLAN {0} as VM.'.format(config['network']['vlan']))
-            # Remove VLAN information, for untagged Hypervisors VM must be untagged too
-            config['network']['vlan'] = None
 
     send_signal('config_finished', config)
 
