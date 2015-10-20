@@ -80,23 +80,23 @@ def migrate_virsh(config):
     timeout = sum((
             # We assume the disk can be copied at 50 MBp/s;
             config['disk_size_gib'] * 1024 / 50,
-            # the memroy at 100 MBp/s;
+            # the memory at 100 MBp/s;
             config['mem'] / 100,
             # and 5 minutes more for other operations.
             5 * 60,
         ))
 
     migrate_cmd = ('virsh migrate'
-            ' --live' # Do it live!
+            ' --live'               # Do it live!
             ' --copy-storage-all'
-            ' --persistent' # Define the VM on the new host
-            ' --undefinesource' # Undefine the VM on the old host
-            ' --change-protection' # Don't let the VM configuration to be changed
-            ' --auto-converge' # Force convergence, otherwise migrations never end
+            ' --persistent'         # Define the VM on the new host
+            ' --undefinesource'     # Undefine the VM on the old host
+            ' --change-protection'  # Don't let the VM configuration to be changed
+            ' --auto-converge'      # Force convergence, otherwise migrations never end
             ' --domain {vm_hostname}'
-            ' --abort-on-error' # Don't tolerate soft errors
+            ' --abort-on-error'     # Don't tolerate soft errors
             ' --desturi qemu+ssh://{dsthv_hostname}/system' # We need SSH agent forwarding
-            ' --timeout {timeout}' # Force guest to suspend, if noting else helped
+            ' --timeout {timeout}'  # Force guest to suspend, if noting else helped
             ' --verbose'
         )
 
