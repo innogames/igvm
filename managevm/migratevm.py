@@ -127,6 +127,13 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     if config['srchv']['hostname'] == config['dsthv']['hostname']:
         raise Exception("Source and destination Hypervisor is the same machine {0}!".format(config['srchv']['hostname']))
 
+    if not offline and not (
+                config['srchv']['hypervisor'] == 'kvm'
+            and
+                config['dsthv']['hypervisor'] == 'kvm'
+        ):
+        raise Exception('Online migration is only possible from KVM to KVM.')
+
     # Configuration of Fabric:
     env.disable_known_hosts = True
     env.use_ssh_config = True
@@ -139,12 +146,18 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         config['vm']['intern_ip'] = newip
 
     # Configure network
-    (config['vlan_tag'], offline_flag)= get_vlan_info(config['vm'], config['srchv'], config['dsthv'], newip)
-    offline |= offline_flag
+    config['vlan_tag'], offline_flag = get_vlan_info(
+            config['vm'],
+            config['srchv'],
+            config['dsthv'],
+            newip,
+        )
 
-    # Enforce offline migration of one of Hypervisors is XEN
-    if config['srchv']['hypervisor'] == "xen" or config['dsthv']['hypervisor'] == "xen":
-        offline = True
+    if not offline and offline_flag:
+        raise Exception(
+                'Online migration is not possible with the current network '
+                'configuration.'
+            )
 
     # Import information about VM from source Hypervisor
     if config['srchv']['hypervisor'] == 'xen':
