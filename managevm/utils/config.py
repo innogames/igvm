@@ -86,9 +86,18 @@ def import_vm_config_from_kvm(config):
     # Live migration will be performed, so they must be accurate.
     vm_obj = config['srchv_conn'].lookupByName(config['vm_hostname'])
     vm_info = vm_obj.info()
+
     config['max_mem'] = int(vm_info[1] / 1024)
+    if config['max_mem'] == 0:
+        config['max_mem'] = config['vm']['memory']
+
     config['mem']     = int(vm_info[2] / 1024)
+    if config['mem'] == 0:
+        config['mem'] = config['vm']['memory']
+
     config['num_cpu'] = vm_info[3]
+    if config['num_cpu'] == 0:
+        config['num_cpu'] = config['vm']['num_cpu']
 
     # Some we trust from Admintool
     config['os']      = config['srchv']['os']
