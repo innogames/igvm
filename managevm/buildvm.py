@@ -14,7 +14,7 @@ from managevm.utils.resources import get_meminfo, get_cpuinfo, get_ssh_keytypes
 from managevm.utils.storage import (create_storage, mount_storage, umount_temp,
         remove_temp, get_vm_block_dev)
 from managevm.utils.image import download_image, extract_image, get_images
-from managevm.utils.network import get_network_config
+from managevm.utils.network import get_network_config, get_vlan_info
 from managevm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet, block_autostart, unblock_autostart
 from managevm.utils.hypervisor import (create_definition, start_machine)
 from managevm.utils.portping import wait_until
@@ -40,6 +40,8 @@ def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
     config['dsthv_hostname'] = config['vm']['xen_host']
     config['dsthv'] = get_dsthv(config['dsthv_hostname'])
     config['network'] = get_network_config(config['vm'])
+    # Override VLAN information
+    config['network']['vlan'] = get_vlan_info(config['vm'], None, config['dsthv'], None)[0]
 
     init_vm_config(config)
     import_vm_config_from_admintool(config)
