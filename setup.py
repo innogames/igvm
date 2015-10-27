@@ -7,7 +7,12 @@ setup(
         url='git@gitlab.innogames.de:sysadmins/ig.managevm.git',
         packages=['managevm', 'managevm.utils', 'managevm.hooks'],
         scripts=['bin/buildvm', 'bin/migratevm'],
-        package_data={'managevm': ['templates/*']},
+        package_data={'managevm': [
+            'templates/etc/*',
+            'templates/etc/network/*',
+            'templates/etc/xen/domains/*',
+            'templates/libvirt/*',
+            ]},
         author='Henning Pridohl',
         author_email='henning.pridohl@innogames.de',
         maintainer='Kajetan Staszkiewicz',
