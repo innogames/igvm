@@ -3,7 +3,7 @@ from fabric.contrib.files import upload_template as _upload_template
 
 from managevm.utils import get_installdir, fail_gracefully
 
-_template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'templates')
+_template_dir = os.path.join(os.path.dirname(__file__), '..', 'templates')
 
 print "Loading templates from: %s" % _template_dir
 
