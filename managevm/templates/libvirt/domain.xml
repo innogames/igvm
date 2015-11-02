@@ -1,6 +1,9 @@
 <domain type='kvm'>
   <name>{{ hostname }}</name>
   <uuid>{{ uuid }}</uuid>
+{% if mem_hotplug %}
+  <maxMemory slots='16' unit='MiB'>{{ max_mem }}</maxMemory>
+{% endif %}
   <memory unit='MiB'>{{ mem_size }}</memory>
   <currentMemory unit='MiB'>{{ mem_size }}</currentMemory>
   <vcpu placement='auto' current='{{ num_vcpus }}'>24</vcpu>
@@ -16,6 +19,13 @@
     <apic eoi='on'/>
     <hap/>
   </features>
+{% if mem_hotplug %}
+  <cpu>
+    <numa>
+      <cell id='0' cpus='0-{{ num_vcpus-1 }}' memory='{{ mem_size }}' unit='MiB'/>
+    </numa>
+  </cpu>
+{% endif %}
   <clock offset='utc' adjustment='reset'/>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>

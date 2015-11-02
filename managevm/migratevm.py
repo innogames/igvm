@@ -35,6 +35,7 @@ def setup_dsthv(config, offline):
     send_signal('setup_hardware', config)
     check_dsthv_cpu(config)
     check_dsthv_mem(config, config['dsthv']['hypervisor'])
+    check_dsthv_mem_hotplug(config)
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
     config['dst_device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
 
@@ -66,7 +67,7 @@ def start_offline_vm(config):
 
     create_definition(config['vm_hostname'], config['num_cpu'], config['mem'],
             config['max_mem'], config['vlan_tag'],
-            config['dst_device'], config['dsthv']['hypervisor'], hypervisor_extra)
+            config['dst_device'], config['mem_hotplug'], config['dsthv']['hypervisor'], hypervisor_extra)
 
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 

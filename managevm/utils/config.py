@@ -122,6 +122,18 @@ def import_vm_config_from_xen(config):
     # But not for disk size
     import_vm_disk(config)
 
+def check_dsthv_mem_hotplug(config):
+    config['mem_hotplug'] = False
+    if config['dsthv']['hypervisor'] == 'kvm':
+        version = config['dsthv_conn'].getVersion()
+        # According to documentation:
+        # value is major * 1,000,000 + minor * 1,000 + release
+        release = version % 1000
+        minor = int(version/1000%1000)
+        major = int(version/1000000%1000000)
+        if major >= 2 and minor >=3 :
+            config['mem_hotplug'] = True
+
 def check_dsthv_cpu(config):
     cpuinfo = get_cpuinfo()
     num_cpus = len(cpuinfo)
