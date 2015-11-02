@@ -122,9 +122,19 @@ def import_vm_config_from_xen(config):
     # But not for disk size
     import_vm_disk(config)
 
-def check_dsthv_mem_hotplug(config):
+def check_dsthv_memory(config):
+    """ Check various parameters of DstHV and VM memory.
+
+        Returns nothing.
+        Will raise an exception if there is not enough memory.
+        Will modify config if all is fine. """
+
     config['mem_hotplug'] = False
+    config['numa_interleave'] = False
+
     if config['dsthv']['hypervisor'] == 'kvm':
+
+        # Check memory hotplugging capability.
         version = config['dsthv_conn'].getVersion()
         # According to documentation:
         # value is major * 1,000,000 + minor * 1,000 + release
@@ -134,25 +144,32 @@ def check_dsthv_mem_hotplug(config):
         if major >= 2 and minor >=3 :
             config['mem_hotplug'] = True
 
+        # Get amount of memory available to Hypervisor.
+        # Start with what OS sees as total memory (not hardware installed memory)
+        total_MiB = config['dsthv_conn'].getMemoryStats(-1)['total'] / 1024
+        # Always keep extra 2GiB free for Hypervisor
+        total_MiB -= 2*1024
+
+        # Calculate memory used by other VMs.
+        # We can not trust hv_conn.getFreeMemory(), sum up memory used by each VM instead
+        used_KiB = 0
+        for dom_id in config['dsthv_conn'].listDomainsID():
+            dom = config['dsthv_conn'].lookupByID(dom_id)
+            used_KiB += dom.maxMemory()
+        free_MiB = total_MiB - used_KiB/1024
+        if config['mem'] > free_MiB:
+            raise Exception('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
+
+        if config['mem'] >= 0.5 * total_MiB:
+            config['numa_interleave'] = True
+
+
 def check_dsthv_cpu(config):
     cpuinfo = get_cpuinfo()
     num_cpus = len(cpuinfo)
     if config['num_cpu'] > num_cpus:
         raise Exception('Not enough CPUs. Destination Hypervisor has {0} but VM requires {1}.'.format(num_cpus, config['num_cpu']))
 
-def check_dsthv_mem(config, hypervisor):
-    if hypervisor == 'kvm':
-        # Start with what OS sees as total memory (not hardware installed memory)
-        free_KiB = config['dsthv_conn'].getMemoryStats(-1)['total']
-        # Always keep extra 2GiB free
-        free_KiB -= 2*1024*1024
-        # We can not trust hv_conn.getFreeMemory(), sum up memory used by each VM instead
-        for dom_id in config['dsthv_conn'].listDomainsID():
-            dom = config['dsthv_conn'].lookupByID(dom_id)
-            free_KiB -= dom.maxMemory()
-        free_MiB = free_KiB / 1024
-        if config['mem'] > (free_MiB):
-            raise Exception('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
 
 def check_vm_config(config):
     send_signal('config_created', config)

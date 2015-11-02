@@ -72,8 +72,7 @@ def setup_dsthv(config):
         config['dsthv_conn'] = get_virtconn(config['dsthv']['hostname'], 'kvm')
 
     check_dsthv_cpu(config)
-    check_dsthv_mem(config, config['dsthv']['hypervisor'])
-    check_dsthv_mem_hotplug(config)
+    check_dsthv_memory(config)
 
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
 
@@ -111,7 +110,8 @@ def setup_dsthv(config):
 
     create_definition(config['vm_hostname'], config['num_cpu'], config['mem'],
             config['max_mem'], config['network']['vlan'],
-            device, config['mem_hotplug'], config['dsthv']['hypervisor'], hypervisor_extra)
+            device, config['mem_hotplug'], config['numa_interleave'],
+            config['dsthv']['hypervisor'], hypervisor_extra)
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 
     start_machine(config['vm_hostname'], config['dsthv']['hypervisor'])
