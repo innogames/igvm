@@ -130,8 +130,15 @@ def check_dsthv_cpu(config):
 
 def check_dsthv_mem(config, hypervisor):
     if hypervisor == 'kvm':
+        # Start with what OS sees as total memory (not hardware installed memory)
+        free_KiB = config['dsthv_conn'].getMemoryStats(-1)['total']
         # Always keep extra 2GiB free
-        free_MiB = (config['dsthv_conn'].getFreeMemory() / 1024 / 1024) - 2048
+        free_KiB -= 2*1024*1024
+        # We can not trust hv_conn.getFreeMemory(), sum up memory used by each VM instead
+        for dom_id in config['dsthv_conn'].listDomainsID():
+            dom = config['dsthv_conn'].lookupByID(dom_id)
+            free_KiB -= dom.maxMemory()
+        free_MiB = free_KiB / 1024
         if config['mem'] > (free_MiB):
             raise Exception('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
 

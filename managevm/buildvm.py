@@ -67,19 +67,12 @@ def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
 
 def setup_dsthv(config):
     send_signal('setup_hardware', config)
-    meminfo = get_meminfo()
-    cpuinfo = get_cpuinfo()
 
-    mem_free = meminfo['MemFree'] + meminfo['Buffers'] + meminfo['Cached']
-    mem_free = convert_size(mem_free, 'B', 'M')
-    if config['mem'] > mem_free:
-        mem_missing = config['mem'] - mem_free
-        raise_failure(Exception('Not enough free memory. Missing {0} MiB',
-                mem_missing))
+    if config['dsthv']['hypervisor'] == 'kvm':
+        config['dsthv_conn'] = get_virtconn(config['dsthv']['hostname'], 'kvm')
 
-    num_cpus = len(cpuinfo)
-    if config['num_cpu'] > num_cpus:
-        raise_failure(Exception('Not enough CPUs.'))
+    check_dsthv_cpu(config)
+    check_dsthv_mem(config, config['dsthv']['hypervisor'])
 
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
 
