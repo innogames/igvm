@@ -82,7 +82,7 @@ def get_vlan_info(vm, srchv, dsthv, newip):
         print("Machine will be moved to new network, this enforces offline migration.")
         print("Segment: {0}, IP address: {1}, VLAN: {2}".format(vm['segment'], vm['intern_ip'], vm_net['vlan']))
 
-    if dsthv['network_vlans']:
+    if 'network_vlans' in dsthv and dsthv['network_vlans']:
         if srchv and not srchv['network_vlans']:
             offline_flag = True
         if vm_net['vlan'] not in dsthv['network_vlans']:
