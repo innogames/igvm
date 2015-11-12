@@ -189,6 +189,14 @@ def check_vm_config(config):
     if config['max_mem'] < 1:
         raise Exception('"max_mem" is not greater than 0.')
 
+    if config['max_mem'] <= config['mem']:
+        puts('Max Mem setting was wrong, fixing it')
+        # TODO: remove this dup of code and set it with libvirt api
+        if config['mem'] > 12288:
+            config['max_mem'] = config['mem'] + 10240
+        else:
+            config['max_mem'] = 16384
+
     if 'num_cpu' not in config:
         raise Exception('"num_cpu" is not set.')
 

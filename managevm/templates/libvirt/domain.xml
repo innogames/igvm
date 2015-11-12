@@ -5,6 +5,8 @@
   <maxMemory slots='16' unit='MiB'>{{ max_mem }}</maxMemory>
 {% endif %}
   <memory unit='MiB'>{{ mem_size }}</memory>
+{% if mem_hotplug %}
+{% else %}
   <numatune>
 {% if numa_interleave %}
     <memory mode='interleave' nodeset='0-1'/>
@@ -12,8 +14,13 @@
     <memory mode='strict' placement='auto'/>
 {% endif %}
   </numatune>
+{% endif %}
   <currentMemory unit='MiB'>{{ mem_size }}</currentMemory>
+{% if mem_hotplug %}
+  <vcpu placement='static' current='{{ num_vcpus }}'>24</vcpu>
+{% else %}
   <vcpu placement='auto' current='{{ num_vcpus }}'>24</vcpu>
+{% endif %}
   <os>
     <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>
     <kernel>/vmlinuz</kernel>
@@ -29,7 +36,7 @@
 {% if mem_hotplug %}
   <cpu>
     <numa>
-      <cell id='0' cpus='0-{{ num_vcpus-1 }}' memory='{{ mem_size }}' unit='MiB'/>
+      <cell id='0' cpus='0-23' memory='{{ mem_size }}' unit='MiB'/>
     </numa>
   </cpu>
 {% endif %}
