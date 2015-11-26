@@ -9,9 +9,9 @@ from fabric.contrib import files
 
 from managevm.utils import fail_gracefully, cmd
 
-BASE_URL = 'http://images.ig.local/'
-PACKET_SERVER = 'images.ig.local'
-PACKET_DIR = '/images/domu'
+BASE_URL = 'http://aw-foreman.ig.local:8080/'
+PACKET_SERVER = 'aw-foreman.ig.local'
+PACKET_DIR = '/srv/domu_images/images'
 
 run = fail_gracefully(run)
 
