@@ -155,7 +155,7 @@ def check_dsthv_memory(config):
         used_KiB = 0
         for dom_id in config['dsthv_conn'].listDomainsID():
             dom = config['dsthv_conn'].lookupByID(dom_id)
-            used_KiB += dom.maxMemory()
+            used_KiB += dom.info()[2]
         free_MiB = total_MiB - used_KiB/1024
         if config['mem'] > free_MiB:
             raise Exception('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
