@@ -122,6 +122,18 @@ def import_vm_config_from_xen(config):
     # But not for disk size
     import_vm_disk(config)
 
+def check_dsthv_vm(config):
+    """ Check if VM is already defined on Destination Hypervisor.
+
+        Returns nothing.
+        Will raise an exception if VM already exists"""
+
+    if config['dsthv']['hypervisor'] == 'kvm':
+        for dom_id in config['dsthv_conn'].listDomainsID():
+            dom = config['dsthv_conn'].lookupByID(dom_id)
+            if dom.name() == config['vm_hostname']:
+                raise Exception('VM {0} already defined on {1}'.format(config['vm_hostname'], config['dsthv_hostname']))
+
 def check_dsthv_memory(config):
     """ Check various parameters of DstHV and VM memory.
 

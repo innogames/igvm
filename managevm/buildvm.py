@@ -71,6 +71,7 @@ def setup_dsthv(config):
     if config['dsthv']['hypervisor'] == 'kvm':
         config['dsthv_conn'] = get_virtconn(config['dsthv']['hostname'], 'kvm')
 
+    check_dsthv_vm(config)
     check_dsthv_cpu(config)
     check_dsthv_memory(config)
 
