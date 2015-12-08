@@ -185,7 +185,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     if newip:
         config['vm'].commit()
 
-    if not nolbdowntime:
+    if not nolbdowntime and 'testtool_downtime' in config['vm']:
         print "Downtiming testtool"
         config['vm']['testtool_downtime'] = True
         config['vm'].commit()
@@ -198,7 +198,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     else:
         execute(migrate_virsh, config, hosts=[config['srchv']['hostname']])
 
-    if not nolbdowntime:
+    if not nolbdowntime and 'testtool_downtime' in config['vm']:
         print "Removing testtool downtime"
         config['vm']['testtool_downtime'] = False
         config['vm'].commit()
