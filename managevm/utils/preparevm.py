@@ -2,7 +2,6 @@ import os
 
 from fabric.api import run, cd, put, settings
 
-
 from managevm.utils.sshkeys import create_authorized_keys
 from managevm.utils.template import upload_template
 from managevm.utils import fail_gracefully, cmd

@@ -1,28 +1,45 @@
-import os, sys, re, time
-from glob import glob
-
-import libvirt
 from time import strftime
 
 from fabric.api import env, execute, run, settings
 from fabric.context_managers import hide
 from fabric.network import disconnect_all
-from fabric.contrib.console import confirm
 
-from adminapi.dataset import query, DatasetError
 from adminapi import api
 
 from managevm.signals import send_signal
-from managevm.utils import raise_failure, fail_gracefully
-from managevm.utils.config import *
-from managevm.utils.hypervisor import *
+from managevm.utils import fail_gracefully
+from managevm.utils.config import (
+        get_vm,
+        get_srchv,
+        get_dsthv,
+        check_dsthv_memory,
+        check_dsthv_cpu,
+        check_vm_config,
+        import_vm_config_from_xen,
+        import_vm_config_from_kvm,
+    )
+from managevm.utils.hypervisor import (
+        create_definition,
+        start_machine,
+        shutdown_vm,
+        rename_old_vm,
+    )
 from managevm.utils.network import get_vlan_info
-from managevm.utils.portping import wait_until
 from managevm.utils.preparevm import run_puppet
-from managevm.utils.resources import get_ssh_keytypes
-from managevm.utils.storage import *
-from managevm.utils.units import convert_size
-from managevm.utils.virtutils import close_virtconns
+from managevm.utils.storage import (
+        rename_logical_volume,
+        mount_temp,
+        umount_temp,
+        remove_temp,
+        create_storage,
+        get_vm_block_dev,
+        netcat_to_device,
+        device_to_netcat
+    )
+from managevm.utils.virtutils import (
+        get_virtconn,
+        close_virtconns,
+    )
 
 run = fail_gracefully(run)
 

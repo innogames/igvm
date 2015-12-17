@@ -1,16 +1,16 @@
 from __future__ import division
 
-import os, sys, re
+import os
+import sys
+import re
 from glob import glob
 import math
 
 from adminapi.dataset import query, DatasetError
-from fabric.api import run, settings, hide, puts, prompt
+from fabric.api import run
 from managevm.signals import send_signal
-from managevm.utils.virtutils import get_virtconn
-from managevm.utils.storage import get_volume_groups, get_logical_volumes
-from managevm.utils.network import get_network_config
-from managevm.utils.resources import get_meminfo, get_cpuinfo
+from managevm.utils.storage import get_logical_volumes
+from managevm.utils.resources import get_cpuinfo
 
 def get_vm(hostname):
     """ Get VM from admintool by config['guest'] hostname.

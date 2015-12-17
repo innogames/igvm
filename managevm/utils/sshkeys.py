@@ -1,5 +1,4 @@
 import os
-import grp
 import pwd
 
 from fabric.api import cd, run
