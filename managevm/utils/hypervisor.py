@@ -150,4 +150,3 @@ def rename_old_vm(vm, date, offline, hypervisor):
     elif hypervisor == "kvm" and offline == True:
         run('virsh dumpxml {0} > /etc/libvirt/qemu/{0}.xml.migrated.{1}'.format(vm['hostname'], date))
         run('virsh undefine {0}'.format(vm['hostname']))
-

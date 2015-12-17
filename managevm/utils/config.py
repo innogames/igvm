@@ -228,4 +228,3 @@ def check_vm_config(config):
         config['image'] = config['os'] + '-base.tar.gz'
 
     send_signal('config_finished', config)
-

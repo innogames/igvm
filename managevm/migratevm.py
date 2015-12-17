@@ -215,4 +215,3 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
 
     close_virtconns()
     disconnect_all()
-

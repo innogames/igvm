@@ -17,5 +17,4 @@ setup(
         author_email='henning.pridohl@innogames.de',
         maintainer='Kajetan Staszkiewicz',
         maintainer_email='kajetan.staszkiewicz@innogames.de',
-        )
-
+    )
