@@ -57,7 +57,7 @@ def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
     config['runpuppet'] = not nopuppet
     if postboot != None:
         config['postboot_script'] = postboot
-    config['vm'] = get_server(vm_hostname)
+    config['vm'] = get_server(vm_hostname, 'vm')
     config['dsthv_hostname'] = config['vm']['xen_host']
     config['dsthv'] = get_server(config['dsthv_hostname'], 'hypervisor')
     config['network'] = get_network_config(config['vm'])
