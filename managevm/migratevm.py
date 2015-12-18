@@ -9,9 +9,7 @@ from adminapi import api
 from managevm.signals import send_signal
 from managevm.utils import fail_gracefully
 from managevm.utils.config import (
-        get_vm,
-        get_srchv,
-        get_dsthv,
+        get_server,
         check_dsthv_memory,
         check_dsthv_cpu,
         check_vm_config,
@@ -136,9 +134,9 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         'runpuppet': not nopuppet,
     }
 
-    config['vm'] = get_vm(vm_hostname)
-    config['srchv'] = get_srchv(config['vm']['xen_host'])
-    config['dsthv'] = get_dsthv(dsthv_hostname)
+    config['vm'] = get_server(vm_hostname)
+    config['srchv'] = get_server(config['vm']['xen_host'])
+    config['dsthv'] = get_server(dsthv_hostname, 'hypervisor')
 
     lb_api = api.get('lbadmin')
 

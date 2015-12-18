@@ -12,42 +12,34 @@ from managevm.signals import send_signal
 from managevm.utils.storage import get_logical_volumes
 from managevm.utils.resources import get_cpuinfo
 
-def get_vm(hostname):
-    """ Get VM from admintool by config['guest'] hostname.
+def get_server(hostname, servertype=None):
+    """Get a server from admintool by hostname
 
-        Returns admintool object."""
+    Optionally check the servertype of the server.  Return the adminapi
+    Server object."""
 
-    try:
-        vm = query(hostname=hostname).get()
-    except DatasetError:
-        raise Exception("VM '{0}' not found".format(hostname))
+    # We want to return the server only, if matches with some conditions,
+    # but we are not using those conditions on the query to give better errors.
+    servers = tuple(query(hostname=hostname))
 
-    return vm
+    if not servers:
+        raise Exception('Server "{0}" not found.'.format(hostname))
 
+    # Hostnames are unique on the serveradmin.  The query cannot return more
+    # than one server.
+    assert len(servers) == 1
+    server = servers[0]
 
-def get_srchv(hostname):
-    """ Get source Hypervisor from admintool by config['srchv'] hostname.
+    if servertype and server['servertype'] != servertype:
+        raise Exception('Server "{0}" is not a "{1}".'.format(
+                hostname,
+                servertype,
+            ))
 
-        Returns admintool object."""
+    if server['cancelled']:
+        raise Exception('Server "{0}" is cancelled.'.format(hostname))
 
-    try:
-        srchv = query(hostname=hostname).get()
-    except DatasetError:
-        raise Exception("Source Hypervisor '{0}' not found".format(config['srchv']))
-
-    return srchv
-
-def get_dsthv(hostname):
-    """ Get destination Hypervisor from admintool by config['dsthv'] hostname.
-
-        Returns admintool object."""
-
-    try:
-        dsthv = query(hostname=hostname, cancelled=False).get()
-    except DatasetError:
-        raise Exception("Destination Hypervisor '{0}' not found or is cancelled or of wrong servertype".format(hostname))
-
-    return dsthv
+    return server
 
 def init_vm_config(config):
     """ Put some hardcoded defaults into config dictionary.

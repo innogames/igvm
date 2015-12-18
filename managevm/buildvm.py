@@ -6,8 +6,7 @@ from fabric.network import disconnect_all
 
 from managevm.utils import raise_failure, fail_gracefully
 from managevm.utils.config import (
-        get_vm,
-        get_dsthv,
+        get_server,
         init_vm_config,
         import_vm_config_from_admintool,
         check_dsthv_vm,
@@ -58,9 +57,9 @@ def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
     config['runpuppet'] = not nopuppet
     if postboot != None:
         config['postboot_script'] = postboot
-    config['vm'] = get_vm(vm_hostname)
+    config['vm'] = get_server(vm_hostname)
     config['dsthv_hostname'] = config['vm']['xen_host']
-    config['dsthv'] = get_dsthv(config['dsthv_hostname'])
+    config['dsthv'] = get_server(config['dsthv_hostname'], 'hypervisor')
     config['network'] = get_network_config(config['vm'])
     # Override VLAN information
     config['network']['vlan'] = get_vlan_info(config['vm'], None, config['dsthv'], None)[0]
