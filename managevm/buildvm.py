@@ -1,24 +1,45 @@
-import os, sys, re
+import os
 from glob import glob
 
 from fabric.api import env, execute, run
 from fabric.network import disconnect_all
-from fabric.contrib.console import confirm
-
-from adminapi.dataset import query
 
 from managevm.utils import raise_failure, fail_gracefully
-from managevm.utils.config import *
-from managevm.utils.units import convert_size
-from managevm.utils.resources import get_meminfo, get_cpuinfo, get_ssh_keytypes
-from managevm.utils.storage import (create_storage, mount_storage, umount_temp,
-        remove_temp, get_vm_block_dev)
-from managevm.utils.image import download_image, extract_image, get_images
+from managevm.utils.config import (
+        get_server,
+        init_vm_config,
+        import_vm_config_from_admintool,
+        check_dsthv_vm,
+        check_dsthv_memory,
+        check_dsthv_cpu,
+        check_vm_config,
+    )
+from managevm.utils.resources import get_ssh_keytypes
+from managevm.utils.storage import (
+        create_storage,
+        mount_storage,
+        umount_temp,
+        remove_temp,
+        get_vm_block_dev,
+    )
+from managevm.utils.image import download_image, extract_image
 from managevm.utils.network import get_network_config, get_vlan_info
-from managevm.utils.preparevm import prepare_vm, copy_postboot_script, run_puppet, block_autostart, unblock_autostart
-from managevm.utils.hypervisor import (create_definition, start_machine)
+from managevm.utils.preparevm import (
+        prepare_vm,
+        copy_postboot_script,
+        run_puppet,
+        block_autostart,
+        unblock_autostart,
+    )
+from managevm.utils.hypervisor import (
+        create_definition,
+        start_machine,
+    )
 from managevm.utils.portping import wait_until
-from managevm.utils.virtutils import close_virtconns
+from managevm.utils.virtutils import (
+        get_virtconn,
+        close_virtconns,
+    )
 from managevm.signals import send_signal
 
 run = fail_gracefully(run)
@@ -36,9 +57,9 @@ def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
     config['runpuppet'] = not nopuppet
     if postboot != None:
         config['postboot_script'] = postboot
-    config['vm'] = get_vm(vm_hostname)
+    config['vm'] = get_server(vm_hostname, 'vm')
     config['dsthv_hostname'] = config['vm']['xen_host']
-    config['dsthv'] = get_dsthv(config['dsthv_hostname'])
+    config['dsthv'] = get_server(config['dsthv_hostname'], 'hypervisor')
     config['network'] = get_network_config(config['vm'])
     # Override VLAN information
     config['network']['vlan'] = get_vlan_info(config['vm'], None, config['dsthv'], None)[0]

@@ -45,4 +45,3 @@ def raise_failure(exc_obj):
     raise exc_obj
 
 raise_failure = fail_gracefully(raise_failure, exc_class=Exception)
-

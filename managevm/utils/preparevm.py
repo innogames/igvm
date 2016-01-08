@@ -2,7 +2,6 @@ import os
 
 from fabric.api import run, cd, put, settings
 
-
 from managevm.utils.sshkeys import create_authorized_keys
 from managevm.utils.template import upload_template
 from managevm.utils import fail_gracefully, cmd
@@ -96,4 +95,3 @@ def run_puppet(target_dir, hostname, clear_cert):
             run('/usr/bin/puppet cert clean {0}.ig.local || echo "No cert for Host found"'.format(hostname))
     with cd(target_dir):
         run('chroot . /usr/bin/puppet agent -v --fqdn={}.ig.local --waitforcert 60 --onetime --no-daemonize --tags network,internal_routes'.format(hostname))
-
