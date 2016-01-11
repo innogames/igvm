@@ -136,12 +136,12 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
 
     config['vm'] = get_server(vm_hostname, 'vm')
 
-    # TODO We are not validating the servertype of the source hypervisor
-    # for now, because of the old hypervisors with servertype "db_server" and
-    # "frontend_server".  Fix this after the migration is complete.
+    # TODO We are not validating the servertype of the source and target
+    # hypervisor for now, because of the old hypervisors with servertype
+    # "db_server" and "frontend_server".  Fix this after the migration is
+    # complete.
     config['srchv'] = get_server(config['vm']['xen_host'])
-
-    config['dsthv'] = get_server(dsthv_hostname, 'hypervisor')
+    config['dsthv'] = get_server(dsthv_hostname)
 
     lb_api = api.get('lbadmin')
 
