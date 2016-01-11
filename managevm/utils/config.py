@@ -36,7 +36,7 @@ def get_server(hostname, servertype=None):
                 servertype,
             ))
 
-    if server['cancelled']:
+    if server.get('cancelled'):
         raise Exception('Server "{0}" is cancelled.'.format(hostname))
 
     return server
