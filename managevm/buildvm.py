@@ -59,7 +59,7 @@ def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
         config['postboot_script'] = postboot
     config['vm'] = get_server(vm_hostname, 'vm')
     config['dsthv_hostname'] = config['vm']['xen_host']
-    config['dsthv'] = get_server(config['dsthv_hostname'], 'hypervisor')
+    config['dsthv'] = get_server(config['dsthv_hostname'])
     config['network'] = get_network_config(config['vm'])
     # Override VLAN information
     config['network']['vlan'] = get_vlan_info(config['vm'], None, config['dsthv'], None)[0]
