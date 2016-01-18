@@ -94,9 +94,9 @@ def migrate_virsh(config):
     # timeout if it is catching up the dirtied memory.  To be in this stage,
     # it should have coped the initial disk and memory and changes on them.
     timeout = sum((
-            # We assume the disk can be copied at 50 MBp/s;
+            # We assume the disk can be copied at 50 MB/s;
             config['disk_size_gib'] * 1024 / 50,
-            # the memory at 100 MBp/s;
+            # the memory at 100 MB/s;
             config['mem'] / 100,
             # and 5 minutes more for other operations.
             5 * 60,
