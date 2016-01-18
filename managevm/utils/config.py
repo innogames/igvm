@@ -57,6 +57,9 @@ def import_vm_disk(config):
         if lv['name'].split('/')[3] == config['vm_hostname']:
             config['src_device'] = lv['name']
             config['disk_size_gib'] = int(math.ceil(lv['size_MiB'] / 1024))
+            break
+    else:
+        raise Exception('Unable to find source LV and determine its size.')
 
 def import_vm_config_from_admintool(config):
     """ Import configuration from Admintool.
