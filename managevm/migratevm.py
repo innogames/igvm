@@ -209,7 +209,8 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         print "Downtiming testtool"
         config['vm']['testtool_downtime'] = True
         config['vm'].commit()
-        lb_api.downtime_segment_push(config['vm']['segment'])
+        # TODO: use networks, not segment
+        lb_api.push_downtimes([config['vm']['segment']])
 
     # Finally migrate the VM
     if offline:
@@ -222,7 +223,8 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         print "Removing testtool downtime"
         config['vm']['testtool_downtime'] = False
         config['vm'].commit()
-        lb_api.downtime_segment_push(config['vm']['segment'])
+        # TODO: use networks, not segment
+        lb_api.push_downtimes([config['vm']['segment']])
 
     # Rename resources on source hypervisor.
     execute(cleanup_srchv, config, offline, hosts=[config['srchv']['hostname']])
