@@ -155,6 +155,21 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         ):
         raise Exception('Online migration is only possible from KVM to KVM.')
 
+    downtime_network = None
+
+    if not nolbdowntime and 'testtool_downtime' in config['vm']:
+        if config['vm']['segment'] in ['af', 'aw', 'vn', 'none']:
+            network_api = api.get('ip')
+            for iprange in network_api.get_matching_ranges(config['vm']['intern_ip']):
+                if iprange['belongs_to'] == None and iprange['type'] == 'private':
+                    if downtime_network:
+                        raise Exception('Unable to determine network for testtool downtime. Multiple networks found.')
+                    downtime_network = iprange['range_id']
+        else:
+            downtime_network = config['vm']['segment']
+        if not downtime_network:
+            raise Exception('Unable to determine network for testtool downtime. No network found.')
+
     # Configuration of Fabric:
     env.disable_known_hosts = True
     env.use_ssh_config = True
@@ -206,11 +221,10 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         config['vm'].commit()
 
     if not nolbdowntime and 'testtool_downtime' in config['vm']:
-        print "Downtiming testtool"
+        print "Downtiming testtool for network '{}'".format(downtime_network)
         config['vm']['testtool_downtime'] = True
         config['vm'].commit()
-        # TODO: use networks, not segment
-        lb_api.push_downtimes([config['vm']['segment']])
+        lb_api.push_downtimes([downtime_network])
 
     # Finally migrate the VM
     if offline:
@@ -223,8 +237,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         print "Removing testtool downtime"
         config['vm']['testtool_downtime'] = False
         config['vm'].commit()
-        # TODO: use networks, not segment
-        lb_api.push_downtimes([config['vm']['segment']])
+        lb_api.push_downtimes([downtime_network])
 
     # Rename resources on source hypervisor.
     execute(cleanup_srchv, config, offline, hosts=[config['srchv']['hostname']])
