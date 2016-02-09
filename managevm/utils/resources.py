@@ -63,3 +63,8 @@ def get_ssh_keytypes(os):
         return ['dsa', 'rsa', 'ecdsa', 'ed25519']
     else:
         return ['dsa', 'rsa']
+
+def get_hw_model(hw_config):
+    # return UNKNOWN if it is not set
+    # currently the template handles cpu models
+    return hw_config.get('hardware_model', 'UNKNOWN')

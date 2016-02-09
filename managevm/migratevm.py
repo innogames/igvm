@@ -6,6 +6,7 @@ from fabric.network import disconnect_all
 
 from adminapi import api
 
+from managevm.utils.resources import get_hw_model
 from managevm.signals import send_signal
 from managevm.utils import fail_gracefully
 from managevm.utils.config import (
@@ -74,6 +75,8 @@ def start_offline_vm(config):
         umount_temp(vm_path)
         remove_temp(vm_path)
 
+    config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
+
     # Signals are not used in hypervisor.py, so do not migrate this stuff there!
     hypervisor_extra = {}
     for extra in send_signal('hypervisor_extra', config, config['dsthv']['hypervisor']):
@@ -82,7 +85,8 @@ def start_offline_vm(config):
     create_definition(config['vm_hostname'], config['num_cpu'], config['mem'],
             config['max_mem'], config['vlan_tag'],
             config['dst_device'], config['mem_hotplug'], config['numa_interleave'],
-            config['dsthv']['hypervisor'], hypervisor_extra)
+            config['dsthv']['hypervisor'], config['dsthv_hw_model'],
+            hypervisor_extra)
 
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 

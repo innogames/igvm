@@ -14,7 +14,7 @@ from managevm.utils.config import (
         check_dsthv_cpu,
         check_vm_config,
     )
-from managevm.utils.resources import get_ssh_keytypes
+from managevm.utils.resources import get_ssh_keytypes, get_hw_model
 from managevm.utils.storage import (
         create_storage,
         mount_storage,
@@ -97,6 +97,7 @@ def setup_dsthv(config):
     check_dsthv_memory(config)
 
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
+    config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
 
     device = create_storage(config['vm_hostname'], config['disk_size_gib'])
     mount_path = mount_storage(device, config['vm_hostname'])
@@ -133,7 +134,8 @@ def setup_dsthv(config):
     create_definition(config['vm_hostname'], config['num_cpu'], config['mem'],
             config['max_mem'], config['network']['vlan'],
             device, config['mem_hotplug'], config['numa_interleave'],
-            config['dsthv']['hypervisor'], hypervisor_extra)
+            config['dsthv']['hypervisor'], config['dsthv_hw_model'],
+            hypervisor_extra)
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 
     start_machine(config['vm_hostname'], config['dsthv']['hypervisor'])

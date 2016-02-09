@@ -34,7 +34,15 @@
     <hap/>
   </features>
 {% if mem_hotplug %}
+{% if hw_model in ['Dell_M610'] %}
+  <cpu mode='custom' match='exact'>
+    <model fallback='allow'>Nehalem</model>
+{% elif hw_model in ['Dell_M620', 'Dell_M630'] %}
+  <cpu mode='custom' match='exact'>
+      <model fallback='allow'>SandyBridge</model>
+{% else %}
   <cpu>
+{% endif %}
     <numa>
       <cell id='0' cpus='0-23' memory='{{ mem_size }}' unit='MiB'/>
     </numa>

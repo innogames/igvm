@@ -38,7 +38,7 @@ def start_machine_xm(hostname):
     sxp_file = os.path.join('/etc/xen/domains', hostname + '.sxp')
     run(cmd('xm create {0}', sxp_file))
 
-def create_domain_xml(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_hotplug, numa_interleave):
+def create_domain_xml(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_hotplug, numa_interleave, hw_model):
     jenv = Environment(loader=PackageLoader('managevm', 'templates'))
     domain_xml = jenv.get_template('libvirt/domain.xml').render(**{
         'hostname': hostname,
@@ -50,6 +50,7 @@ def create_domain_xml(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_
         'vlan': vlan,
         'mem_hotplug': mem_hotplug,
         'numa_interleave': numa_interleave,
+        'hw_model': hw_model,
     })
     return domain_xml
 
@@ -69,9 +70,9 @@ def start_machine_libvirt(hostname, hypervisor):
     domain = conn.lookupByName(hostname)
     domain.create()
 
-def create_definition(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_hotplug, numa_interleave, hypervisor, hypervisor_extra):
+def create_definition(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_hotplug, numa_interleave, hypervisor, hw_model, hypervisor_extra):
     if hypervisor == 'kvm':
-        xml = create_domain_xml(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_hotplug, numa_interleave)
+        xml = create_domain_xml(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_hotplug, numa_interleave, hw_model)
         return create_domain(xml, hypervisor)
     elif hypervisor == 'xen':
         sxp_file = hypervisor_extra.get('sxp_file')
