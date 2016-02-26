@@ -1,15 +1,7 @@
-import math
 import urllib2
-from itertools import chain
-from socket import inet_ntoa
-from struct import pack
 
-from fabric.contrib.console import confirm
-from fabric.api import prompt, abort
+from fabric.api import abort
 
-from adminapi.dataset import query
-from adminapi.dataset.exceptions import DatasetError
-from adminapi.utils import IP
 from adminapi import api
 
 class NetworkError(Exception):
