@@ -2,12 +2,8 @@
 from __future__ import print_function
 
 import argparse
-import sys
-import os
 
 import adminapi
-from adminapi.utils import IP
-from adminapi.dataset import DatasetError, query
 
 from managevm.buildvm import buildvm
 
