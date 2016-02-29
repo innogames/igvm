@@ -1,3 +1,4 @@
+import copy
 from time import strftime
 
 from fabric.api import env, execute, run, settings
@@ -18,8 +19,7 @@ from managevm.utils.config import (
         import_vm_config_from_kvm,
     )
 from managevm.utils.hypervisor import (
-        create_definition,
-        start_machine,
+        VM,
         shutdown_vm,
         rename_old_vm,
     )
@@ -64,7 +64,7 @@ def add_dsthv_to_ssh(config):
 
 def migrate_offline(config):
     add_dsthv_to_ssh(config)
-    execute(shutdown_vm, config['vm'], config['srchv']['hypervisor'], hosts=config['srchv']['hostname'])
+    execute(shutdown_vm, config['vm']['hostname'], config['srchv']['hypervisor'], hosts=config['srchv']['hostname'])
     execute(device_to_netcat, config['src_device'], config['disk_size_gib']*1024*1024*1024, config['dsthv_hostname'], config['nc_port'], hosts=config['srchv']['hostname'])
 
 def start_offline_vm(config):
@@ -78,19 +78,22 @@ def start_offline_vm(config):
     config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
 
     # Signals are not used in hypervisor.py, so do not migrate this stuff there!
-    hypervisor_extra = {}
+    # Note: Extra values used to be separated from config, but since they're currently unused
+    # this shouldn't matter.
     for extra in send_signal('hypervisor_extra', config, config['dsthv']['hypervisor']):
-        hypervisor_extra.update(extra)
+        config.update(extra)
 
-    create_definition(config['vm_hostname'], config['num_cpu'], config['mem'],
-            config['max_mem'], config['vlan_tag'],
-            config['dst_device'], config['mem_hotplug'], config['numa_interleave'],
-            config['dsthv']['hypervisor'], config['dsthv_hw_model'],
-            hypervisor_extra)
+    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'])
+
+    # We distinguish between src_device and dst_device, which create() doesn't know about.
+    create_config = copy.copy(config)
+    create_config['device'] = config['dst_device']
+
+    vm.create(create_config)
 
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 
-    start_machine(config['vm_hostname'], config['dsthv']['hypervisor'])
+    vm.start()
 
 def migrate_virsh(config):
 

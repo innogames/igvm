@@ -1,8 +1,8 @@
 name="{{ hostname }}"
 kernel="/boot/vmlinuz-2.6-xenU"
 root="/dev/xvda1 ro"
-memory={{ mem_size }}
-vcpus={{ num_vcpus }}
+memory={{ mem }}
+vcpus={{ num_cpu }}
 maxvcpus=24
 disk=['phy:{{ device }},xvda1,w']
 vif=['']
