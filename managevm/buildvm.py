@@ -31,10 +31,7 @@ from managevm.utils.preparevm import (
         block_autostart,
         unblock_autostart,
     )
-from managevm.utils.hypervisor import (
-        create_definition,
-        start_machine,
-    )
+from managevm.utils.hypervisor import VM
 from managevm.utils.portping import wait_until
 from managevm.utils.virtutils import (
         get_virtconn,
@@ -63,6 +60,7 @@ def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
     config['network'] = get_network_config(config['vm'])
     # Override VLAN information
     config['network']['vlan'] = get_vlan_info(config['vm'], None, config['dsthv'], None)[0]
+    config['vlan_tag'] = config['network']['vlan']
 
     init_vm_config(config)
     import_vm_config_from_admintool(config)
@@ -127,18 +125,17 @@ def setup_dsthv(config):
     umount_temp(device)
     remove_temp(mount_path)
 
-    hypervisor_extra = {}
+    # Note: Extra values used to be separated from config, but since they're currently unused
+    # this shouldn't matter.
     for extra in send_signal('hypervisor_extra', config, config['dsthv']['hypervisor']):
-        hypervisor_extra.update(extra)
+        config.update(extra)
 
-    create_definition(config['vm_hostname'], config['num_cpu'], config['mem'],
-            config['max_mem'], config['network']['vlan'],
-            device, config['mem_hotplug'], config['numa_interleave'],
-            config['dsthv']['hypervisor'], config['dsthv_hw_model'],
-            hypervisor_extra)
+    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'])
+    vm.create(config)
+
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 
-    start_machine(config['vm_hostname'], config['dsthv']['hypervisor'])
+    vm.start()
 
     host_up = wait_until(config['vm']['intern_ip'].as_ip(),
             waitmsg='Waiting for guest to boot')

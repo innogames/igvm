@@ -22,127 +22,139 @@ exists = fail_gracefully(exists)
 class HypervisorError(Exception):
     pass
 
-def create_sxp(hostname, num_vcpus, mem_size, max_mem, device, sxp_file=None):
-    if sxp_file is None:
-        sxp_file = 'etc/xen/domains/hostname.sxp'
-    dest = os.path.join('/etc/xen/domains', hostname + '.sxp')
-    upload_template(sxp_file, dest, {
-        'hostname': hostname,
-        'num_vcpus': num_vcpus,
-        'mem_size': mem_size,
-        'max_mem': max_mem,
-        'device': device,
-    })
+class VM(object):
+    """
+    Hypervisor interface for VMs.
+    """
+    def __init__(self, hostname):
+        self.hostname = hostname
 
-def start_machine_xm(hostname):
-    sxp_file = os.path.join('/etc/xen/domains', hostname + '.sxp')
-    run(cmd('xm create {0}', sxp_file))
+    def create(self, **kwargs):
+        raise NotImplementedError(type(self).__name__)
 
-def create_domain_xml(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_hotplug, numa_interleave, hw_model):
-    jenv = Environment(loader=PackageLoader('managevm', 'templates'))
-    domain_xml = jenv.get_template('libvirt/domain.xml').render(**{
-        'hostname': hostname,
-        'uuid': uuid.uuid1(),
-        'num_vcpus': num_vcpus,
-        'mem_size': mem_size,
-        'max_mem': max_mem,
-        'device': device,
-        'vlan': vlan,
-        'mem_hotplug': mem_hotplug,
-        'numa_interleave': numa_interleave,
-        'hw_model': hw_model,
-    })
-    return domain_xml
+    def start(self):
+        raise NotImplementedError(type(self).__name__)
 
-def create_domain(domain_xml, hypervisor):
-    conn = get_virtconn(env.host_string, hypervisor)
-    puts('Defining domain on libvirt')
-    conn.defineXML(domain_xml)
+    def shutdown(self):
+        raise NotImplementedError(type(self).__name__)
 
-    # Refresh storage pools to register the vm image
-    for pool_name in conn.listStoragePools():
-        pool = conn.storagePoolLookupByName(pool_name)
-        pool.refresh(0)
+    def is_running(self):
+        raise NotImplementedError(type(self).__name__)
 
-def start_machine_libvirt(hostname, hypervisor):
-    conn = get_virtconn(env.host_string, hypervisor)
-    puts('Starting domain on libvirt')
-    domain = conn.lookupByName(hostname)
-    domain.create()
+    def wait_for_running(self, running=True, timeout=60):
+        """
+        Waits for the VM to enter the given running state.
+        Returns False on timeout, True otherwise.
+        """
+        action = 'boot' if running else 'shutdown'
+        for i in range(timeout, 1, -1):
+            print("Waiting for VM to {0} {1}".format(action, i))
+            if self.is_running() == running:
+                return True
+            time.sleep(1)
+        else:
+            return False
 
-def create_definition(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_hotplug, numa_interleave, hypervisor, hw_model, hypervisor_extra):
-    if hypervisor == 'kvm':
-        xml = create_domain_xml(hostname, num_vcpus, mem_size, max_mem, vlan, device, mem_hotplug, numa_interleave, hw_model)
-        return create_domain(xml, hypervisor)
-    elif hypervisor == 'xen':
-        sxp_file = hypervisor_extra.get('sxp_file')
-        return create_sxp(hostname, num_vcpus, mem_size, max_mem, device, sxp_file)
-    else:
-        raise ValueError('Not a valid hypervisor: {0}'.format(hypervisor))
+    @staticmethod
+    def get(hostname, hypervisor):
+        if hypervisor == 'kvm':
+            return KVMVM(hostname)
+        elif hypervisor == 'xen':
+            return XenVM(hostname)
+        else:
+            raise NotImplementedError('Not a valid hypervisor: {0}'.format(hypervisor))
 
-def start_machine(hostname, hypervisor):
-    if hypervisor == 'kvm':
-        start_machine_libvirt(hostname, hypervisor)
-    elif hypervisor == 'xen':
-        start_machine_xm(hostname)
-    else:
-        raise ValueError('Not a valid hypervisor: {0}'.format(hypervisor))
 
-def shutdown_vm_xen(vm):
-    run('xm shutdown {0}'.format(vm['hostname']))
+class KVMVM(VM):
+    def create(self, config):
+        domain_xml = self.generate_xml(config)
+        conn = get_virtconn(env.host_string, 'kvm')
+        puts('Defining domain on libvirt')
+        conn.defineXML(domain_xml)
 
-    found = False
-    for i in range(60, 1, -1):
-        print("Waiting for VM to shutdown {0}".format(i))
+        # Refresh storage pools to register the vm image
+        for pool_name in conn.listStoragePools():
+            pool = conn.storagePoolLookupByName(pool_name)
+            pool.refresh(0)
+
+    def generate_xml(self, config):
+        if config.get('uuid'):
+            config['uuid'] = uuid.uuid1()
+        config['hostname'] = self.hostname
+
+        jenv = Environment(loader=PackageLoader('managevm', 'templates'))
+        domain_xml = jenv.get_template('libvirt/domain.xml').render(**config)
+        return domain_xml
+
+    def start(self):
+        conn = get_virtconn(env.host_string, 'kvm')
+        puts('Starting domain on libvirt')
+        domain = conn.lookupByName(self.hostname)
+        domain.create()
+
+    def is_running(self):
+        out = StringIO()
+        with hide('running'):
+            run("virsh list", stdout=out)
+        out.seek(0)
+        found = False
+        for line in out.readlines():
+            pieces = line.split()
+            if len(pieces) >= 4 and pieces[3] == self.hostname:
+                return True
+        return False
+
+    def shutdown(self):
+        run('virsh shutdown {0}'.format(self.hostname))
+
+        if not self.wait_for_running(False):
+            print("WARNING: VM did not shutdown, I'm destroying it by force!")
+            run('virsh destroy {0}'.format(self.hostname))
+        else:
+            print("VM is shutdown.")
+
+class XenVM(VM):
+    def create(self, config):
+        sxp_file = config.get('sxp_file')
+        if sxp_file is None:
+            sxp_file = 'etc/xen/domains/hostname.sxp'
+        config['hostname'] = self.hostname
+
+        dest = os.path.join('/etc/xen/domains', self.hostname + '.sxp')
+        upload_template(sxp_file, dest, config)
+
+    def start(self):
+        sxp_file = os.path.join('/etc/xen/domains', self.hostname + '.sxp')
+        run(cmd('xm create {0}', sxp_file))
+
+    def is_running(self):
         xmList = StringIO()
         with hide('running'):
             run("xm list", stdout=xmList)
         xmList.seek(0)
-        found = False
         for xmEntry in xmList.readlines():
-            if len(xmEntry.split())>=3 and xmEntry.split()[2] == vm['hostname']:
-                found = True
-        if found == False:
-            break
-        time.sleep(1)
+            pieces = xmEntry.split()
+            if len(pieces) >= 3 and piecles[2] == self.hostname:
+                return True
+        return False
 
-    if found == True:
-        print("WARNING: VM did not shutdown, I'm destroying it by force!")
-        run('xm destroy {0}'.format(vm['hostname']))
-    else:
-        print("VM is shutdown.")
+    def shutdown(self):
+        run('xm shutdown {0}'.format(self.hostname))
 
-def shutdown_vm_kvm(vm):
-    run('virsh shutdown {0}'.format(vm['hostname']))
+        if not self.wait_for_running(False):
+            print("WARNING: VM did not shutdown, I'm destroying it by force!")
+            run('xm destroy {0}'.format(self.hostname))
+        else:
+            print("VM is shutdown.")
 
-    found = False
-    for i in range(60, 1, -1):
-        print("Waiting for VM to shutdown {0}".format(i))
-        xmList = StringIO()
-        with hide('running'):
-            run("virsh list", stdout=xmList)
-        xmList.seek(0)
-        found = False
-        for xmEntry in xmList.readlines():
-            if len(xmEntry.split())>=4 and xmEntry.split()[3] == vm['hostname']:
-                found = True
-        if found == False:
-            break
-        time.sleep(1)
 
-    if found == True:
-        print("WARNING: VM did not shutdown, I'm destroying it by force!")
-        run('virsh destroy {0}'.format(vm['hostname']))
-    else:
-        print("VM is shutdown.")
+def start_machine(hostname, hypervisor):
+    vm = VM.get(hostname, hypervisor)
+    vm.start()
 
-def shutdown_vm(vm, hypervisor):
-    if hypervisor == "xen":
-        shutdown_vm_xen(vm)
-    elif hypervisor == "kvm":
-        shutdown_vm_kvm(vm)
-    else:
-        raise Exception("Not a valid hypervisor: {0}".format(hypervisor))
+def shutdown_vm(hostname, hypervisor):
+    vm = VM.get(hostname, hypervisor)
+    vm.shutdown()
     downtimer.call_icinga("down", vm['hostname'], duration=600)
 
 def rename_old_vm(vm, date, offline, hypervisor):

@@ -4,7 +4,7 @@
 {% if mem_hotplug %}
   <maxMemory slots='16' unit='MiB'>{{ max_mem }}</maxMemory>
 {% endif %}
-  <memory unit='MiB'>{{ mem_size }}</memory>
+  <memory unit='MiB'>{{ mem }}</memory>
 {% if mem_hotplug %}
 {% else %}
   <numatune>
@@ -15,11 +15,11 @@
 {% endif %}
   </numatune>
 {% endif %}
-  <currentMemory unit='MiB'>{{ mem_size }}</currentMemory>
+  <currentMemory unit='MiB'>{{ mem }}</currentMemory>
 {% if mem_hotplug %}
-  <vcpu placement='static' current='{{ num_vcpus }}'>24</vcpu>
+  <vcpu placement='static' current='{{ num_cpu }}'>24</vcpu>
 {% else %}
-  <vcpu placement='auto' current='{{ num_vcpus }}'>24</vcpu>
+  <vcpu placement='auto' current='{{ num_cpu }}'>24</vcpu>
 {% endif %}
   <os>
     <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>
@@ -34,17 +34,17 @@
     <hap/>
   </features>
 {% if mem_hotplug %}
-{% if hw_model in ['Dell_M610'] %}
+{% if dsthv_hw_model in ['Dell_M610'] %}
   <cpu mode='custom' match='exact'>
     <model fallback='allow'>Nehalem</model>
-{% elif hw_model in ['Dell_M620', 'Dell_M630'] %}
+{% elif dsthv_hw_model in ['Dell_M620', 'Dell_M630'] %}
   <cpu mode='custom' match='exact'>
       <model fallback='allow'>SandyBridge</model>
 {% else %}
   <cpu>
 {% endif %}
     <numa>
-      <cell id='0' cpus='0-23' memory='{{ mem_size }}' unit='MiB'/>
+      <cell id='0' cpus='0-23' memory='{{ mem }}' unit='MiB'/>
     </numa>
   </cpu>
 {% endif %}
@@ -66,9 +66,9 @@
     </controller>
     <interface type='bridge'>
       <source bridge='br0'/>
-{% if vlan %}
+{% if vlan_tag %}
       <vlan>
-        <tag id='{{ vlan }}'/>
+        <tag id='{{ vlan_tag }}'/>
       </vlan>
 {% endif %}
       <virtualport type='openvswitch'/>
