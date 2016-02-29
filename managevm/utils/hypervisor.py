@@ -155,7 +155,7 @@ def start_machine(hostname, hypervisor):
 def shutdown_vm(hostname, hypervisor):
     vm = VM.get(hostname, hypervisor)
     vm.shutdown()
-    downtimer.call_icinga("down", vm['hostname'], duration=600)
+    downtimer.call_icinga("down", hostname, duration=600)
 
 def rename_old_vm(vm, date, offline, hypervisor):
     if hypervisor == "xen":
