@@ -1,8 +1,9 @@
 import os
-from glob import glob
 
 from fabric.api import env, execute, run
 from fabric.network import disconnect_all
+
+from managevm.hooks import load_hooks
 
 from managevm.utils import raise_failure, fail_gracefully
 from managevm.utils.config import (
@@ -42,11 +43,7 @@ from managevm.signals import send_signal
 run = fail_gracefully(run)
 
 def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
-    hooks = glob(os.path.join(os.path.dirname(__file__), 'hooks', '*.py'))
-    for hook in hooks:
-        if hook == '__init__.py':
-            continue
-        execfile(hook, {})
+    load_hooks()
 
     config = {'vm_hostname': vm_hostname}
     if image != None:
@@ -85,8 +82,6 @@ def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
     disconnect_all()
 
 def setup_dsthv(config):
-    send_signal('setup_hardware', config)
-
     if config['dsthv']['hypervisor'] == 'kvm':
         config['dsthv_conn'] = get_virtconn(config['dsthv']['hostname'], 'kvm')
 
@@ -97,6 +92,10 @@ def setup_dsthv(config):
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
     config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
 
+    send_signal('populate_config', config)
+
+    # Config completely generated -> start doing stuff.
+    send_signal('setup_hardware', config)
     config['device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
     mount_path = mount_storage(config['device'], config['vm_hostname'])
 

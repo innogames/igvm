@@ -5,22 +5,15 @@
   <maxMemory slots='16' unit='MiB'>{{ max_mem }}</maxMemory>
 {% endif %}
   <memory unit='MiB'>{{ mem }}</memory>
-{% if mem_hotplug %}
-{% else %}
-  <numatune>
-{% if numa_interleave %}
-    <memory mode='interleave' nodeset='0-1'/>
-{% else %}
-    <memory mode='strict' placement='auto'/>
-{% endif %}
-  </numatune>
-{% endif %}
   <currentMemory unit='MiB'>{{ mem }}</currentMemory>
-{% if mem_hotplug %}
-  <vcpu placement='static' current='{{ num_cpu }}'>24</vcpu>
-{% else %}
-  <vcpu placement='auto' current='{{ num_cpu }}'>24</vcpu>
-{% endif %}
+  
+  <vcpu placement='auto' current='{{ num_cpu }}'>{{ max_cpu }}</vcpu>
+
+  <!-- These are filled by KVM hooks in managevm/utils/kvm.py. -->
+  <cpu></cpu>
+  <cputune></cputune>
+  <numatune></numatune>
+
   <os>
     <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>
     <kernel>/vmlinuz</kernel>
@@ -33,21 +26,7 @@
     <apic eoi='on'/>
     <hap/>
   </features>
-{% if mem_hotplug %}
-{% if dsthv_hw_model in ['Dell_M610'] %}
-  <cpu mode='custom' match='exact'>
-    <model fallback='allow'>Nehalem</model>
-{% elif dsthv_hw_model in ['Dell_M620', 'Dell_M630'] %}
-  <cpu mode='custom' match='exact'>
-      <model fallback='allow'>SandyBridge</model>
-{% else %}
-  <cpu>
-{% endif %}
-    <numa>
-      <cell id='0' cpus='0-23' memory='{{ mem }}' unit='MiB'/>
-    </numa>
-  </cpu>
-{% endif %}
+
   <clock offset='utc' adjustment='reset'/>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>

@@ -10,3 +10,13 @@ def send_signal(signal_name, *args, **kwargs):
 def register_signal(signal_name, handler):
     handlers = _signal_handlers.setdefault(signal_name, [])
     handlers.append(handler)
+
+def on_signal(signal_name):
+    """
+    Decorator to register signals.
+    """
+    def decorator(fn):
+        register_signal(signal_name, fn)
+        return fn
+    return decorator
+

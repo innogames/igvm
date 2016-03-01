@@ -7,6 +7,7 @@ from fabric.network import disconnect_all
 
 from adminapi import api
 
+from managevm.hooks import load_hooks
 from managevm.utils.resources import get_hw_model
 from managevm.signals import send_signal
 from managevm.utils import fail_gracefully
@@ -48,9 +49,13 @@ def cleanup_srchv(config, offline):
     rename_logical_volume(config['src_device'], config['vm_hostname'], config['date'])
 
 def setup_dsthv(config, offline):
-    send_signal('setup_hardware', config)
     check_dsthv_cpu(config)
     check_dsthv_memory(config)
+
+    # Invoke hooks to populate more config fields
+    send_signal('populate_config', config)
+
+    send_signal('setup_hardware', config)
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
     config['dst_device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
 
@@ -133,6 +138,8 @@ def migrate_virsh(config):
         run(migrate_cmd)
 
 def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):
+    load_hooks()
+
     config = {
         'vm_hostname': vm_hostname,
         # Character : is invalid for LV name, use - instead.

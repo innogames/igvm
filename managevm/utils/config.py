@@ -135,22 +135,7 @@ def check_dsthv_memory(config):
         Returns nothing.
         Will raise an exception if there is not enough memory.
         Will modify config if all is fine. """
-
-    config['mem_hotplug'] = False
-    config['numa_interleave'] = False
-
     if config['dsthv']['hypervisor'] == 'kvm':
-
-        # Check memory hotplugging capability.
-        version = config['dsthv_conn'].getVersion()
-        # According to documentation:
-        # value is major * 1,000,000 + minor * 1,000 + release
-        release = version % 1000
-        minor = int(version/1000%1000)
-        major = int(version/1000000%1000000)
-        if major >= 2 and minor >=3 :
-            config['mem_hotplug'] = True
-
         # Get amount of memory available to Hypervisor.
         # Start with what OS sees as total memory (not hardware installed memory)
         total_MiB = config['dsthv_conn'].getMemoryStats(-1)['total'] / 1024
@@ -167,9 +152,6 @@ def check_dsthv_memory(config):
         if config['mem'] > free_MiB:
             raise Exception('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
 
-        if config['mem'] >= 0.5 * total_MiB:
-            config['numa_interleave'] = True
-
 
 def check_dsthv_cpu(config):
     cpuinfo = get_cpuinfo()
@@ -177,10 +159,9 @@ def check_dsthv_cpu(config):
     if config['num_cpu'] > num_cpus:
         raise Exception('Not enough CPUs. Destination Hypervisor has {0} but VM requires {1}.'.format(num_cpus, config['num_cpu']))
 
+    config['max_cpu'] = config.get('max_cpu', 24)
 
 def check_vm_config(config):
-    send_signal('config_created', config)
-
     if 'mem' not in config:
         raise Exception('"mem" is not set.')
 
@@ -220,5 +201,3 @@ def check_vm_config(config):
 
     if 'image' not in config:
         config['image'] = config['os'] + '-base.tar.gz'
-
-    send_signal('config_finished', config)

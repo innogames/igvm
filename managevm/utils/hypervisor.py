@@ -1,7 +1,11 @@
 import os
+import re
 import time
 import uuid
 from StringIO import StringIO
+
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 from icinga_utils import downtimer
 
@@ -15,6 +19,7 @@ from managevm.utils import cmd, fail_gracefully
 from managevm.utils.template import upload_template
 from managevm.utils.virtutils import get_virtconn, close_virtconns
 from managevm.utils.resources import get_cpuinfo
+from managevm.signals import send_signal
 
 run = fail_gracefully(run)
 exists = fail_gracefully(exists)
@@ -84,6 +89,13 @@ class KVMVM(VM):
 
         jenv = Environment(loader=PackageLoader('managevm', 'templates'))
         domain_xml = jenv.get_template('libvirt/domain.xml').render(**config)
+
+        tree = ET.fromstring(domain_xml)
+        send_signal('customize_kvm_xml', self, config, tree)
+
+        # Remove whitespace and re-indent properly.
+        out = re.sub('>\s+<', '><', ET.tostring(tree))
+        domain_xml = minidom.parseString(out).toprettyxml()
         return domain_xml
 
     def start(self):
