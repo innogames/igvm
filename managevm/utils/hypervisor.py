@@ -146,7 +146,7 @@ class XenVM(VM):
         xmList.seek(0)
         for xmEntry in xmList.readlines():
             pieces = xmEntry.split()
-            if len(pieces) >= 3 and piecles[2] == self.hostname:
+            if len(pieces) >= 3 and pieces[2] == self.hostname:
                 return True
         return False
 
