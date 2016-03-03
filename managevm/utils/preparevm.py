@@ -89,9 +89,11 @@ def copy_postboot_script(target_dir, script):
 
 def run_puppet(target_dir, hostname, clear_cert):
     if clear_cert:
+        # Cleart certs on Puppet 3 Master
         with settings(host_string='master.puppet.ig.local'):
             run('/usr/bin/puppet cert clean {0}.ig.local || echo "No cert for Host found"'.format(hostname))
-        with settings(host_string='master-puppet.ig.local'):
+        # Clear cert new Puppet 4 on CA Master
+        with settings(host_string='ca.puppet.ig.local'):
             run('/usr/bin/puppet cert clean {0}.ig.local || echo "No cert for Host found"'.format(hostname))
     with cd(target_dir):
         run('chroot . /usr/bin/puppet agent -v --fqdn={}.ig.local --waitforcert 60 --onetime --no-daemonize --tags network,internal_routes'.format(hostname))
