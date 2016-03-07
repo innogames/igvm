@@ -55,6 +55,8 @@ def kvm_hw_model(vm, config, tree):
     """
     Selects CPU model based on hardware model.
     """
+    if get_qemu_version(config) < (2, 3):
+        return
     if not 'dsthv_hw_model' in config:
         return
 
