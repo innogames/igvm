@@ -1,7 +1,7 @@
 import copy
 from time import strftime
 
-from fabric.api import env, execute, run, settings
+from fabric.api import env, execute, run
 from fabric.context_managers import hide
 from fabric.network import disconnect_all
 
@@ -129,13 +129,11 @@ def migrate_virsh(config):
         )
 
     add_dsthv_to_ssh(config)
-    with settings(user='root', forward_agent=True):
-        migrate_cmd = migrate_cmd.format(
-                    vm_hostname    = config['vm_hostname'],
-                    dsthv_hostname = config['dsthv_hostname'],
-                    timeout        = timeout,
-                )
-        run(migrate_cmd)
+    run(migrate_cmd.format(
+        vm_hostname    = config['vm_hostname'],
+        dsthv_hostname = config['dsthv_hostname'],
+        timeout        = timeout,
+    ))
 
 def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):
     load_hooks()
