@@ -43,6 +43,13 @@ from managevm.utils.virtutils import (
 
 run = fail_gracefully(run)
 
+# Configuration of Fabric:
+env.disable_known_hosts = True
+env.use_ssh_config = True
+env.always_use_pty = False
+env.forward_agent = True
+env.user = 'root'
+env.shell = '/bin/bash -c'
 
 def cleanup_srchv(config, offline):
     rename_old_vm(config['vm'], config['date'], offline, config['srchv']['hypervisor'])
@@ -181,14 +188,6 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
             downtime_network = config['vm']['segment']
         if not downtime_network:
             raise Exception('Unable to determine network for testtool downtime. No network found.')
-
-    # Configuration of Fabric:
-    env.disable_known_hosts = True
-    env.use_ssh_config = True
-    env.always_use_pty = False
-    env.forward_agent = True
-    env.user = 'root'
-    env.shell = '/bin/bash -c'
 
     if newip:
         config['vm']['intern_ip'] = newip
