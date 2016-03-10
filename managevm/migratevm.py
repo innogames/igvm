@@ -235,7 +235,8 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
 
     # Finally migrate the VM
     if offline:
-        source_vm.shutdown()
+        if source_vm.is_running():
+            source_vm.shutdown()
         execute(migrate_offline, config, hosts=[config['srchv']['hostname']])
         execute(start_offline_vm, config, hosts=[config['dsthv']['hostname']])
     else:
