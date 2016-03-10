@@ -158,6 +158,11 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         config['srchv']['hostname'],
     )
 
+    # There is no point of online migration, if the VM is already
+    # shutdown.
+    if not offline and not source_vm.is_running():
+        offline = True
+
     lb_api = api.get('lbadmin')
 
     if config['srchv']['hostname'] == config['dsthv']['hostname']:
