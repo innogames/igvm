@@ -19,11 +19,7 @@ from managevm.utils.config import (
         import_vm_config_from_xen,
         import_vm_config_from_kvm,
     )
-from managevm.utils.hypervisor import (
-        VM,
-        shutdown_vm,
-        rename_old_vm,
-    )
+from managevm.utils.hypervisor import VM
 from managevm.utils.network import get_vlan_info
 from managevm.utils.preparevm import run_puppet
 from managevm.utils.storage import (
@@ -51,10 +47,6 @@ env.forward_agent = True
 env.user = 'root'
 env.shell = '/bin/bash -c'
 
-def cleanup_srchv(config):
-    rename_old_vm(config['vm'], config['date'], config['srchv']['hypervisor'])
-    rename_logical_volume(config['src_device'], config['vm_hostname'], config['date'])
-
 def setup_dsthv(config, offline):
     check_dsthv_cpu(config)
     check_dsthv_memory(config)
@@ -76,7 +68,6 @@ def add_dsthv_to_ssh(config):
 
 def migrate_offline(config):
     add_dsthv_to_ssh(config)
-    execute(shutdown_vm, config['vm']['hostname'], config['srchv']['hypervisor'], hosts=config['srchv']['hostname'])
     execute(device_to_netcat, config['src_device'], config['disk_size_gib']*1024*1024*1024, config['dsthv_hostname'], config['nc_port'], hosts=config['srchv']['hostname'])
 
 def start_offline_vm(config):
@@ -95,7 +86,7 @@ def start_offline_vm(config):
     for extra in send_signal('hypervisor_extra', config, config['dsthv']['hypervisor']):
         config.update(extra)
 
-    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'])
+    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'], config['dsthv']['hostname'])
 
     # We distinguish between src_device and dst_device, which create() doesn't know about.
     create_config = copy.copy(config)
@@ -160,6 +151,12 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     # complete.
     config['srchv'] = get_server(config['vm']['xen_host'])
     config['dsthv'] = get_server(dsthv_hostname)
+
+    source_vm = VM.get(
+        vm_hostname,
+        config['srchv']['hypervisor'],
+        config['srchv']['hostname'],
+    )
 
     lb_api = api.get('lbadmin')
 
@@ -238,6 +235,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
 
     # Finally migrate the VM
     if offline:
+        source_vm.shutdown()
         execute(migrate_offline, config, hosts=[config['srchv']['hostname']])
         execute(start_offline_vm, config, hosts=[config['dsthv']['hostname']])
     else:
@@ -250,7 +248,14 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         lb_api.push_downtimes([downtime_network])
 
     # Rename resources on source hypervisor.
-    execute(cleanup_srchv, config, hosts=[config['srchv']['hostname']])
+    source_vm.rename_as_old(config['date'])
+    execute(
+        rename_logical_volume,
+        config['src_device'],
+        config['vm_hostname'],
+        config['date'],
+        hosts=[config['srchv']['hostname']],
+    )
 
     # Update admintool information
     config['vm']['xen_host'] = config['dsthv']['hostname']

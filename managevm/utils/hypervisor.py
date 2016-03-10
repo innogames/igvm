@@ -9,7 +9,7 @@ from xml.dom import minidom
 
 from icinga_utils import downtimer
 
-from fabric.api import env, run, puts
+from fabric.api import run, puts, settings
 from fabric.context_managers import hide
 from fabric.contrib.files import exists
 
@@ -31,8 +31,9 @@ class VM(object):
     """
     Hypervisor interface for VMs.
     """
-    def __init__(self, hostname):
+    def __init__(self, hostname, hypervisor_hostname):
         self.hostname = hostname
+        self.hypervisor_hostname = hypervisor_hostname
 
     def create(self, **kwargs):
         raise NotImplementedError(type(self).__name__)
@@ -44,6 +45,9 @@ class VM(object):
         raise NotImplementedError(type(self).__name__)
 
     def is_running(self):
+        raise NotImplementedError(type(self).__name__)
+
+    def rename_as_old(self, date):
         raise NotImplementedError(type(self).__name__)
 
     def wait_for_running(self, running=True, timeout=60):
@@ -61,11 +65,11 @@ class VM(object):
             return False
 
     @staticmethod
-    def get(hostname, hypervisor):
+    def get(hostname, hypervisor, hypervisor_hostname):
         if hypervisor == 'kvm':
-            return KVMVM(hostname)
+            return KVMVM(hostname, hypervisor_hostname)
         elif hypervisor == 'xen':
-            return XenVM(hostname)
+            return XenVM(hostname, hypervisor_hostname)
         else:
             raise NotImplementedError('Not a valid hypervisor: {0}'.format(hypervisor))
 
@@ -73,7 +77,7 @@ class VM(object):
 class KVMVM(VM):
     def create(self, config):
         domain_xml = self.generate_xml(config)
-        conn = get_virtconn(env.host_string, 'kvm')
+        conn = get_virtconn(self.hypervisor_hostname, 'kvm')
         puts('Defining domain on libvirt')
         conn.defineXML(domain_xml)
 
@@ -99,13 +103,13 @@ class KVMVM(VM):
         return domain_xml
 
     def start(self):
-        conn = get_virtconn(env.host_string, 'kvm')
+        conn = get_virtconn(self.hypervisor_hostname, 'kvm')
         puts('Starting domain on libvirt')
         domain = conn.lookupByName(self.hostname)
         domain.create()
 
     def is_running(self):
-        conn = get_virtconn(env.host_string, 'kvm')
+        conn = get_virtconn(self.hypervisor_hostname, 'kvm')
 
         # This only returns list of running domain ids.
         domain_ids = conn.listDomainsID()
@@ -118,13 +122,20 @@ class KVMVM(VM):
         return False
 
     def shutdown(self):
-        run('virsh shutdown {0}'.format(self.hostname))
+        with settings(host_string=self.hypervisor_hostname):
+            run('virsh shutdown {0}'.format(self.hostname))
 
         if not self.wait_for_running(False):
             print("WARNING: VM did not shutdown, I'm destroying it by force!")
-            run('virsh destroy {0}'.format(self.hostname))
+            with settings(host_string=self.hypervisor_hostname):
+                run('virsh destroy {0}'.format(self.hostname))
         else:
             print("VM is shutdown.")
+
+    def rename_as_old(self, date):
+        with settings(host_string=self.hypervisor_hostname):
+            run('virsh dumpxml {0} > /etc/libvirt/qemu/{0}.xml.migrated.{1}'.format(self.hostname, date))
+            run('virsh undefine {0}'.format(self.hostname))
 
 class XenVM(VM):
     def create(self, config):
@@ -138,12 +149,14 @@ class XenVM(VM):
 
     def start(self):
         sxp_file = os.path.join('/etc/xen/domains', self.hostname + '.sxp')
-        run(cmd('xm create {0}', sxp_file))
+        with settings(host_string=self.hypervisor_hostname):
+            run(cmd('xm create {0}', sxp_file))
 
     def is_running(self):
         xmList = StringIO()
-        with hide('running'):
-            run("xm list", stdout=xmList)
+        with settings(host_string=self.hypervisor_hostname):
+            with hide('running'):
+                run("xm list", stdout=xmList)
         xmList.seek(0)
         for xmEntry in xmList.readlines():
             pieces = xmEntry.split()
@@ -152,27 +165,16 @@ class XenVM(VM):
         return False
 
     def shutdown(self):
-        run('xm shutdown {0}'.format(self.hostname))
+        with settings(host_string=self.hypervisor_hostname):
+            run('xm shutdown {0}'.format(self.hostname))
 
         if not self.wait_for_running(False):
             print("WARNING: VM did not shutdown, I'm destroying it by force!")
-            run('xm destroy {0}'.format(self.hostname))
+            with settings(host_string=self.hypervisor_hostname):
+                run('xm destroy {0}'.format(self.hostname))
         else:
             print("VM is shutdown.")
 
-
-def start_machine(hostname, hypervisor):
-    vm = VM.get(hostname, hypervisor)
-    vm.start()
-
-def shutdown_vm(hostname, hypervisor):
-    vm = VM.get(hostname, hypervisor)
-    vm.shutdown()
-    downtimer.call_icinga("down", hostname, duration=600)
-
-def rename_old_vm(vm, date, hypervisor):
-    if hypervisor == "xen":
-        run('mv /etc/xen/domains/{0}.sxp /etc/xen/domains/{0}.sxp.migrated.{1}'.format(vm['hostname'], date))
-    elif hypervisor == "kvm":
-        run('virsh dumpxml {0} > /etc/libvirt/qemu/{0}.xml.migrated.{1}'.format(vm['hostname'], date))
-        run('virsh undefine {0}'.format(vm['hostname']))
+    def rename_as_old(self, date):
+        with settings(host_string=self.hypervisor_hostname):
+            run('mv /etc/xen/domains/{0}.sxp /etc/xen/domains/{0}.sxp.migrated.{1}'.format(self.hostname, date))

@@ -129,7 +129,7 @@ def setup_dsthv(config):
     for extra in send_signal('hypervisor_extra', config, config['dsthv']['hypervisor']):
         config.update(extra)
 
-    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'])
+    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'], config['dsthv']['hostname'])
     vm.create(config)
 
     send_signal('defined_vm', config, config['dsthv']['hypervisor'])
