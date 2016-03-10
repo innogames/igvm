@@ -105,14 +105,15 @@ class KVMVM(VM):
         domain.create()
 
     def is_running(self):
-        out = StringIO()
-        with hide('running'):
-            run("virsh list", stdout=out)
-        out.seek(0)
-        found = False
-        for line in out.readlines():
-            pieces = line.split()
-            if len(pieces) >= 4 and pieces[3] == self.hostname:
+        conn = get_virtconn(env.host_string, 'kvm')
+
+        # This only returns list of running domain ids.
+        domain_ids = conn.listDomainsID()
+        if domain_ids == None:
+            raise HypervisorError('Failed to get a list of domain IDs')
+
+        for domain_id in domain_ids:
+            if self.hostname == conn.lookupByID(domain_id).name():
                 return True
         return False
 
