@@ -51,8 +51,8 @@ env.forward_agent = True
 env.user = 'root'
 env.shell = '/bin/bash -c'
 
-def cleanup_srchv(config, offline):
-    rename_old_vm(config['vm'], config['date'], offline, config['srchv']['hypervisor'])
+def cleanup_srchv(config):
+    rename_old_vm(config['vm'], config['date'], config['srchv']['hypervisor'])
     rename_logical_volume(config['src_device'], config['vm_hostname'], config['date'])
 
 def setup_dsthv(config, offline):
@@ -125,7 +125,6 @@ def migrate_virsh(config):
             ' --live'               # Do it live!
             ' --copy-storage-all'
             ' --persistent'         # Define the VM on the new host
-            ' --undefinesource'     # Undefine the VM on the old host
             ' --change-protection'  # Don't let the VM configuration to be changed
             ' --auto-converge'      # Force convergence, otherwise migrations never end
             ' --domain {vm_hostname}'
@@ -251,7 +250,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         lb_api.push_downtimes([downtime_network])
 
     # Rename resources on source hypervisor.
-    execute(cleanup_srchv, config, offline, hosts=[config['srchv']['hostname']])
+    execute(cleanup_srchv, config, hosts=[config['srchv']['hostname']])
 
     # Update admintool information
     config['vm']['xen_host'] = config['dsthv']['hostname']
