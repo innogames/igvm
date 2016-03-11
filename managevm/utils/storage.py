@@ -80,8 +80,8 @@ def get_logical_volumes():
 
     return lvolumes
 
-def rename_logical_volume(lv, name, date):
-    run('lvrename {0} {1}.migrated.{2}'. format(lv, name, date))
+def remove_logical_volume(lv):
+    run('lvremove -f {0}'. format(lv))
 
 def create_logical_volume(volume_group, name, size_GiB):
     lvs = [lv.strip().split(':') for lv in run('lvdisplay -c').splitlines()]
@@ -98,13 +98,6 @@ def create_logical_volume(volume_group, name, size_GiB):
 
     run(cmd('lvcreate -L {0}G -n {1} {2}', size_GiB, name, volume_group))
     return volume
-
-def format_device(device):
-    with settings(warn_only=True):
-        status = run(cmd('mkfs.xfs {0}', device))
-    if status.failed:
-        if confirm('Force mkfs.xfs?'):
-            run(cmd('mkfs.xfs -f {0}', device))
 
 def mount_temp(device, suffix=''):
     mount_dir = run(cmd('mktemp -d --suffix {0}', suffix))
@@ -182,7 +175,10 @@ def create_storage(hostname, disk_size_gib):
     return device
 
 def mount_storage(device, hostname):
-    format_device(device)
+
+    # First, make the file system
+    run(cmd('mkfs.xfs -f {0}', device))
+
     mount_path = mount_temp(device, suffix='-' + hostname)
     return mount_path
 

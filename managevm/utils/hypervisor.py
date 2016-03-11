@@ -47,7 +47,7 @@ class VM(object):
     def is_running(self):
         raise NotImplementedError(type(self).__name__)
 
-    def rename_as_old(self, date):
+    def undefine(self):
         raise NotImplementedError(type(self).__name__)
 
     def wait_for_running(self, running=True, timeout=60):
@@ -132,9 +132,8 @@ class KVMVM(VM):
         else:
             print("VM is shutdown.")
 
-    def rename_as_old(self, date):
+    def undefine(self):
         with settings(host_string=self.hypervisor_hostname):
-            run('virsh dumpxml {0} > /etc/libvirt/qemu/{0}.xml.migrated.{1}'.format(self.hostname, date))
             run('virsh undefine {0}'.format(self.hostname))
 
 class XenVM(VM):
@@ -175,6 +174,6 @@ class XenVM(VM):
         else:
             print("VM is shutdown.")
 
-    def rename_as_old(self, date):
+    def undefine(self):
         with settings(host_string=self.hypervisor_hostname):
-            run('mv /etc/xen/domains/{0}.sxp /etc/xen/domains/{0}.sxp.migrated.{1}'.format(self.hostname, date))
+            run('rm /etc/xen/domains/{0}.sxp'.format(self.hostname))
