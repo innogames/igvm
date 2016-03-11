@@ -1,7 +1,7 @@
 import copy
 from time import strftime
 
-from fabric.api import env, execute, run, settings
+from fabric.api import env, execute, run
 from fabric.context_managers import hide
 from fabric.network import disconnect_all
 
@@ -19,11 +19,7 @@ from managevm.utils.config import (
         import_vm_config_from_xen,
         import_vm_config_from_kvm,
     )
-from managevm.utils.hypervisor import (
-        VM,
-        shutdown_vm,
-        rename_old_vm,
-    )
+from managevm.utils.hypervisor import VM
 from managevm.utils.network import get_vlan_info
 from managevm.utils.preparevm import run_puppet
 from managevm.utils.storage import (
@@ -43,10 +39,13 @@ from managevm.utils.virtutils import (
 
 run = fail_gracefully(run)
 
-
-def cleanup_srchv(config, offline):
-    rename_old_vm(config['vm'], config['date'], offline, config['srchv']['hypervisor'])
-    rename_logical_volume(config['src_device'], config['vm_hostname'], config['date'])
+# Configuration of Fabric:
+env.disable_known_hosts = True
+env.use_ssh_config = True
+env.always_use_pty = False
+env.forward_agent = True
+env.user = 'root'
+env.shell = '/bin/bash -c'
 
 def setup_dsthv(config, offline):
     check_dsthv_cpu(config)
@@ -69,7 +68,6 @@ def add_dsthv_to_ssh(config):
 
 def migrate_offline(config):
     add_dsthv_to_ssh(config)
-    execute(shutdown_vm, config['vm']['hostname'], config['srchv']['hypervisor'], hosts=config['srchv']['hostname'])
     execute(device_to_netcat, config['src_device'], config['disk_size_gib']*1024*1024*1024, config['dsthv_hostname'], config['nc_port'], hosts=config['srchv']['hostname'])
 
 def start_offline_vm(config):
@@ -88,7 +86,7 @@ def start_offline_vm(config):
     for extra in send_signal('hypervisor_extra', config, config['dsthv']['hypervisor']):
         config.update(extra)
 
-    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'])
+    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'], config['dsthv']['hostname'])
 
     # We distinguish between src_device and dst_device, which create() doesn't know about.
     create_config = copy.copy(config)
@@ -118,7 +116,6 @@ def migrate_virsh(config):
             ' --live'               # Do it live!
             ' --copy-storage-all'
             ' --persistent'         # Define the VM on the new host
-            ' --undefinesource'     # Undefine the VM on the old host
             ' --change-protection'  # Don't let the VM configuration to be changed
             ' --auto-converge'      # Force convergence, otherwise migrations never end
             ' --domain {vm_hostname}'
@@ -129,13 +126,11 @@ def migrate_virsh(config):
         )
 
     add_dsthv_to_ssh(config)
-    with settings(user='root', forward_agent=True):
-        migrate_cmd = migrate_cmd.format(
-                    vm_hostname    = config['vm_hostname'],
-                    dsthv_hostname = config['dsthv_hostname'],
-                    timeout        = timeout,
-                )
-        run(migrate_cmd)
+    run(migrate_cmd.format(
+        vm_hostname    = config['vm_hostname'],
+        dsthv_hostname = config['dsthv_hostname'],
+        timeout        = timeout,
+    ))
 
 def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):
     load_hooks()
@@ -156,6 +151,17 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     # complete.
     config['srchv'] = get_server(config['vm']['xen_host'])
     config['dsthv'] = get_server(dsthv_hostname)
+
+    source_vm = VM.get(
+        vm_hostname,
+        config['srchv']['hypervisor'],
+        config['srchv']['hostname'],
+    )
+
+    # There is no point of online migration, if the VM is already
+    # shutdown.
+    if not offline and not source_vm.is_running():
+        offline = True
 
     lb_api = api.get('lbadmin')
 
@@ -183,14 +189,6 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
             downtime_network = config['vm']['segment']
         if not downtime_network:
             raise Exception('Unable to determine network for testtool downtime. No network found.')
-
-    # Configuration of Fabric:
-    env.disable_known_hosts = True
-    env.use_ssh_config = True
-    env.always_use_pty = False
-    env.forward_agent = True
-    env.user = 'root'
-    env.shell = '/bin/bash -c'
 
     if newip:
         config['vm']['intern_ip'] = newip
@@ -242,6 +240,8 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
 
     # Finally migrate the VM
     if offline:
+        if source_vm.is_running():
+            source_vm.shutdown()
         execute(migrate_offline, config, hosts=[config['srchv']['hostname']])
         execute(start_offline_vm, config, hosts=[config['dsthv']['hostname']])
     else:
@@ -254,7 +254,14 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         lb_api.push_downtimes([downtime_network])
 
     # Rename resources on source hypervisor.
-    execute(cleanup_srchv, config, offline, hosts=[config['srchv']['hostname']])
+    source_vm.rename_as_old(config['date'])
+    execute(
+        rename_logical_volume,
+        config['src_device'],
+        config['vm_hostname'],
+        config['date'],
+        hosts=[config['srchv']['hostname']],
+    )
 
     # Update admintool information
     config['vm']['xen_host'] = config['dsthv']['hostname']
