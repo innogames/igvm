@@ -251,6 +251,12 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         config['vm'].commit()
         lb_api.push_downtimes([downtime_network])
 
+    # Update admintool information
+    config['vm']['xen_host'] = config['dsthv']['hostname']
+    config['vm']['num_cpu'] = config['num_cpu']
+    config['vm']['memory'] = config['mem']
+    config['vm'].commit()
+
     # Remove the existing VM
     source_vm.undefine()
     execute(
@@ -258,12 +264,6 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         config['src_device'],
         hosts=[config['srchv']['hostname']],
     )
-
-    # Update admintool information
-    config['vm']['xen_host'] = config['dsthv']['hostname']
-    config['vm']['num_cpu'] = config['num_cpu']
-    config['vm']['memory'] = config['mem']
-    config['vm'].commit()
 
     close_virtconns()
     disconnect_all()
