@@ -253,8 +253,8 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         config['vm'].commit()
         lb_api.push_downtimes([downtime_network])
 
-    # Rename resources on source hypervisor.
-    source_vm.rename_as_old(config['date'])
+    # Remove the existing VM
+    source_vm.undefine()
     execute(
         rename_logical_volume,
         config['src_device'],
