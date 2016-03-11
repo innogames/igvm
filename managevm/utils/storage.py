@@ -80,8 +80,8 @@ def get_logical_volumes():
 
     return lvolumes
 
-def rename_logical_volume(lv, name, date):
-    run('lvrename {0} {1}.migrated.{2}'. format(lv, name, date))
+def remove_logical_volume(lv):
+    run('lvremove -f {0}'. format(lv))
 
 def create_logical_volume(volume_group, name, size_GiB):
     lvs = [lv.strip().split(':') for lv in run('lvdisplay -c').splitlines()]

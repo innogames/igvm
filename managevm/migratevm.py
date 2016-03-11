@@ -23,7 +23,7 @@ from managevm.utils.hypervisor import VM
 from managevm.utils.network import get_vlan_info
 from managevm.utils.preparevm import run_puppet
 from managevm.utils.storage import (
-        rename_logical_volume,
+        remove_logical_volume,
         mount_temp,
         umount_temp,
         remove_temp,
@@ -137,8 +137,6 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
 
     config = {
         'vm_hostname': vm_hostname,
-        # Character : is invalid for LV name, use - instead.
-        'date': strftime("%Y-%m-%d_%H-%M-%S"),
         'dsthv_hostname': dsthv_hostname,
         'runpuppet': not nopuppet,
     }
@@ -256,10 +254,8 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     # Remove the existing VM
     source_vm.undefine()
     execute(
-        rename_logical_volume,
+        remove_logical_volume,
         config['src_device'],
-        config['vm_hostname'],
-        config['date'],
         hosts=[config['srchv']['hostname']],
     )
 
