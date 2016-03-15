@@ -136,7 +136,7 @@ def setup_dsthv(config):
 
     vm.start()
 
-    host_up = wait_until(config['vm']['intern_ip'].as_ip(),
+    host_up = wait_until(str(config['vm']['intern_ip']),
             waitmsg='Waiting for guest to boot')
 
     if not host_up:
