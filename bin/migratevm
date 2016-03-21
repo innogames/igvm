@@ -1,11 +1,14 @@
 #!/usr/bin/python
 
 import argparse
+import sys
+
 from fabric.network import disconnect_all
 
 import adminapi
 
 from igvm.migratevm import migratevm
+from igvm.utils import ManageVMError
 
 print('This is deprecated use "igvm create"')
 
@@ -21,7 +24,11 @@ args = vars(parser.parse_args())
 
 adminapi.auth()
 
-migratevm(args.pop('vm_hostname'), args.pop('dsthv_hostname'), **args)
+try:
+    migratevm(args.pop('vm_hostname'), args.pop('dsthv_hostname'), **args)
+except ManageVMError as error:
+    print(error)
+    sys.exit(1)
 
 # Force disconnection from Fabric.
 # Otherwise errors in Paramiko are trigerred.

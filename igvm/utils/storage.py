@@ -7,10 +7,10 @@ from contextlib import nested
 from fabric.api import run, settings, hide
 
 from igvm.utils.units import convert_size
-from igvm.utils import cmd
+from igvm.utils import cmd, ManageVMError
 
 
-class StorageError(Exception):
+class StorageError(ManageVMError):
     pass
 
 
@@ -121,6 +121,7 @@ def get_vm_block_dev(hypervisor):
         raise StorageError((
             'VM block device name unknown for hypervisor {0}'
         ).format(hypervisor))
+
 
 def get_storage_type():
     with nested(settings(warn_only=True), hide('everything')):

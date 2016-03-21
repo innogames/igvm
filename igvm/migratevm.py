@@ -1,8 +1,6 @@
 import copy
-from time import strftime, sleep
 
 from fabric.api import env, execute, run
-from fabric.context_managers import hide
 from fabric.network import disconnect_all
 
 from adminapi import api
@@ -10,7 +8,7 @@ from adminapi import api
 from igvm.hooks import load_hooks
 from igvm.utils.resources import get_hw_model
 from igvm.signals import send_signal
-from igvm.utils import fail_gracefully
+from igvm.utils import ManageVMError
 from igvm.utils.config import (
         get_server,
         check_dsthv_memory,
@@ -31,14 +29,13 @@ from igvm.utils.storage import (
         create_storage,
         get_vm_block_dev,
         netcat_to_device,
-        device_to_netcat
+        device_to_netcat,
+        StorageError,
     )
 from igvm.utils.virtutils import (
         get_virtconn,
         close_virtconns,
     )
-
-run = fail_gracefully(run)
 
 # Configuration of Fabric:
 env.disable_known_hosts = True
@@ -47,6 +44,7 @@ env.always_use_pty = False
 env.forward_agent = True
 env.user = 'root'
 env.shell = '/bin/bash -c'
+
 
 def setup_dsthv(config, offline):
     check_dsthv_cpu(config)
@@ -64,10 +62,12 @@ def setup_dsthv(config, offline):
     if offline:
         config['nc_port'] = netcat_to_device(config['dst_device'])
 
+
 def add_dsthv_to_ssh(config):
     run('touch .ssh/known_hosts'.format(config['dsthv_hostname']))
     run('ssh-keygen -R {0}'.format(config['dsthv_hostname']))
     run('ssh-keyscan -t rsa {0} >> .ssh/known_hosts'.format(config['dsthv_hostname']))
+
 
 def migrate_offline(config):
     add_dsthv_to_ssh(config)
@@ -79,6 +79,7 @@ def migrate_offline(config):
         config['nc_port'],
         hosts=config['srchv']['hostname'],
     )
+
 
 def start_offline_vm(config):
 
@@ -142,29 +143,23 @@ def migrate_virsh(config):
         timeout        = timeout,
     ))
 
-def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):
-    load_hooks()
 
-    config = {
-        'vm_hostname': vm_hostname,
-        'dsthv_hostname': dsthv_hostname,
-        'runpuppet': not nopuppet,
-    }
+def _migratevm(config, newip, nolbdowntime, offline):
 
-    config['vm'] = get_server(vm_hostname, 'vm')
+    config['vm'] = get_server(config['vm_hostname'], 'vm')
 
     # TODO We are not validating the servertype of the source and target
     # hypervisor for now, because of the old hypervisors with servertype
     # "db_server" and "frontend_server".  Fix this after the migration is
     # complete.
     config['srchv'] = get_server(config['vm']['xen_host'])
-    config['dsthv'] = get_server(dsthv_hostname)
+    config['dsthv'] = get_server(config['dsthv_hostname'])
 
     if config['dsthv']['state'] != 'online':
         raise Exception('Server "{0}" is not online.'.format(config['dsthv']['hostname']))
 
     source_vm = VM.get(
-        vm_hostname,
+        config['vm_hostname'],
         config['srchv']['hypervisor'],
         config['srchv']['hostname'],
     )
@@ -296,5 +291,23 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         hosts=[config['srchv']['hostname']],
     )
 
-    close_virtconns()
-    sleep(1) # For Paramiko's race condition.
+
+def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):
+    load_hooks()
+
+    config = {
+        'vm_hostname': vm_hostname,
+        'dsthv_hostname': dsthv_hostname,
+        'runpuppet': not nopuppet,
+    }
+
+    try:
+        _migratevm(config, newip, nolbdowntime, offline)
+    except StorageError as e:
+        # TODO: Perform cleanup
+        raise ManageVMError(e)
+    else:
+        pass
+    finally:
+        close_virtconns()
+        disconnect_all()
