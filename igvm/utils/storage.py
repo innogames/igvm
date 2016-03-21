@@ -197,10 +197,8 @@ def create_storage(hostname, disk_size_gib):
 
 
 def mount_storage(device, hostname):
-
     # First, make the file system
     run(cmd('mkfs.xfs -f {0}', device))
-
     mount_path = mount_temp(device, suffix='-' + hostname)
     return mount_path
 
