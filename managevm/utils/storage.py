@@ -183,7 +183,9 @@ def mount_storage(device, hostname):
     return mount_path
 
 def netcat_to_device(device):
-    port = 4242
+    dev_minor = run('stat -L -c "%T" {}'.format(device))
+    dev_minor = int(dev_minor, 16)
+    port = 7000 + dev_minor
     # Using DD lowers load on device with big enough Block Size
     run('nohup /bin/nc.traditional -l -p {0} | dd of={1} obs=1048576 &'.format(port, device))
     return port
