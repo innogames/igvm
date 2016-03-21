@@ -54,17 +54,27 @@ def init_vm_config(config):
 
 def get_vm_volume(vm):
     for lv in get_logical_volumes():
-        if lv['name'].split('/')[3] == vm['hostname']:
+        if lv['name'] == vm['hostname']:
             if vm['disk_size_gib'] != int(math.ceil(lv['size_MiB'] / 1024)):
                 raise Exception((
                     "Server disk_size_gib {0} on Serveradmin doesn't "
                     'match the volume size {1} MiB.'
                 ).format(vm['disk_size_gib'], lv['size_MiB']))
 
-            return lv['name']
+            return lv['path']
 
     raise Exception('Unable to find source LV and determine its size.')
 
+
+def import_vm_disk(config):
+    lvs = get_logical_volumes()
+    for lv in lvs:
+        if lv['name'] == config['vm_hostname']:
+            config['src_device'] = lv['path']
+            config['disk_size_gib'] = int(math.ceil(lv['size_MiB'] / 1024))
+            break
+    else:
+        raise Exception('Unable to find source LV and determine its size.')
 
 def import_vm_config_from_admintool(config):
     """ Import configuration from Admintool.

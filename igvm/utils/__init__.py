@@ -22,4 +22,3 @@ def cmd(cmd, *args, **kwargs):
         escaped_kwargs[key] = quote(str(value))
 
     return cmd.format(*escaped_args, **escaped_kwargs)
-

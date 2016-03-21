@@ -1,12 +1,9 @@
 from __future__ import division
 
-import os
-import re
-from contextlib import nested
+import math
 
-from fabric.api import run, settings, hide
+from fabric.api import run, settings
 
-from igvm.utils.units import convert_size
 from igvm.utils import cmd, ManageVMError
 
 
@@ -14,64 +11,16 @@ class StorageError(ManageVMError):
     pass
 
 
-def get_volume_groups():
-    lvminfo = run('vgdisplay -c')
-
-    if lvminfo.failed:
-        raise StorageError("No LVM found")
-
-    vgroups = []
-    for line in lvminfo.splitlines():
-        parts = line.strip().split(':')
-        if len(parts) != 17:
-            print("Badly formatted vgdisplay output: {0}".format(line))
-            continue
-        volume_group = parts[0]
-        size_KiB = int(parts[11])
-        size_MiB = int(size_KiB / 1024)
-        pe_size_KiB = int(parts[12])
-        free_exts = int(parts[15])
-        free_MiB = int(free_exts * pe_size_KiB / 1024)
-
-        vgroups.append({
-            'name': volume_group,
-            'size_total_MiB': size_MiB,
-            'size_free_MiB': free_MiB,
-            'pe_size_KiB': pe_size_KiB,
-        })
-
-    return vgroups
-
-
 def get_logical_volumes():
-    vgs = get_volume_groups()
-
-    lvminfo = run('lvdisplay -c')
-
-    if lvminfo.failed:
-        raise StorageError("No LVM found")
-
     lvolumes = []
-    for line in lvminfo.splitlines():
-        parts = line.strip().split(':')
-        if len(parts) != 13:
-            print("Badly formatted lvdisplay output: {0}".format(line))
-            continue
-        logical_volume = parts[0]
-        volume_group = parts[1]
-
-        for volume_group_test in vgs:
-            if volume_group_test['name'] == volume_group:
-                pe_size_KiB = volume_group_test['pe_size_KiB']
-
-        size_KiB = int(parts[7]) * pe_size_KiB
-        size_MiB = int(size_KiB / 1024)
-
+    for lv_line in run('lvs --noheadings -o name,vg_name,lv_size --unit m --nosuffix').splitlines():
+        lv_name, vg_name, lv_size = lv_line.split()
         lvolumes.append({
-            'name': logical_volume,
-            'size_MiB': size_MiB,
+            'path': '/dev/{}/{}'.format(vg_name, lv_name),
+            'name': lv_name,
+            'vg_name': vg_name,
+            'size_MiB': math.ceil(float(lv_size)),
         })
-
     return lvolumes
 
 
@@ -85,17 +34,26 @@ def lvresize(volume, size_gib):
     run('lvresize {0} -L {1}g'.format(volume, size_gib))
 
 
-def create_logical_volume(volume_group, name, size_gib):
+def create_storage(vm_name, size_gib):
     # Do not search only for the given LV.
     # `lvs` must generally not fail and give a list of LVs.
     for lv_line in run('lvs --noheading -o vg_name,name').splitlines():
         vg_name, lv_name = lv_line.split()
-        if volume_group == vg_name and lv_name == name:
+        if lv_name == vm_name:
             raise StorageError('Logical Volume {}/{} already exists!'.format(vg_name, lv_name))
+    # Find VG with enough free space
+    for vg_line in run('vgs --noheadings -o vg_name,vg_free --unit g --nosuffix').splitlines():
+            vg_name, vg_size_gib = vg_line.split()
+            if vg_size_gib > size_gib + 5: # Always keep a few GiB free
+                found_vg = vg_name
+                break
+    else:
+        raise StorageError('Not enough free space in VGs!')
     with settings(warn_only=True):
-        if not run(cmd('lvcreate -L {0}g -n {1} {2}', size_gib, name, volume_group)):
+        out = run(cmd('lvcreate -L {0}g -n {1} {2}', size_gib, vm_name, vg_name))
+        if out.failed:
             raise StorageError('Unable to create Logical Volume {}/{}!'.format(volume_group, name))
-    return '/dev/{}/{}'.format(volume_group, name)
+    return '/dev/{}/{}'.format(found_vg, vm_name)
 
 
 def mount_temp(device, suffix=''):
@@ -121,67 +79,6 @@ def get_vm_block_dev(hypervisor):
         raise StorageError((
             'VM block device name unknown for hypervisor {0}'
         ).format(hypervisor))
-
-
-def get_storage_type():
-    with nested(settings(warn_only=True), hide('everything')):
-        result = run('which santool')
-    return 'san' if not result.failed else 'lvm'
-
-
-def get_san_arrays():
-    saninfo = run('santool --show free')
-
-    arrays = []
-    array = None
-    for line in saninfo.splitlines():
-        line = line.strip()
-        if line.startswith('Array:'):
-            if array:
-                arrays.append(array)
-            match = re.match(r'Array:\s+(\w+)\s+\((\d+)\)', line)
-            if match:
-                array = {'id': match.group(1),
-                         'no': int(match.group(2))}
-            else:
-                array = None
-        elif line.startswith('free luns:') and array:
-            match = re.match('free luns:\s+(\d+) of (\d+)\s+\d+% free', line)
-            if match:
-                array['num_free'] = int(match.group(1))
-                array['num_total'] = int(match.group(2))
-    if array:
-        arrays.append(array)
-
-    return arrays
-
-
-def choose_array(arrays):
-    return max(arrays, key=lambda x: x['num_free'] / x['num_total'])
-
-
-def create_san_raid(name, array):
-    run(cmd('santool --build-raid -u {0} --array-number {1}', name, array))
-    return os.path.join('/dev', 'san', 'raid', name)
-
-
-def create_storage(hostname, disk_size_gib):
-    storage_type = get_storage_type()
-    if storage_type == 'san':
-        san_arrays = get_san_arrays()
-        array = choose_array(san_arrays)
-        device = create_san_raid(hostname, array['no'])
-    else:
-        volume_groups = get_volume_groups()
-        if not volume_groups:
-            raise StorageError('No volume groups found')
-        volume_group = volume_groups[0]
-        volume = volume_group['name']
-        if convert_size(volume_group['size_free_MiB'], 'M', 'G') < disk_size_gib:
-            raise StorageError('No enough free space')
-        device = create_logical_volume(volume, hostname, disk_size_gib)
-
-    return device
 
 
 def mount_storage(device, hostname):
@@ -211,4 +108,7 @@ def netcat_to_device(device):
 
 def device_to_netcat(device, size, host, port):
     # Using DD lowers load on device with big enough Block Size
-    run('dd if={0} ibs=1048576 | pv -f -s {1} | /bin/nc.traditional -q 1 {2} {3}'.format(device, size, host, port))
+    with settings(warn_only=True):
+        out = run('dd if={0} ibs=1048576 | pv -f -s {1} | /bin/nc.traditional -q 1 {2} {3}'.format(device, size, host, port))
+        if out.failed:
+            raise StorageError('Copying data over NetCat has failed!')
