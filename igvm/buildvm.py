@@ -6,7 +6,6 @@ from time import sleep
 
 from igvm.hooks import load_hooks
 
-from igvm.utils import raise_failure, fail_gracefully
 from igvm.utils.config import (
         get_server,
         init_vm_config,
@@ -40,8 +39,8 @@ from igvm.utils.virtutils import (
         close_virtconns,
     )
 from igvm.signals import send_signal
+from igvm.utils import ManageVMError
 
-run = fail_gracefully(run)
 
 def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     load_hooks()
@@ -88,6 +87,10 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
 
     close_virtconns()
     sleep(1) # For Paramiko's race condition.
+
+    # Return true. This code should throw exceptions on all troubles anyway.
+    return True
+
 
 def setup_dsthv(config):
     if config['dsthv']['hypervisor'] == 'kvm':
@@ -154,7 +157,8 @@ def setup_dsthv(config):
             waitmsg='Waiting for guest to boot')
 
     if not host_up:
-        raise_failure(Exception('Guest did not boot.'))
+        raise ManageVMError('Guest did not boot.')
+
 
 def setup_vm(config):
     send_signal('vm_booted', config)

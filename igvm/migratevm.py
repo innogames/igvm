@@ -109,6 +109,7 @@ def start_offline_vm(config):
 
     vm.start()
 
+
 def migrate_virsh(config):
 
     # Unfortunately, virsh provides a global timeout, but what we need it to
@@ -172,14 +173,14 @@ def _migratevm(config, newip, nolbdowntime, offline):
     lb_api = api.get('lbadmin')
 
     if config['srchv']['hostname'] == config['dsthv']['hostname']:
-        raise Exception("Source and destination Hypervisor is the same machine {0}!".format(config['srchv']['hostname']))
+        raise ManageVMError("Source and destination Hypervisor is the same machine {0}!".format(config['srchv']['hostname']))
 
     if not offline and not (
                 config['srchv']['hypervisor'] == 'kvm'
             and
                 config['dsthv']['hypervisor'] == 'kvm'
         ):
-        raise Exception('Online migration is only possible from KVM to KVM.')
+        raise ManageVMError('Online migration is only possible from KVM to KVM.')
 
     if not config['runpuppet'] and newip:
         raise Exception("Changing IP requires a Puppet run, don't pass --nopuppet.")
@@ -192,12 +193,12 @@ def _migratevm(config, newip, nolbdowntime, offline):
             for iprange in network_api.get_matching_ranges(config['vm']['intern_ip']):
                 if iprange['belongs_to'] == None and iprange['type'] == 'private':
                     if downtime_network:
-                        raise Exception('Unable to determine network for testtool downtime. Multiple networks found.')
+                        raise ManageVMError('Unable to determine network for testtool downtime. Multiple networks found.')
                     downtime_network = iprange['range_id']
         else:
             downtime_network = config['vm']['segment']
         if not downtime_network:
-            raise Exception('Unable to determine network for testtool downtime. No network found.')
+            raise ManageVMError('Unable to determine network for testtool downtime. No network found.')
 
     if newip:
         config['vm']['intern_ip'] = newip
@@ -211,7 +212,7 @@ def _migratevm(config, newip, nolbdowntime, offline):
         )
 
     if not offline and offline_flag:
-        raise Exception(
+        raise ManageVMError(
                 'Online migration is not possible with the current network '
                 'configuration.'
             )
@@ -227,7 +228,7 @@ def _migratevm(config, newip, nolbdowntime, offline):
         config['srchv_conn'] = get_virtconn(config['srchv']['hostname'], 'kvm')
         execute(import_vm_config_from_kvm, config, hosts=[config['srchv']['hostname']])
     else:
-        raise Exception("Migration from Hypervisor type {0} is not supported".format(config['srchv']['hypervisor']))
+        raise ManageVMError("Migration from Hypervisor type {0} is not supported".format(config['srchv']['hypervisor']))
 
     # Verify if config contains all the needed parameters
     check_vm_config(config)
@@ -239,7 +240,7 @@ def _migratevm(config, newip, nolbdowntime, offline):
         config['dsthv_conn'] = get_virtconn(config['dsthv']['hostname'], 'kvm')
         execute(setup_dsthv, config, offline, hosts=[config['dsthv']['hostname']])
     else:
-        raise Exception("Migration to Hypervisor type {0} is not supported".format(config['dsthv']['hypervisor']))
+        raise ManageVMError("Migration to Hypervisor type {0} is not supported".format(config['dsthv']['hypervisor']))
 
     # Trigger pre-migration hooks
     send_signal('pre_migration', config, offline)

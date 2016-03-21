@@ -2,12 +2,10 @@ import os
 
 from fabric.api import run, cd, put, settings
 
-from igvm.utils.sshkeys import create_authorized_keys
-from igvm.utils.template import upload_template
-from igvm.utils import fail_gracefully, cmd
+from managevm.utils.sshkeys import create_authorized_keys
+from managevm.utils.template import upload_template
+from managevm.utils import cmd
 
-run = fail_gracefully(run)
-put = fail_gracefully(put)
 
 def set_hostname(target_dir, hostname):
     with cd(target_dir):
@@ -66,6 +64,7 @@ def block_autostart(target_dir):
 def unblock_autostart(target_dir):
     with cd(target_dir):
         run(cmd('rm usr/sbin/policy-rc.d' ))
+
 
 def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
                swap_size, blk_dev, ssh_keytypes):

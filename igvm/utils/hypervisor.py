@@ -7,25 +7,20 @@ from StringIO import StringIO
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
-from icinga_utils import downtimer
-
 from fabric.api import run, puts, settings
 from fabric.context_managers import hide
-from fabric.contrib.files import exists
 
 from jinja2 import Environment, PackageLoader
 
-from igvm.utils import cmd, fail_gracefully
+from igvm.utils import cmd
 from igvm.utils.template import upload_template
-from igvm.utils.virtutils import get_virtconn, close_virtconns
-from igvm.utils.resources import get_cpuinfo
+from igvm.utils.virtutils import get_virtconn
 from igvm.signals import send_signal
 
-run = fail_gracefully(run)
-exists = fail_gracefully(exists)
 
 class HypervisorError(Exception):
     pass
+
 
 class VM(object):
     """
@@ -135,6 +130,7 @@ class KVMVM(VM):
     def undefine(self):
         with settings(host_string=self.hypervisor_hostname):
             run('virsh undefine {0}'.format(self.hostname))
+
 
 class XenVM(VM):
     def create(self, config):

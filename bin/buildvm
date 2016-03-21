@@ -8,6 +8,7 @@ from fabric.network import disconnect_all
 import adminapi
 
 from igvm.buildvm import buildvm
+from igvm.utils import ManageVMError
 
 print('This is deprecated use "igvm create"')
 
@@ -21,7 +22,11 @@ args = vars(parser.parse_args())
 
 adminapi.auth()
 
-buildvm(args.pop('guest'), **args)
+try:
+    buildvm(args.pop('guest'), **args)
+except ManageVMError as error:
+    print(error)
+    sys.exit(1)
 
 # Force disconnection from Fabric.
 # Otherwise errors in Paramiko are trigerred.

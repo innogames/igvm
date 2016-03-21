@@ -7,13 +7,12 @@ import os
 from fabric.api import run, cd, settings
 from fabric.contrib import files
 
-from igvm.utils import fail_gracefully, cmd
+from igvm.utils import cmd
 
 BASE_URL = 'http://aw-foreman.ig.local:8080/'
 PACKET_SERVER = 'aw-foreman.ig.local'
 PACKET_DIR = '/srv/domu_images/images'
 
-run = fail_gracefully(run)
 
 def get_images():
     try:
@@ -22,6 +21,7 @@ def get_images():
         return None
 
     return re.findall(r'<a\s+href="(.+?\.tar\.gz)"', image_html)
+
 
 def download_image(image):
     url = BASE_URL + image
