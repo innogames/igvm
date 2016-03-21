@@ -4,14 +4,10 @@ import os
 import re
 from contextlib import nested
 
-from fabric.utils import warn
-from fabric.api import run, settings, hide, puts, prompt
-from fabric.contrib.console import confirm
+from fabric.api import run, settings, hide
 
 from igvm.utils.units import convert_size
-from igvm.utils import cmd, fail_gracefully, raise_failure
-
-run = fail_gracefully(run)
+from igvm.utils import cmd
 
 
 class StorageError(Exception):
@@ -19,12 +15,10 @@ class StorageError(Exception):
 
 
 def get_volume_groups():
-    with settings(warn_only=True):
-        lvminfo = run('vgdisplay -c')
+    lvminfo = run('vgdisplay -c')
 
     if lvminfo.failed:
-        warn("No LVM found")
-        raise_failure(StorageError("No LVM found"))
+        raise StorageError("No LVM found")
 
     vgroups = []
     for line in lvminfo.splitlines():
@@ -52,12 +46,10 @@ def get_volume_groups():
 def get_logical_volumes():
     vgs = get_volume_groups()
 
-    with settings(warn_only=True):
-        lvminfo = run('lvdisplay -c')
+    lvminfo = run('lvdisplay -c')
 
     if lvminfo.failed:
-        warn("No LVM found")
-        raise_failure(StorageError("No LVM found"))
+        raise StorageError("No LVM found")
 
     lvolumes = []
     for line in lvminfo.splitlines():
@@ -94,20 +86,16 @@ def lvresize(volume, size_gib):
 
 
 def create_logical_volume(volume_group, name, size_gib):
-    lvs = [lv.strip().split(':') for lv in run('lvdisplay -c').splitlines()]
-    lvs = [lv for lv in lvs if lv[1] == volume_group]
-    volume = os.path.join('/dev', volume_group, name)
-    if volume in [lv[0] for lv in lvs]:
-        rem = confirm('Logical volume already exists. Should I remove it?')
-        if rem:
-            puts('Please remove the VM for this volume if it exists.')
-            prompt('Press any key to continue.')
-            with settings(warn_only=True):
-                run(cmd('umount {0}', volume))
-            run(cmd('lvremove -f {0}', volume))
-
-    run(cmd('lvcreate -L {0}g -n {1} {2}', size_gib, name, volume_group))
-    return volume
+    # Do not search only for the given LV.
+    # `lvs` must generally not fail and give a list of LVs.
+    for lv_line in run('lvs --noheading -o vg_name,name').splitlines():
+        vg_name, lv_name = lv_line.split()
+        if volume_group == vg_name and lv_name == name:
+            raise StorageError('Logical Volume {}/{} already exists!'.format(vg_name, lv_name))
+    with settings(warn_only=True):
+        if not run(cmd('lvcreate -L {0}g -n {1} {2}', size_gib, name, volume_group)):
+            raise StorageError('Unable to create Logical Volume {}/{}!'.format(volume_group, name))
+    return '/dev/{}/{}'.format(volume_group, name)
 
 
 def mount_temp(device, suffix=''):
@@ -130,10 +118,9 @@ def get_vm_block_dev(hypervisor):
     elif hypervisor == 'kvm':
         return 'vda'
     else:
-        raise_failure(StorageError((
+        raise StorageError((
             'VM block device name unknown for hypervisor {0}'
-        ).format(hypervisor)))
-
+        ).format(hypervisor))
 
 def get_storage_type():
     with nested(settings(warn_only=True), hide('everything')):
@@ -186,11 +173,11 @@ def create_storage(hostname, disk_size_gib):
     else:
         volume_groups = get_volume_groups()
         if not volume_groups:
-            raise_failure(StorageError('No volume groups found'))
+            raise StorageError('No volume groups found')
         volume_group = volume_groups[0]
         volume = volume_group['name']
         if convert_size(volume_group['size_free_MiB'], 'M', 'G') < disk_size_gib:
-            raise_failure(StorageError('No enough free space'))
+            raise StorageError('No enough free space')
         device = create_logical_volume(volume, hostname, disk_size_gib)
 
     return device
@@ -202,12 +189,15 @@ def mount_storage(device, hostname):
     mount_path = mount_temp(device, suffix='-' + hostname)
     return mount_path
 
+
 def check_netcat(port):
     if run('pgrep -f "^/bin/nc.traditional -l -p {}"'.format(port)):
-        raise Exception('Listening netcat already found on destination hypervisor.')
+        raise StorageError('Listening netcat already found on destination hypervisor.')
+
 
 def kill_netcat(port):
     run('pkill -f "^/bin/nc.traditional -l -p {}"'.format(port))
+
 
 def netcat_to_device(device):
     dev_minor = run('stat -L -c "%T" {}'.format(device))
