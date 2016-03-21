@@ -204,6 +204,12 @@ def mount_storage(device, hostname):
     mount_path = mount_temp(device, suffix='-' + hostname)
     return mount_path
 
+def check_netcat(port):
+    if run('pgrep -f "^/bin/nc.traditional -l -p {}"'.format(port)):
+        raise Exception('Listening netcat already found on destination hypervisor.')
+
+def kill_netcat(port):
+    run('pkill -f "^/bin/nc.traditional -l -p {}"'.format(port))
 
 def netcat_to_device(device):
     dev_minor = run('stat -L -c "%T" {}'.format(device))
