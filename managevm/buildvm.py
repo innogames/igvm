@@ -47,7 +47,7 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
 
     config = {'vm_hostname': vm_hostname}
     if localimage != None:
-        config['image'] = localimage
+        config['localimage'] = localimage
     config['runpuppet'] = not nopuppet
     if postboot != None:
         config['postboot_script'] = postboot
@@ -99,8 +99,11 @@ def setup_dsthv(config):
     config['device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
     mount_path = mount_storage(config['device'], config['vm_hostname'])
 
-    if config['image'] == None:
+    if not config.has_key('localimage'):
         download_image(config['image'])
+    else:
+        config['image'] = config['localimage']
+
     extract_image(config['image'], mount_path, config['dsthv']['os'])
 
     send_signal('prepare_vm', config, config['device'], mount_path)
