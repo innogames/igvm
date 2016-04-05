@@ -99,7 +99,6 @@ def setup_dsthv(config):
     config['device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
     mount_path = mount_storage(config['device'], config['vm_hostname'])
 
-    print config['image']
     if config['image'] == None:
         download_image(config['image'])
     extract_image(config['image'], mount_path, config['dsthv']['os'])
