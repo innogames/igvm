@@ -26,13 +26,13 @@ migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=
  * offline - boolean, allow offline migration, default is to attempt online migration and fail if it is impossible due to hypervisor of network configuration
 
 ```python
-buildvm(vm_hostname, image=None, nopuppet=False, postboot=None)
+buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None)
 ```
 
 * Mandatory:
  * vm_hostname - string, hostname of virtual machine
 * Optional:
- * image - image to use as base for VM, if no image is given, one based on os Admintool parameter will be used
+ * localimage - image on filesystem of HV to use as base for VM, if no image is given, one based on os Admintool parameter will be used
  * nopuppet - boolean, disable running chrooted puppet after VM image is extracted
  * postboot - extra command to run after machine is booted
 
