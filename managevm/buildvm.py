@@ -99,9 +99,12 @@ def setup_dsthv(config):
     config['device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
     mount_path = mount_storage(config['device'], config['vm_hostname'])
 
-    if config['localimage'] == None:
+    if not config.has_key('localimage'):
         download_image(config['image'])
-    extract_image(config['localimage'], mount_path, config['dsthv']['os'])
+    else:
+        config['image'] = config['localimage']
+
+    extract_image(config['image'], mount_path, config['dsthv']['os'])
 
     send_signal('prepare_vm', config, config['device'], mount_path)
     prepare_vm(mount_path,
