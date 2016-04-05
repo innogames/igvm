@@ -42,12 +42,12 @@ from managevm.signals import send_signal
 
 run = fail_gracefully(run)
 
-def buildvm(vm_hostname, image=None, nopuppet=False, postboot=None):
+def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     load_hooks()
 
     config = {'vm_hostname': vm_hostname}
-    if image != None:
-        config['image'] = image
+    if localimage != None:
+        config['image'] = localimage
     config['runpuppet'] = not nopuppet
     if postboot != None:
         config['postboot_script'] = postboot
@@ -99,7 +99,8 @@ def setup_dsthv(config):
     config['device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
     mount_path = mount_storage(config['device'], config['vm_hostname'])
 
-    download_image(config['image'])
+    if localimage == None:
+        download_image(config['image'])
     extract_image(config['image'], mount_path, config['dsthv']['os'])
 
     send_signal('prepare_vm', config, config['device'], mount_path)
