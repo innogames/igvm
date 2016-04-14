@@ -62,7 +62,7 @@ def kvm_hw_model(vm, config, tree):
 
     model2arch = {
         'Nehalem': ['Dell_M610'],
-        'SandyBridge': ['Dell_M620', 'Dell_M630']
+        'SandyBridge': ['Dell_M620', 'Dell_M630', 'Dell_R620']
     }
     for arch, models in model2arch.iteritems():
         if config['dsthv_hw_model'] in models:
