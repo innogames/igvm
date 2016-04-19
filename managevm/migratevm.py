@@ -1,9 +1,8 @@
 import copy
-from time import strftime
+from time import strftime, sleep
 
 from fabric.api import env, execute, run
 from fabric.context_managers import hide
-from fabric.network import disconnect_all
 
 from adminapi import api
 
@@ -266,4 +265,4 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     )
 
     close_virtconns()
-    disconnect_all()
+    sleep(1) # For Paramiko's race condition.

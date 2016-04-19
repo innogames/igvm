@@ -1,7 +1,7 @@
 import os
 
 from fabric.api import env, execute, run
-from fabric.network import disconnect_all
+from time import sleep
 
 from managevm.hooks import load_hooks
 
@@ -79,7 +79,7 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     execute(setup_vm, config, hosts=[config['vm_hostname']])
 
     close_virtconns()
-    disconnect_all()
+    sleep(1) # For Paramiko's race condition.
 
 def setup_dsthv(config):
     if config['dsthv']['hypervisor'] == 'kvm':
