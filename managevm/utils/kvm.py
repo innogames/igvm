@@ -179,7 +179,7 @@ def kvm_place_numa(vm, config, tree):
                 memnode.attrib = {
                     'cellid': str(i),
                     'nodeset': str(i),
-                    'mode': 'strict',
+                    'mode': 'preferred',
                 }
             # </numatune>
     else:
