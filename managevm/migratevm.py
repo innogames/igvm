@@ -228,6 +228,9 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     else:
         raise Exception("Migration to Hypervisor type {0} is not supported".format(config['dsthv']['hypervisor']))
 
+    # Trigger pre-migration hooks
+    send_signal('pre_migration', config, offline)
+
     # Commit previously changed IP address and segment.
     if newip:
         config['vm'].commit()
@@ -263,6 +266,9 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     config['vm']['num_cpu'] = config['num_cpu']
     config['vm']['memory'] = config['mem']
     config['vm'].commit()
+
+    # Trigger post-migration hooks
+    send_signal('post_migration', config, offline)
 
     # Remove the existing VM
     source_vm.undefine()

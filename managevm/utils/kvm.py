@@ -91,6 +91,56 @@ def kvm_memory_hotplug(vm, config, tree):
     # maxMemory node is part of XML
 
 
+@on_signal('pre_migration')
+def kvm_adjust_cpuset_pre(config, offline):
+    """
+    Reduces the cpuset to the minimum number of CPUs on source and destination.
+    """
+    if config['dsthv']['hypervisor'] != 'kvm' or offline:
+        return
+    conn_src = config['srchv_conn']
+    conn_dst = config['dsthv_conn']
+
+    # https://libvirt.org/html/libvirt-libvirt-host.html#virNodeInfo
+    num_cpus_src = conn_src.getInfo()[2]
+    num_cpus_dst = conn_dst.getInfo()[2]
+    if num_cpus_src <= num_cpus_dst:
+        # After migration we will need to include the additional cores from dst
+        config['__postmigrate_expand_cpuset'] = num_cpus_src
+        return  # Nothing to do
+
+    print('Target hypervisor has less cores, shrinking cpuset from {} to {} CPUs'.format(
+            num_cpus_src, num_cpus_dst))
+    assert num_cpus >= 4, 'hypervisor has at least four cores'
+
+    dom = conn_dst.lookupByName(config['vm_hostname'])
+    for i, mask in enumerate(dom.vcpuPinInfo()):
+        # Truncate CPU mask
+        dom.pinVcpu(i, mask[:num_cpus])
+
+
+@on_signal('post_migration')
+def kvm_adjust_cpuset_post(config, offline):
+    """
+    Includes all new physical cores in the cpuset.
+    For each new core P, the bit on VCPU V equals the bit of pcpu P-<num nodes>.
+    """
+    start_cpu = config.get('__postmigrate_expand_cpuset', 0)
+    if not start_cpu:
+        return
+    conn = config['dsthv_conn']
+
+    info = conn.getInfo()
+    num_cpus = info[2]
+    num_nodes = info[4]
+
+    dom = conn_dst.lookupByName(config['vm_hostname'])
+    for i, mask in enumerate(dom.vcpuPinInfo()):
+        for j in range(start_cpu, num_cpus):
+            mask[j] = mask[j-num_noddes]
+        dom.pinVcpu(i, mask)
+
+
 @on_signal('customize_kvm_xml')
 def kvm_place_numa(vm, config, tree):
     """
