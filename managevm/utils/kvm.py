@@ -113,6 +113,9 @@ def kvm_place_numa(vm, config, tree):
     _del_if_exists(tree, 'cpu/topology')
     _del_if_exists(tree, 'cpu/numa')
 
+    memory_backing = tree.find('memoryBacking')
+    hugepages = memory_backing is not None and memory_backing.find('hugepages') is not None
+
     if numa_mode == 'spread':
         # We currently don't have any other hypervisors, so this script *might* do something weird.
         # You may remove this check if it ever triggers and you've verified that it actually did
@@ -164,20 +167,21 @@ def kvm_place_numa(vm, config, tree):
         # </cell></numa>
         # </cpu>
 
-        # <numatune>
-        # Map VCPUs to guest NUMA nodes.
-        numatune = _find_or_create(tree, 'numatune')
-        memory = _find_or_create(numatune, 'memory')
-        memory.attrib['mode'] = 'strict'
-        memory.attrib['nodeset'] = nodeset
-        for i in range(0, num_nodes):
-            memnode = ET.SubElement(numatune, 'memnode')
-            memnode.attrib = {
-                'cellid': str(i),
-                'nodeset': str(i),
-                'mode': 'strict',
-            }
-        # </numatune>
+        if not hugepages:
+            # <numatune>
+            # Map VCPUs to guest NUMA nodes.
+            numatune = _find_or_create(tree, 'numatune')
+            memory = _find_or_create(numatune, 'memory')
+            memory.attrib['mode'] = 'strict'
+            memory.attrib['nodeset'] = nodeset
+            for i in range(0, num_nodes):
+                memnode = ET.SubElement(numatune, 'memnode')
+                memnode.attrib = {
+                    'cellid': str(i),
+                    'nodeset': str(i),
+                    'mode': 'strict',
+                }
+            # </numatune>
     else:
         raise Exception('NUMA mode not supported: {0}'.format(numa_mode))
 
