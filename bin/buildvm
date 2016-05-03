@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import argparse
+from fabric.network import disconnect_all
 
 import adminapi
 
@@ -18,3 +19,7 @@ args = vars(parser.parse_args())
 adminapi.auth()
 
 buildvm(args.pop('guest'), **args)
+
+# Force disconnection from Fabric.
+# Otherwise errors in Paramiko are trigerred.
+disconnect_all
