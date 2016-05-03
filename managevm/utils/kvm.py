@@ -104,19 +104,22 @@ def kvm_adjust_cpuset_pre(config, offline):
     # https://libvirt.org/html/libvirt-libvirt-host.html#virNodeInfo
     num_cpus_src = conn_src.getInfo()[2]
     num_cpus_dst = conn_dst.getInfo()[2]
-    if num_cpus_src <= num_cpus_dst:
+
+    if num_cpus_src < num_cpus_dst:
         # After migration we will need to include the additional cores from dst
         config['__postmigrate_expand_cpuset'] = num_cpus_src
+        return
+    elif num_cpus_src == num_cpus_dst:
         return  # Nothing to do
 
     print('Target hypervisor has less cores, shrinking cpuset from {} to {} CPUs'.format(
             num_cpus_src, num_cpus_dst))
-    assert num_cpus >= 4, 'hypervisor has at least four cores'
+    assert num_cpus_dst >= 4, 'hypervisor has at least four cores'
 
-    dom = conn_dst.lookupByName(config['vm_hostname'])
+    dom = conn_src.lookupByName(config['vm_hostname'])
     for i, mask in enumerate(dom.vcpuPinInfo()):
         # Truncate CPU mask
-        dom.pinVcpu(i, mask[:num_cpus])
+        dom.pinVcpu(i, mask[:num_cpus_dst])
 
 
 @on_signal('post_migration')
@@ -134,11 +137,14 @@ def kvm_adjust_cpuset_post(config, offline):
     num_cpus = info[2]
     num_nodes = info[4]
 
-    dom = conn_dst.lookupByName(config['vm_hostname'])
+    print('Expanding cpuset from {} to {} CPUs'.format(start_cpu, num_cpus))
+
+    dom = conn.lookupByName(config['vm_hostname'])
     for i, mask in enumerate(dom.vcpuPinInfo()):
+        mask = list(mask)
         for j in range(start_cpu, num_cpus):
-            mask[j] = mask[j-num_noddes]
-        dom.pinVcpu(i, mask)
+            mask[j] = mask[j-num_nodes]
+        dom.pinVcpu(i, tuple(mask))
 
 
 @on_signal('customize_kvm_xml')

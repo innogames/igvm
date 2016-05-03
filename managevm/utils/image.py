@@ -40,7 +40,7 @@ def download_image(image):
 
     if files.exists(image):
         local_hash = run(cmd('md5sum {0}', image)).split()[0]
-        if sysadmin:
+        if sysadmin and False:
             with settings(host_string=PACKET_SERVER):
                 with cd(PACKET_DIR):
                     remote_hash = run(cmd('md5sum {0}', image)).split()[0]

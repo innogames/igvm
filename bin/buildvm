@@ -4,6 +4,13 @@ from __future__ import print_function
 import argparse
 from fabric.network import disconnect_all
 
+import sys
+import os
+
+sys.path = ['.'] + sys.path
+#print('Disabled during the weekend')
+#sys.exit(1)
+
 import adminapi
 
 from managevm.buildvm import buildvm
