@@ -149,6 +149,9 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
     config['srchv'] = get_server(config['vm']['xen_host'])
     config['dsthv'] = get_server(dsthv_hostname)
 
+    if config['dsthv']['state'] != 'online':
+        raise Exception('Server "{0}" is not online.'.format(config['dsthv']['hostname']))
+
     source_vm = VM.get(
         vm_hostname,
         config['srchv']['hypervisor'],
