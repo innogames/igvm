@@ -3,8 +3,6 @@
 import argparse
 from fabric.network import disconnect_all
 
-sys.path = ['.'] + sys.path
-
 import adminapi
 
 from managevm.migratevm import migratevm
