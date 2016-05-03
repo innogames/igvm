@@ -236,8 +236,10 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         print "Downtiming testtool for network '{}'".format(downtime_network)
         config['vm']['testtool_downtime'] = True
         config['vm'].commit()
-        lb_api.push_downtimes([downtime_network])
-
+        try:
+            lb_api.push_downtimes([downtime_network])
+        except:
+            pass
     # Finally migrate the VM
     if offline:
         if source_vm.is_running():
@@ -251,7 +253,10 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         print "Removing testtool downtime"
         config['vm']['testtool_downtime'] = False
         config['vm'].commit()
-        lb_api.push_downtimes([downtime_network])
+        try:
+            lb_api.push_downtimes([downtime_network])
+        except:
+            pass
 
     # Update admintool information
     config['vm']['xen_host'] = config['dsthv']['hostname']
