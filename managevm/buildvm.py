@@ -59,6 +59,9 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     config['network']['vlan'] = get_vlan_info(config['vm'], None, config['dsthv'], None)[0]
     config['vlan_tag'] = config['network']['vlan']
 
+    if not nopuppet and not config['vm']['puppet_classes']:
+        raise_failure(Exception('VM has no puppet_classes and would not get any network configuration.'))
+
     init_vm_config(config)
     import_vm_config_from_admintool(config)
 
