@@ -1,6 +1,7 @@
 import os
 
-from fabric.api import env, execute, run
+from fabric.api import env, execute, run, warn
+from fabric.colors import yellow
 from time import sleep
 
 from managevm.hooks import load_hooks
@@ -59,8 +60,12 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     config['network']['vlan'] = get_vlan_info(config['vm'], None, config['dsthv'], None)[0]
     config['vlan_tag'] = config['network']['vlan']
 
-    if not nopuppet and not config['vm']['puppet_classes']:
-        raise_failure(Exception('VM has no puppet_classes and would not get any network configuration.'))
+    if not config['vm']['puppet_classes']:
+        if nopuppet or config['vm']['puppet_disabled']:
+            warn(yellow('VM has no puppet_classes and will not receive network configuration.\n' \
+                    'You have chosen to disable Puppet. Expect things to go south.'))
+        else:
+            raise_failure(Exception('VM has no puppet_classes and will not get any network configuration.'))
 
     init_vm_config(config)
     import_vm_config_from_admintool(config)
