@@ -8,6 +8,8 @@ import adminapi
 
 from managevm.buildvm import buildvm
 
+print('This is deprecated use "igvm create"')
+
 parser = argparse.ArgumentParser(description='Creates a new virtual machine.')
 parser.add_argument('guest',        metavar='guest',           help='Hostname of the guest system')
 parser.add_argument('--localimage', metavar='localimage',      help='Image file for for installation from local fs')

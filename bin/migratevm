@@ -7,6 +7,8 @@ import adminapi
 
 from managevm.migratevm import migratevm
 
+print('This is deprecated use "igvm create"')
+
 parser = argparse.ArgumentParser(description='Migrate a virtual machine.')
 parser.add_argument('--newip',        metavar='IP address',     help='IP address to move VM to, in case you migrate between segments')
 parser.add_argument('--nopuppet',     action='store_true',      help='Skip running puppet in chroot before powering up')
