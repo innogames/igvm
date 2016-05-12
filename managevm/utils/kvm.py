@@ -61,7 +61,7 @@ def kvm_hw_model(vm, config, tree):
         return
 
     model2arch = {
-        'Nehalem': ['Dell_M610'],
+        'Nehalem': ['Dell_M610', 'Dell_M710'],
         'SandyBridge': ['Dell_M620', 'Dell_M630', 'Dell_R620']
     }
     for arch, models in model2arch.iteritems():
