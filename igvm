@@ -5,7 +5,7 @@
 # Copyright (c) 2016, InnoGames GmbH
 #
 
-"""The "igvm" binary"""
+"""InnoGames VM Management Tool"""
 
 from argparse import ArgumentParser
 
@@ -15,68 +15,79 @@ from managevm.buildvm import buildvm
 from managevm.migratevm import migratevm
 from managevm.resources import disk_set
 
-top_parser = ArgumentParser(description='InnoGames VM Management Tool')
-subparsers = top_parser.add_subparsers(description='Actions')
+top_parser = ArgumentParser(__doc__)
+subparsers = top_parser.add_subparsers(
+    help='Actions',
+)
 
-create_parser = subparsers.add_parser('create')
-create_parser.set_defaults(action=buildvm)
-create_parser.add_argument(
+subparser = subparsers.add_parser(
+    'create',
+    description=(__doc__ + ' - Create VM'),
+)
+subparser.set_defaults(func=buildvm)
+subparser.add_argument(
     'vm_hostname',
     help='Hostname of the guest system',
 )
-create_parser.add_argument(
+subparser.add_argument(
     '--localimage',
     help='Image file for for installation from local fs',
 )
-create_parser.add_argument(
+subparser.add_argument(
     '--postboot',
     metavar='postboot_script',
     help='Run postboot_script on the guest after first boot',
 )
-create_parser.add_argument(
+subparser.add_argument(
     '--nopuppet',
     action='store_true',
     help='Skip running puppet in chroot before powering up',
 )
 
-migrate_parser = subparsers.add_parser('migrate')
-migrate_parser.set_defaults(action=migratevm)
-migrate_parser.add_argument(
+subparser = subparsers.add_parser(
+    'migrate',
+    description=(__doc__ + ' - Migrate VM'),
+)
+subparser.set_defaults(func=migratevm)
+subparser.add_argument(
     'vm_hostname',
     help='Hostname of the guest system',
 )
-migrate_parser.add_argument(
+subparser.add_argument(
     'dsthv_hostname',
     help='Hostname of destination hypervisor',
 )
-migrate_parser.add_argument(
+subparser.add_argument(
     '--newip',
     metavar='IP address',
     help='IP address to move VM to, in case you migrate between segments',
 )
-migrate_parser.add_argument(
+subparser.add_argument(
     '--nopuppet',
     action='store_true',
     help='Skip running puppet in chroot before powering up',
 )
-migrate_parser.add_argument(
+subparser.add_argument(
     '--nolbdowntime',
     action='store_true',
     help="Don't use testtool's downtime feature during migration",
 )
-migrate_parser.add_argument(
+subparser.add_argument(
     '--offline',
     action='store_true',
     help='Force offline migration',
 )
 
-disk_set_parser = subparsers.add_parser('disk-set')
-disk_set_parser.set_defaults(action=disk_set)
-disk_set_parser.add_argument(
+subparser = subparsers.add_parser(
+    'disk-set',
+    description=(__doc__ + ' - Set VM Disk Size'),
+)
+subparser.set_defaults(func=disk_set)
+subparser.add_argument(
     'vm_hostname',
     help='Hostname of the guest system',
 )
-disk_set_parser.add_argument(
+subparser.add_argument(
     'size',
     help='New disk size in GiBs (can be specified relative with "+")',
 )
@@ -84,4 +95,4 @@ disk_set_parser.add_argument(
 adminapi.auth()
 
 args = vars(top_parser.parse_args())
-args.pop('action')(**args)
+args.pop('func')(**args)
