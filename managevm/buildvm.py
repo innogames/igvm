@@ -104,7 +104,9 @@ def setup_dsthv(config):
 
     # Config completely generated -> start doing stuff.
     send_signal('setup_hardware', config)
-    config['device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
+    config['device'] = create_storage(
+        config['vm']['hostname'], config['vm']['disk_size_gib']
+    )
     mount_path = mount_storage(config['device'], config['vm_hostname'])
 
     if not config.has_key('localimage'):

@@ -51,15 +51,20 @@ def init_vm_config(config):
     config['mailname'] = config['vm_hostname'] + '.ig.local'
     config['dns_servers']=['10.0.0.102', '10.0.0.85', '10.0.0.83']
 
-def import_vm_disk(config):
-    lvs = get_logical_volumes()
-    for lv in lvs:
-        if lv['name'].split('/')[3] == config['vm_hostname']:
-            config['src_device'] = lv['name']
-            config['disk_size_gib'] = int(math.ceil(lv['size_MiB'] / 1024))
-            break
-    else:
-        raise Exception('Unable to find source LV and determine its size.')
+
+def get_vm_volume(vm):
+    for lv in get_logical_volumes():
+        if lv['name'].split('/')[3] == vm['hostname']:
+            if vm['disk_size_gib'] != int(math.ceil(lv['size_MiB'] / 1024)):
+                raise Exception((
+                    "Server disk_size_gib {0} on Serveradmin doesn't "
+                    'match the volume size {1} MiB.'
+                ).format(vm['disk_size_gib'], lv['size_MiB']))
+
+            return lv['name']
+
+    raise Exception('Unable to find source LV and determine its size.')
+
 
 def import_vm_config_from_admintool(config):
     """ Import configuration from Admintool.
@@ -97,8 +102,9 @@ def import_vm_config_from_kvm(config):
     # Some we trust from Admintool
     config['os']      = config['srchv']['os']
 
-    # And some must be retrieved from running source hypervisor OS
-    import_vm_disk(config)
+    # The source device name must be retrieved from running source
+    # hypervisor OS to be on the safer side.
+    config['src_device'] = get_vm_volume(config['vm'])
 
 def import_vm_config_from_xen(config):
     """ Import configuration from Hypervisor currently hosting the VM.
@@ -115,7 +121,7 @@ def import_vm_config_from_xen(config):
     config['os']      = config['srchv']['os']
 
     # But not for disk size
-    import_vm_disk(config)
+    config['src_device'] = get_vm_volume(config['vm'])
 
 def check_dsthv_vm(config):
     """ Check if VM is already defined on Destination Hypervisor.

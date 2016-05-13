@@ -55,7 +55,9 @@ def setup_dsthv(config, offline):
 
     send_signal('setup_hardware', config)
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
-    config['dst_device'] = create_storage(config['vm_hostname'], config['disk_size_gib'])
+    config['dst_device'] = create_storage(
+        config['vm']['hostname'], config['vm']['disk_size_gib']
+    )
 
     if offline:
         config['nc_port'] = netcat_to_device(config['dst_device'])
@@ -67,7 +69,14 @@ def add_dsthv_to_ssh(config):
 
 def migrate_offline(config):
     add_dsthv_to_ssh(config)
-    execute(device_to_netcat, config['src_device'], config['disk_size_gib']*1024*1024*1024, config['dsthv_hostname'], config['nc_port'], hosts=config['srchv']['hostname'])
+    execute(
+        device_to_netcat,
+        config['src_device'],
+        config['vm']['disk_size_gib'] * 1024**3,
+        config['dsthv_hostname'],
+        config['nc_port'],
+        hosts=config['srchv']['hostname'],
+    )
 
 def start_offline_vm(config):
 
@@ -104,7 +113,7 @@ def migrate_virsh(config):
     # it should have coped the initial disk and memory and changes on them.
     timeout = sum((
             # We assume the disk can be copied at 50 MB/s;
-            config['disk_size_gib'] * 1024 / 50,
+            config['vm']['disk_size_gib'] * 1024 / 50,
             # the memory at 100 MB/s;
             config['mem'] / 100,
             # and 5 minutes more for other operations.
