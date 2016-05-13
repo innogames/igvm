@@ -83,6 +83,11 @@ def get_logical_volumes():
 def remove_logical_volume(lv):
     run('lvremove -f {0}'. format(lv))
 
+def lvresize(volume, size_gib):
+    """Extend the volume, return the new size"""
+
+    run('lvresize {0} -L {1}g'.format(volume, size_gib))
+
 def create_logical_volume(volume_group, name, size_GiB):
     lvs = [lv.strip().split(':') for lv in run('lvdisplay -c').splitlines()]
     lvs = [lv for lv in lvs if lv[1] == volume_group]

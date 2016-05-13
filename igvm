@@ -5,12 +5,15 @@
 # Copyright (c) 2016, InnoGames GmbH
 #
 
+"""The "igvm" binary"""
+
 from argparse import ArgumentParser
 
 import adminapi
 
 from managevm.buildvm import buildvm
 from managevm.migratevm import migratevm
+from managevm.resources import disk_set
 
 top_parser = ArgumentParser(description='InnoGames VM Management Tool')
 subparsers = top_parser.add_subparsers(description='Actions')
@@ -65,6 +68,17 @@ migrate_parser.add_argument(
     '--offline',
     action='store_true',
     help='Force offline migration',
+)
+
+disk_set_parser = subparsers.add_parser('disk-set')
+disk_set_parser.set_defaults(action=disk_set)
+disk_set_parser.add_argument(
+    'vm_hostname',
+    help='Hostname of the guest system',
+)
+disk_set_parser.add_argument(
+    'size',
+    help='New disk size in GiBs (can be specified relative with "+")',
 )
 
 adminapi.auth()
