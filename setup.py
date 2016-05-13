@@ -2,9 +2,9 @@
 from distutils.core import setup
 
 setup(
-    name='managevm',
+    name='igvm',
     version='1.0',
-    url='git@gitlab.innogames.de:sysadmins/ig.managevm.git',
+    url='https://gitlab.innogames.de/sysadmins/igvm',
     packages=['managevm', 'managevm.utils', 'managevm.hooks'],
     scripts=[
         'igvm',
