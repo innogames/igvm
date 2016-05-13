@@ -159,7 +159,8 @@ def check_dsthv_cpu(config):
     if config['num_cpu'] > num_cpus:
         raise Exception('Not enough CPUs. Destination Hypervisor has {0} but VM requires {1}.'.format(num_cpus, config['num_cpu']))
 
-    config['max_cpu'] = config.get('max_cpu', 24)
+    assert num_cpus >= 4 and num_cpus <= 128, 'max_cpu is in sane range'
+    config['max_cpu'] = min(24, num_cpus)
 
 def check_vm_config(config):
     if 'mem' not in config:
