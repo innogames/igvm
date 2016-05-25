@@ -13,8 +13,10 @@ from managevm.utils import cmd, fail_gracefully, raise_failure
 
 run = fail_gracefully(run)
 
+
 class StorageError(Exception):
     pass
+
 
 def get_volume_groups():
     with settings(warn_only=True):
@@ -24,7 +26,6 @@ def get_volume_groups():
         warn("No LVM found")
         raise_failure(StorageError("No LVM found"))
 
-
     vgroups = []
     for line in lvminfo.splitlines():
         parts = line.strip().split(':')
@@ -32,11 +33,11 @@ def get_volume_groups():
             print("Badly formatted vgdisplay output: {0}".format(line))
             continue
         volume_group = parts[0]
-        size_KiB    = int(parts[11])
-        size_MiB    = int(size_KiB / 1024)
+        size_KiB = int(parts[11])
+        size_MiB = int(size_KiB / 1024)
         pe_size_KiB = int(parts[12])
-        free_exts   = int(parts[15])
-        free_MiB    = int(free_exts * pe_size_KiB / 1024)
+        free_exts = int(parts[15])
+        free_MiB = int(free_exts * pe_size_KiB / 1024)
 
         vgroups.append({
             'name': volume_group,
@@ -46,6 +47,7 @@ def get_volume_groups():
         })
 
     return vgroups
+
 
 def get_logical_volumes():
     vgs = get_volume_groups()
@@ -64,7 +66,7 @@ def get_logical_volumes():
             print("Badly formatted lvdisplay output: {0}".format(line))
             continue
         logical_volume = parts[0]
-        volume_group   = parts[1]
+        volume_group = parts[1]
 
         for volume_group_test in vgs:
             if volume_group_test['name'] == volume_group:
@@ -80,15 +82,18 @@ def get_logical_volumes():
 
     return lvolumes
 
+
 def remove_logical_volume(lv):
     run('lvremove -f {0}'. format(lv))
+
 
 def lvresize(volume, size_gib):
     """Extend the volume, return the new size"""
 
     run('lvresize {0} -L {1}g'.format(volume, size_gib))
 
-def create_logical_volume(volume_group, name, size_GiB):
+
+def create_logical_volume(volume_group, name, size_gib):
     lvs = [lv.strip().split(':') for lv in run('lvdisplay -c').splitlines()]
     lvs = [lv for lv in lvs if lv[1] == volume_group]
     volume = os.path.join('/dev', volume_group, name)
@@ -101,19 +106,23 @@ def create_logical_volume(volume_group, name, size_GiB):
                 run(cmd('umount {0}', volume))
             run(cmd('lvremove -f {0}', volume))
 
-    run(cmd('lvcreate -L {0}G -n {1} {2}', size_GiB, name, volume_group))
+    run(cmd('lvcreate -L {0}G -n {1} {2}', size_gib, name, volume_group))
     return volume
+
 
 def mount_temp(device, suffix=''):
     mount_dir = run(cmd('mktemp -d --suffix {0}', suffix))
     run(cmd('mount {0} {1}', device, mount_dir))
     return mount_dir
 
+
 def umount_temp(device_or_path):
     run(cmd('umount {0}', device_or_path))
 
+
 def remove_temp(mount_path):
     run(cmd('rm -rf {0}', mount_path))
+
 
 def get_vm_block_dev(hypervisor):
     if hypervisor == 'xen':
@@ -121,12 +130,16 @@ def get_vm_block_dev(hypervisor):
     elif hypervisor == 'kvm':
         return 'vda'
     else:
-        raise_failure(StorageError("VM block device name unknown for hypervisor {0}".format(hypervisor)))
+        raise_failure(StorageError((
+            'VM block device name unknown for hypervisor {0}'
+        ).format(hypervisor)))
+
 
 def get_storage_type():
     with nested(settings(warn_only=True), hide('everything')):
         result = run('which santool')
     return 'san' if not result.failed else 'lvm'
+
 
 def get_san_arrays():
     saninfo = run('santool --show free')
@@ -154,12 +167,15 @@ def get_san_arrays():
 
     return arrays
 
+
 def choose_array(arrays):
     return max(arrays, key=lambda x: x['num_free'] / x['num_total'])
+
 
 def create_san_raid(name, array):
     run(cmd('santool --build-raid -u {0} --array-number {1}', name, array))
     return os.path.join('/dev', 'san', 'raid', name)
+
 
 def create_storage(hostname, disk_size_gib):
     storage_type = get_storage_type()
@@ -179,6 +195,7 @@ def create_storage(hostname, disk_size_gib):
 
     return device
 
+
 def mount_storage(device, hostname):
 
     # First, make the file system
@@ -187,6 +204,7 @@ def mount_storage(device, hostname):
     mount_path = mount_temp(device, suffix='-' + hostname)
     return mount_path
 
+
 def netcat_to_device(device):
     dev_minor = run('stat -L -c "%T" {}'.format(device))
     dev_minor = int(dev_minor, 16)
@@ -194,6 +212,7 @@ def netcat_to_device(device):
     # Using DD lowers load on device with big enough Block Size
     run('nohup /bin/nc.traditional -l -p {0} | dd of={1} obs=1048576 &'.format(port, device))
     return port
+
 
 def device_to_netcat(device, size, host, port):
     # Using DD lowers load on device with big enough Block Size
