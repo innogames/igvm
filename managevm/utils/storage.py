@@ -106,7 +106,7 @@ def create_logical_volume(volume_group, name, size_gib):
                 run(cmd('umount {0}', volume))
             run(cmd('lvremove -f {0}', volume))
 
-    run(cmd('lvcreate -L {0}G -n {1} {2}', size_gib, name, volume_group))
+    run(cmd('lvcreate -L {0}g -n {1} {2}', size_gib, name, volume_group))
     return volume
 
 
