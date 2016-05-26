@@ -15,7 +15,6 @@ from jinja2 import Environment, PackageLoader
 from igvm.utils import cmd
 from igvm.utils.template import upload_template
 from igvm.utils.virtutils import get_virtconn
-from igvm.signals import send_signal
 
 
 class HypervisorError(Exception):
@@ -90,7 +89,7 @@ class KVMVM(VM):
         domain_xml = jenv.get_template('libvirt/domain.xml').render(**config)
 
         tree = ET.fromstring(domain_xml)
-        send_signal('customize_kvm_xml', self, config, tree)
+        # TODO: Domain XML customization for NUMA etc
 
         # Remove whitespace and re-indent properly.
         out = re.sub('>\s+<', '><', ET.tostring(tree))

@@ -41,7 +41,7 @@ def get_qemu_version(config):
     return major, minor
 
 
-@on_signal('populate_config')
+#@on_signal('populate_config')
 def kvm_populate_config(config):
     if config['dsthv']['hypervisor'] != 'kvm':
         return
@@ -52,7 +52,7 @@ def kvm_populate_config(config):
     config['mem_hotplug'] = (version >= (2, 3))
 
 
-@on_signal('customize_kvm_xml')
+#@on_signal('customize_kvm_xml')
 def kvm_hw_model(vm, config, tree):
     """
     Selects CPU model based on hardware model.
@@ -81,7 +81,7 @@ def kvm_hw_model(vm, config, tree):
             break
 
 
-@on_signal('customize_kvm_xml')
+#@on_signal('customize_kvm_xml')
 def kvm_memory_hotplug(vm, config, tree):
     """
     Configures memory hotplugging.
@@ -93,7 +93,7 @@ def kvm_memory_hotplug(vm, config, tree):
     # maxMemory node is part of XML
 
 
-@on_signal('pre_migration')
+#@on_signal('pre_migration')
 def kvm_adjust_cpuset_pre(config, offline):
     """
     Reduces the cpuset to the minimum number of CPUs on source and destination.
@@ -131,7 +131,7 @@ def kvm_adjust_cpuset_pre(config, offline):
         dom.pinVcpu(i, mask[:num_cpus_dst])
 
 
-@on_signal('post_migration')
+#@on_signal('post_migration')
 def kvm_adjust_cpuset_post(config, offline):
     """
     Includes all new physical cores in the cpuset.
@@ -156,7 +156,7 @@ def kvm_adjust_cpuset_post(config, offline):
         dom.pinVcpu(i, tuple(mask))
 
 
-@on_signal('customize_kvm_xml')
+#@on_signal('customize_kvm_xml')
 def kvm_place_numa(vm, config, tree):
     """
     Configures NUMA placement.

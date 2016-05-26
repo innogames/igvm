@@ -7,12 +7,15 @@
   <memory unit='MiB'>{{ mem }}</memory>
   <currentMemory unit='MiB'>{{ mem }}</currentMemory>
   
-  <vcpu placement='auto' current='{{ num_cpu }}'>{{ max_cpu }}</vcpu>
+  <!-- Don't put placement unless NUMA settings are set! -->
+  <vcpu current='{{ num_cpu }}'>{{ max_cpu }}</vcpu>
 
   <!-- These are filled by KVM hooks in managevm/utils/kvm.py. -->
+  <!-- Disabled for now, without hooks this will break.
   <cpu></cpu>
   <cputune></cputune>
   <numatune></numatune>
+  -->
 
   <os>
     <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>

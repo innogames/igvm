@@ -4,8 +4,6 @@ from fabric.api import env, execute, run, warn
 from fabric.colors import yellow
 from time import sleep
 
-from igvm.hooks import load_hooks
-
 from igvm.utils.config import (
         get_server,
         init_vm_config,
@@ -38,13 +36,10 @@ from igvm.utils.virtutils import (
         get_virtconn,
         close_virtconns,
     )
-from igvm.signals import send_signal
 from igvm.utils import ManageVMError
 
 
 def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
-    load_hooks()
-
     config = {'vm_hostname': vm_hostname}
     if localimage != None:
         config['localimage'] = localimage
@@ -103,10 +98,7 @@ def setup_dsthv(config):
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
     config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
 
-    send_signal('populate_config', config)
-
     # Config completely generated -> start doing stuff.
-    send_signal('setup_hardware', config)
     config['device'] = create_storage(
         config['vm']['hostname'], config['vm']['disk_size_gib']
     )
@@ -119,7 +111,6 @@ def setup_dsthv(config):
 
     extract_image(config['image'], mount_path, config['dsthv']['os'])
 
-    send_signal('prepare_vm', config, config['device'], mount_path)
     prepare_vm(mount_path,
             server=config['vm'],
             mailname=config['mailname'],
@@ -128,7 +119,6 @@ def setup_dsthv(config):
             swap_size=config['swap_size'],
             blk_dev=config['vm_block_dev'],
             ssh_keytypes=get_ssh_keytypes(config['os']))
-    send_signal('prepared_vm', config, config['device'], mount_path)
 
     if config['runpuppet']:
         block_autostart(mount_path)
@@ -141,15 +131,8 @@ def setup_dsthv(config):
     umount_temp(config['device'])
     remove_temp(mount_path)
 
-    # Note: Extra values used to be separated from config, but since they're currently unused
-    # this shouldn't matter.
-    for extra in send_signal('hypervisor_extra', config, config['dsthv']['hypervisor']):
-        config.update(extra)
-
     vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'], config['dsthv']['hostname'])
     vm.create(config)
-
-    send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 
     vm.start()
 
@@ -161,8 +144,6 @@ def setup_dsthv(config):
 
 
 def setup_vm(config):
-    send_signal('vm_booted', config)
     if 'postboot_script' in config:
         run('/buildvm-postboot')
         run('rm -f /buildvm-postboot')
-        send_signal('postboot_executed', config)

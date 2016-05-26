@@ -5,9 +5,7 @@ from fabric.network import disconnect_all
 
 from adminapi import api
 
-from igvm.hooks import load_hooks
 from igvm.utils.resources import get_hw_model
-from igvm.signals import send_signal
 from igvm.utils import ManageVMError
 from igvm.utils.config import (
         get_server,
@@ -50,10 +48,6 @@ def setup_dsthv(config, offline):
     check_dsthv_cpu(config)
     check_dsthv_memory(config)
 
-    # Invoke hooks to populate more config fields
-    send_signal('populate_config', config)
-
-    send_signal('setup_hardware', config)
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
     config['dst_device'] = create_storage(
         config['vm']['hostname'], config['vm']['disk_size_gib']
@@ -91,12 +85,6 @@ def start_offline_vm(config):
 
     config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
 
-    # Signals are not used in hypervisor.py, so do not migrate this stuff there!
-    # Note: Extra values used to be separated from config, but since they're currently unused
-    # this shouldn't matter.
-    for extra in send_signal('hypervisor_extra', config, config['dsthv']['hypervisor']):
-        config.update(extra)
-
     vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'], config['dsthv']['hostname'])
 
     # We distinguish between src_device and dst_device, which create() doesn't know about.
@@ -104,8 +92,6 @@ def start_offline_vm(config):
     create_config['device'] = config['dst_device']
 
     vm.create(create_config)
-
-    send_signal('defined_vm', config, config['dsthv']['hypervisor'])
 
     vm.start()
 
@@ -146,7 +132,6 @@ def migrate_virsh(config):
 
 
 def _migratevm(config, newip, nolbdowntime, offline):
-
     config['vm'] = get_server(config['vm_hostname'], 'vm')
 
     # TODO We are not validating the servertype of the source and target
@@ -242,9 +227,6 @@ def _migratevm(config, newip, nolbdowntime, offline):
     else:
         raise ManageVMError("Migration to Hypervisor type {0} is not supported".format(config['dsthv']['hypervisor']))
 
-    # Trigger pre-migration hooks
-    send_signal('pre_migration', config, offline)
-
     # Commit previously changed IP address and segment.
     if newip:
         config['vm'].commit()
@@ -281,9 +263,6 @@ def _migratevm(config, newip, nolbdowntime, offline):
     config['vm']['memory'] = config['mem']
     config['vm'].commit()
 
-    # Trigger post-migration hooks
-    send_signal('post_migration', config, offline)
-
     # Remove the existing VM
     source_vm.undefine()
     execute(
@@ -294,8 +273,6 @@ def _migratevm(config, newip, nolbdowntime, offline):
 
 
 def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):
-    load_hooks()
-
     config = {
         'vm_hostname': vm_hostname,
         'dsthv_hostname': dsthv_hostname,

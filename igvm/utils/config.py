@@ -8,7 +8,6 @@ import math
 
 from adminapi.dataset import query, DatasetError
 from fabric.api import run
-from igvm.signals import send_signal
 from igvm.utils.storage import get_logical_volumes
 from igvm.utils.resources import get_cpuinfo
 
