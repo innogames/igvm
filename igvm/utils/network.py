@@ -1,8 +1,11 @@
+import logging
 import urllib2
 
 from fabric.api import abort
 
 from adminapi import api
+
+log = logging.getLogger(__name__)
 
 class NetworkError(Exception):
     pass
@@ -29,8 +32,8 @@ def get_network_config(server):
         except urllib2.URLError:
             raise NetworkError('Admintool is down')
         except Exception as e:
-            print('Could not configure network automatically!')
-            print('Make sure that IP ranges are configured correctly in admintool.')
+            log.warn('Could not configure network automatically!')
+            log.warn('Make sure that IP ranges are configured correctly in admintool.')
             abort('Error was: {0}'.format(e))
         else:
             # Copy settings from Admintool. Use only internal gateway, it should be enough for installation.
@@ -43,8 +46,8 @@ def get_network_config(server):
         except urllib2.URLError:
             raise NetworkError('Admintool is down')
         except Exception as e:
-            print('Could not configure network automatically!')
-            print('Make sure that IP ranges are configured correctly in admintool.')
+            log.warn('Could not configure network automatically!')
+            log.warn('Make sure that IP ranges are configured correctly in admintool.')
             abort('Error was: {0}'.format(e))
         else:
             # Copy settings from Admintool. Use only internal gateway, it should be enough for installation.
@@ -71,8 +74,8 @@ def get_vlan_info(vm, srchv, dsthv, newip):
     if newip:
         vm['segment'] = vm_net['segment']
 
-        print("Machine will be moved to new network, this enforces offline migration.")
-        print("Segment: {0}, IP address: {1}, VLAN: {2}".format(vm['segment'], vm['intern_ip'], vm_net['vlan']))
+        log.info("Machine will be moved to new network, this enforces offline migration.")
+        log.info("Segment: {0}, IP address: {1}, VLAN: {2}".format(vm['segment'], vm['intern_ip'], vm_net['vlan']))
 
     if 'network_vlans' in dsthv and dsthv['network_vlans']:
         if srchv and not srchv['network_vlans']:
@@ -89,6 +92,6 @@ def get_vlan_info(vm, srchv, dsthv, newip):
         vm_net['vlan'] = None
 
     if offline_flag:
-        print "VLAN configuration change enforces offline migration"
+        log.info("VLAN configuration change enforces offline migration")
 
     return (vm_net['vlan'], offline_flag)

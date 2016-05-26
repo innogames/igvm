@@ -1,6 +1,6 @@
-import os
+import logging
 
-from fabric.api import env, execute, run, warn
+from fabric.api import env, execute, run
 from fabric.colors import yellow
 from time import sleep
 
@@ -38,6 +38,8 @@ from igvm.utils.virtutils import (
     )
 from igvm.utils import ManageVMError
 
+log = logging.getLogger(__name__)
+
 
 def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     config = {'vm_hostname': vm_hostname}
@@ -56,10 +58,10 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
 
     if not config['vm']['puppet_classes']:
         if nopuppet or config['vm']['puppet_disabled']:
-            warn(yellow('VM has no puppet_classes and will not receive network configuration.\n' \
+            log.warn(yellow('VM has no puppet_classes and will not receive network configuration.\n' \
                     'You have chosen to disable Puppet. Expect things to go south.'))
         else:
-            raise_failure(Exception('VM has no puppet_classes and will not get any network configuration.'))
+            raise ManageVMError('VM has no puppet_classes and will not get any network configuration.')
 
     init_vm_config(config)
     import_vm_config_from_admintool(config)

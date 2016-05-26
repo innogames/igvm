@@ -1,9 +1,11 @@
 import re
-import time
 import xml.etree.ElementTree as ET
+import logging
 
 from fabric.api import run
 from igvm.signals import on_signal
+
+log = logging.getLogger(__name__)
 
 def _del_if_exists(tree, name):
     """
@@ -78,6 +80,7 @@ def kvm_hw_model(vm, config, tree):
                 'fallback': 'allow',
             })
             model.text = arch
+            log.info('KVM: cpu model set to "%s"' % arch)
             break
 
 
@@ -88,7 +91,7 @@ def kvm_memory_hotplug(vm, config, tree):
     """
     if not config['mem_hotplug']:
         return
-    
+
     tree.find('vcpu').attrib['placement'] = 'static'
     # maxMemory node is part of XML
 
@@ -105,7 +108,7 @@ def kvm_adjust_cpuset_pre(config, offline):
 
     dom = conn_src.lookupByName(config['vm_hostname'])
     if re.search(r'placement=.?auto', dom.XMLDesc()):
-        print(
+        log.warning(
             'Skipping cpuset adjustment for old-style VM. '
             'Please rebuild or offline-migrate to apply latest KVM settings.'
         )
@@ -122,7 +125,8 @@ def kvm_adjust_cpuset_pre(config, offline):
     elif num_cpus_src == num_cpus_dst:
         return  # Nothing to do
 
-    print('Target hypervisor has less cores, shrinking cpuset from {} to {} CPUs'.format(
+    log.info('Target hypervisor has less cores, shrinking cpuset from '
+                 '{} to {} CPUs'.format(
             num_cpus_src, num_cpus_dst))
     assert num_cpus_dst >= 4, 'hypervisor has at least four cores'
 
@@ -146,7 +150,7 @@ def kvm_adjust_cpuset_post(config, offline):
     num_cpus = info[2]
     num_nodes = info[4]
 
-    print('Expanding cpuset from {} to {} CPUs'.format(start_cpu, num_cpus))
+    log.info('Expanding cpuset from {} to {} CPUs'.format(start_cpu, num_cpus))
 
     dom = conn.lookupByName(config['vm_hostname'])
     for i, mask in enumerate(dom.vcpuPinInfo()):
@@ -186,10 +190,11 @@ def kvm_place_numa(vm, config, tree):
         # You may remove this check if it ever triggers and you've verified that it actually did
         # something sane.
         if len(pcpu_sets) != 2:
-            print('WARNING: Found {0} NUMA nodes instead of 2. Please double-check the placement!')
-            print('Waiting ten seconds to annoy you... :-)')
+            log.warn('WARNING: Found {0} NUMA nodes instead of 2. '
+                     'Please double-check the placement!')
+            log.warn('Waiting ten seconds to annoy you... :-)')
             time.sleep(10)
-    
+
         # Virtual node -> virtual cpu
         vcpu_sets = [','.join(str(j) for j in range(i, num_vcpus, num_nodes)) for i in range(0, num_nodes)]
 
@@ -249,4 +254,3 @@ def kvm_place_numa(vm, config, tree):
             # </numatune>
     else:
         raise Exception('NUMA mode not supported: {0}'.format(numa_mode))
-

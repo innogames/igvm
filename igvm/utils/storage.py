@@ -1,10 +1,13 @@
 from __future__ import division
 
+import logging
 import math
 
 from fabric.api import run, settings
 
 from igvm.utils import cmd, ManageVMError
+
+log = logging.getLogger(__name__)
 
 
 class StorageError(ManageVMError):

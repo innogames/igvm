@@ -8,6 +8,7 @@
 """InnoGames VM Management Tool"""
 
 from argparse import ArgumentParser
+import logging
 
 from fabric.network import disconnect_all
 
@@ -94,6 +95,9 @@ subparser.add_argument(
     help='New disk size in GiBs (can be specified relative with "+")',
 )
 
+
+# TODO: Add argument to enable debug logging
+logging.basicConfig(level=logging.INFO)
 adminapi.auth()
 
 args = vars(top_parser.parse_args())

@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import time
@@ -16,6 +17,8 @@ from igvm.utils import cmd
 from igvm.utils.template import upload_template
 from igvm.utils.virtutils import get_virtconn
 
+
+log = logging.getLogger(__name__)
 
 class HypervisorError(Exception):
     pass
@@ -51,7 +54,7 @@ class VM(object):
         """
         action = 'boot' if running else 'shutdown'
         for i in range(timeout, 1, -1):
-            print("Waiting for VM to {0} {1}".format(action, i))
+            log.info("Waiting for VM to {0} {1}".format(action, i))
             if self.is_running() == running:
                 return True
             time.sleep(1)
@@ -116,15 +119,15 @@ class KVMVM(VM):
         return False
 
     def shutdown(self):
+        log.debug('Shutting down {} on {}'.format(
+                self.hostname, self.hypervisor_hostname))
         with settings(host_string=self.hypervisor_hostname):
             run('virsh shutdown {0}'.format(self.hostname))
 
         if not self.wait_for_running(False):
-            print("WARNING: VM did not shutdown, I'm destroying it by force!")
+            log.warn("VM did not shutdown, I'm destroying it by force!")
             with settings(host_string=self.hypervisor_hostname):
                 run('virsh destroy {0}'.format(self.hostname))
-        else:
-            print("VM is shutdown.")
 
     def undefine(self):
         with settings(host_string=self.hypervisor_hostname):
@@ -159,15 +162,15 @@ class XenVM(VM):
         return False
 
     def shutdown(self):
+        log.debug('Shutting down {} on {}'.format(
+                self.hostname, self.hypervisor_hostname))
         with settings(host_string=self.hypervisor_hostname):
             run('xm shutdown {0}'.format(self.hostname))
 
         if not self.wait_for_running(False):
-            print("WARNING: VM did not shutdown, I'm destroying it by force!")
+            log.warn("VM did not shutdown, I'm destroying it by force!")
             with settings(host_string=self.hypervisor_hostname):
                 run('xm destroy {0}'.format(self.hostname))
-        else:
-            print("VM is shutdown.")
 
     def undefine(self):
         with settings(host_string=self.hypervisor_hostname):
