@@ -14,6 +14,7 @@ from managevm.utils.config import (
         get_server,
         check_dsthv_memory,
         check_dsthv_cpu,
+        import_vm_config_from_admintool,
         check_vm_config,
         import_vm_config_from_xen,
         import_vm_config_from_kvm,
@@ -215,6 +216,10 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
                 'Online migration is not possible with the current network '
                 'configuration.'
             )
+
+    # First, get the VM information from the Serveradmin.  The next
+    # step should validate that information.
+    import_vm_config_from_admintool(config)
 
     # Import information about VM from source Hypervisor
     if config['srchv']['hypervisor'] == 'xen':
