@@ -54,6 +54,9 @@ class Hypervisor(Host):
     def vm_running(self, vm):
         raise NotImplementedError(type(self).__name__)
 
+    def vm_defined(self, vm):
+        raise NotImplementedError(type(self).__name__)
+
     def stop_vm(self, vm):
         raise NotImplementedError(type(self).__name__)
 
@@ -98,6 +101,11 @@ class KVMHypervisor(Hypervisor):
         domain = conn.lookupByName(vm.hostname)
         domain.create()
 
+    def vm_defined(self, vm):
+        # Don't use lookupByName, it prints ugly messages to the console
+        conn = get_virtconn(self.hostname, 'kvm')
+        return vm.hostname in [dom.name() for dom in conn.listAllDomains()]
+
     def vm_running(self, vm):
         conn = get_virtconn(self.hostname, 'kvm')
 
@@ -130,21 +138,27 @@ class KVMHypervisor(Hypervisor):
 
 
 class XenHypervisor(Hypervisor):
+    def _sxp_path(self, vm):
+        return os.path.join('/etc/xen/domains', vm.hostname + '.sxp')
+
     def create_vm(self, vm, config):
         sxp_file = config.get('sxp_file')
         if sxp_file is None:
             sxp_file = 'etc/xen/domains/hostname.sxp'
         config['hostname'] = vm.hostname
 
-        dest = os.path.join('/etc/xen/domains', vm.hostname + '.sxp')
-        upload_template(sxp_file, dest, config)
+        upload_template(sxp_file, self._sxp_path(vm), config)
 
     def start_vm(self, vm):
         log.debug('Starting {} on {}'.format(
                 vm.hostname, self.hostname))
-        sxp_file = os.path.join('/etc/xen/domains', vm.hostname + '.sxp')
         with settings(host_string=self.hostname):
-            run(cmd('xm create {0}', sxp_file))
+            run(cmd('xm create {0}', self._sxp_path(vm)))
+
+    def vm_defined(self, vm):
+        path = self._sxp_path(vm)
+        with settings(host_string=self.hostname):
+            return exists(path, use_sudo=False, verbose=False)
 
     def vm_running(self, vm):
         xmList = StringIO()
@@ -173,4 +187,4 @@ class XenHypervisor(Hypervisor):
     def undefine_vm(self, vm):
         # TODO: Check if still running
         with settings(host_string=self.hostname):
-            run('rm /etc/xen/domains/{0}.sxp'.format(vm.hostname))
+            run(cmd('rm {0}', self._sxp_path(vm)))
