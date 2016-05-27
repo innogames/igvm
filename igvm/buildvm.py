@@ -4,7 +4,6 @@ from fabric.api import env, execute, run
 from fabric.colors import yellow
 from time import sleep
 
-from igvm.hypervisor import VM
 from igvm.utils.config import (
         get_server,
         init_vm_config,
@@ -37,6 +36,8 @@ from igvm.utils.virtutils import (
         close_virtconns,
     )
 from igvm.utils import ManageVMError
+from igvm.vm import VM
+
 
 log = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ def setup_dsthv(config):
     umount_temp(config['device'])
     remove_temp(mount_path)
 
-    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'], config['dsthv']['hostname'])
+    vm = VM(config['vm_hostname'])
     vm.create(config)
 
     vm.start()

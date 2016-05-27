@@ -5,7 +5,7 @@ from fabric.network import disconnect_all
 
 from adminapi import api
 
-from igvm.hypervisor import VM
+from igvm.hypervisor import Hypervisor
 from igvm.utils.resources import get_hw_model
 from igvm.utils import ManageVMError
 from igvm.utils.config import (
@@ -34,6 +34,7 @@ from igvm.utils.virtutils import (
         get_virtconn,
         close_virtconns,
     )
+from igvm.vm import VM
 
 # Configuration of Fabric:
 env.disable_known_hosts = True
@@ -85,7 +86,8 @@ def start_offline_vm(config):
 
     config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
 
-    vm = VM.get(config['vm_hostname'], config['dsthv']['hypervisor'], config['dsthv']['hostname'])
+    hv = Hypervisor.get(config['dsthv']['hostname'])
+    vm = VM(config['vm_hostname'], hv)
 
     # We distinguish between src_device and dst_device, which create() doesn't know about.
     create_config = copy.copy(config)
@@ -144,11 +146,8 @@ def _migratevm(config, newip, nolbdowntime, offline):
     if config['dsthv']['state'] != 'online':
         raise Exception('Server "{0}" is not online.'.format(config['dsthv']['hostname']))
 
-    source_vm = VM.get(
-        config['vm_hostname'],
-        config['srchv']['hypervisor'],
-        config['srchv']['hostname'],
-    )
+    source_hv = Hypervisor.get(config['srchv'])
+    source_vm = VM(config['vm'], source_hv)
 
     # There is no point of online migration, if the VM is already
     # shutdown.
