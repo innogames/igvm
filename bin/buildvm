@@ -30,4 +30,4 @@ except ManageVMError as error:
 
 # Force disconnection from Fabric.
 # Otherwise errors in Paramiko are trigerred.
-disconnect_all
+disconnect_all()
