@@ -5,6 +5,7 @@ from fabric.network import disconnect_all
 
 from adminapi import api
 
+from igvm.hypervisor import VM
 from igvm.utils.resources import get_hw_model
 from igvm.utils import ManageVMError
 from igvm.utils.config import (
@@ -16,7 +17,6 @@ from igvm.utils.config import (
         import_vm_config_from_xen,
         import_vm_config_from_kvm,
     )
-from igvm.utils.hypervisor import VM
 from igvm.utils.network import get_vlan_info
 from igvm.utils.preparevm import run_puppet
 from igvm.utils.storage import (

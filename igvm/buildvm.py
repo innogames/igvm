@@ -4,6 +4,7 @@ from fabric.api import env, execute, run
 from fabric.colors import yellow
 from time import sleep
 
+from igvm.hypervisor import VM
 from igvm.utils.config import (
         get_server,
         init_vm_config,
@@ -30,7 +31,6 @@ from igvm.utils.preparevm import (
         block_autostart,
         unblock_autostart,
     )
-from igvm.utils.hypervisor import VM
 from igvm.utils.portping import wait_until
 from igvm.utils.virtutils import (
         get_virtconn,
