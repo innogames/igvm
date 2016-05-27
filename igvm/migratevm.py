@@ -20,11 +20,6 @@ from igvm.utils.config import (
 from igvm.utils.network import get_vlan_info
 from igvm.utils.preparevm import run_puppet
 from igvm.utils.storage import (
-        remove_logical_volume,
-        mount_temp,
-        umount_temp,
-        remove_temp,
-        create_storage,
         get_vm_block_dev,
         netcat_to_device,
         device_to_netcat,
@@ -46,14 +41,14 @@ env.shell = '/bin/bash -c'
 
 
 def setup_dsthv(config, offline):
+    vm = config['vm_object']
+    dsthv = config['dsthv_object']
+
     check_dsthv_cpu(config)
     check_dsthv_memory(config)
 
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
-    config['dst_device'] = create_storage(
-        config['dsthv_object'],
-        config['vm_object'],
-    )
+    config['dst_device'] = dsthv.create_vm_storage(vm)
 
     if offline:
         config['nc_port'] = netcat_to_device(config['dst_device'])
@@ -78,17 +73,15 @@ def migrate_offline(config):
 
 
 def start_offline_vm(config):
-
-    if config['runpuppet']:
-        vm_path = mount_temp(config['dst_device'], config['vm_hostname'])
-        run_puppet( vm_path, config['vm_hostname'], False)
-        umount_temp(vm_path)
-        remove_temp(vm_path)
-
-    config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
-
     hv = Hypervisor.get(config['dsthv']['hostname'])
     vm = VM(config['vm_hostname'], hv)
+
+    if config['runpuppet']:
+        vm_path = hv.mount_vm_storage(vm)
+        run_puppet(vm_path, config['vm_hostname'], False)
+        hv.umount_vm_storage(vm)
+
+    config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
 
     # We distinguish between src_device and dst_device, which create() doesn't know about.
     create_config = copy.copy(config)
@@ -269,7 +262,8 @@ def _migratevm(config, newip, nolbdowntime, offline):
     # Remove the existing VM
     source_vm.undefine()
 
-    remove_logical_volume(source_hv, config['src_device'])
+
+    source_hv.destroy_vm_storage(source_vm)
 
 
 def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):

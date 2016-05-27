@@ -89,18 +89,18 @@ def create_storage(hv, vm):
     return '/dev/{}/{}'.format(found_vg, vm.hostname)
 
 
-def mount_temp(device, suffix=''):
-    mount_dir = run(cmd('mktemp -d --suffix {0}', suffix))
-    run(cmd('mount {0} {1}', device, mount_dir))
+def mount_temp(host, device, suffix=''):
+    mount_dir = host.run(cmd('mktemp -d --suffix {0}', suffix))
+    host.run(cmd('mount {0} {1}', device, mount_dir))
     return mount_dir
 
 
-def umount_temp(device_or_path):
-    run(cmd('umount {0}', device_or_path))
+def umount_temp(host, device_or_path):
+    host.run(cmd('umount {0}', device_or_path))
 
 
-def remove_temp(mount_path):
-    run(cmd('rm -rf {0}', mount_path))
+def remove_temp(host, mount_path):
+    host.run(cmd('rm -rf {0}', mount_path))
 
 
 def get_vm_block_dev(hypervisor):
@@ -114,11 +114,9 @@ def get_vm_block_dev(hypervisor):
         ).format(hypervisor))
 
 
-def mount_storage(device, hostname):
-    # First, make the file system
-    run(cmd('mkfs.xfs -f {0}', device))
-    mount_path = mount_temp(device, suffix='-' + hostname)
-    return mount_path
+def format_storage(hv, device):
+    hv.run(cmd('mkfs.xfs -f {}', device))
+
 
 
 def check_netcat(port):

@@ -14,13 +14,7 @@ from igvm.utils.config import (
         check_vm_config,
     )
 from igvm.utils.resources import get_ssh_keytypes, get_hw_model
-from igvm.utils.storage import (
-        create_storage,
-        mount_storage,
-        umount_temp,
-        remove_temp,
-        get_vm_block_dev,
-    )
+from igvm.utils.storage import get_vm_block_dev
 from igvm.utils.image import download_image, extract_image
 from igvm.utils.network import get_network_config, get_vlan_info
 from igvm.utils.preparevm import (
@@ -105,8 +99,8 @@ def setup_dsthv(config):
 
     # Config completely generated -> start doing stuff.
     vm = config['vm_object']
-    config['device'] = create_storage(vm.hypervisor, vm)
-    mount_path = mount_storage(config['device'], config['vm_hostname'])
+    config['device'] = vm.hypervisor.create_vm_storage(vm)
+    mount_path = vm.hypervisor.format_vm_storage(vm)
 
     if not config.has_key('localimage'):
         download_image(config['image'])
@@ -132,11 +126,8 @@ def setup_dsthv(config):
     if 'postboot_script' in config:
         copy_postboot_script(mount_path, config['postboot_script'])
 
-    umount_temp(config['device'])
-    remove_temp(mount_path)
-
+    vm.hypervisor.umount_vm_storage(vm)
     vm.create(config)
-
     vm.start()
 
     host_up = wait_until(str(config['vm']['intern_ip']),

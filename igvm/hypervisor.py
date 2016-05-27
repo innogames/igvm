@@ -19,6 +19,15 @@ from igvm.utils import cmd
 from igvm.utils.config import get_server
 from igvm.utils.template import upload_template
 from igvm.utils.virtutils import get_virtconn
+from igvm.utils.storage import (
+    create_storage,
+    format_storage,
+    get_vm_volume,
+    mount_temp,
+    remove_logical_volume,
+    remove_temp,
+    umount_temp,
+)
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +54,20 @@ class Hypervisor(Host):
                     hv_admintool['hypervisor']))
         return cls(hv_admintool)
 
+    def __init__(self, admintool):
+        super(Hypervisor, self).__init__(admintool)
+
+        # Store per-VM path information
+        # We cannot store these in the VM object due to migrations.
+        self._disk_path = {}
+        self._mount_path = {}
+
+    def vm_disk_path(self, vm):
+        """Returns the disk device path for a VM."""
+        if vm not in self._disk_path:
+            self._disk_path[vm] = get_vm_volume(self, vm)
+        return self._disk_path[vm]
+
     def create_vm(self, **kwargs):
         raise NotImplementedError(type(self).__name__)
 
@@ -65,6 +88,59 @@ class Hypervisor(Host):
 
     def undefine_vm(self, vm):
         raise NotImplementedError(type(self).__name__)
+
+    def create_vm_storage(self, vm):
+        """Allocate storage for a VM. Returns the disk path."""
+        assert vm not in self._disk_path, 'Disk already created?'
+
+        self._disk_path[vm] = create_storage(self, vm)
+        return self._disk_path[vm]
+
+    def format_vm_storage(self, vm):
+        """Create new filesystem for VM and mount it. Returns mount path."""
+        assert vm not in self._mount_path, 'Filesystem is already mounted'
+
+        if self.vm_defined(vm):
+            raise HypervisorError(
+                'Refusing to format storage of defined VM {}'
+                .format(vm.hostname)
+            )
+
+        format_storage(self, self.vm_disk_path(vm))
+        return self.mount_vm_storage(vm)
+
+    def mount_vm_storage(self, vm):
+        """Mount VM filesystem on host and return mount point."""
+        if vm in self._mount_path:
+            return self._mount_path[vm]
+
+        if self.vm_defined(vm) and self.vm_running(vm):
+            raise HypervisorError('Refusing to mount VM filesystem while VM is powered on')
+
+        self._mount_path[vm] = mount_temp(
+            self,
+            self.vm_disk_path(vm),
+            suffix='-'+vm.hostname,
+        )
+        return self._mount_path[vm]
+
+    def umount_vm_storage(self, vm):
+        """Unmount VM filesystem."""
+        if vm not in self._mount_path:
+            return
+        umount_temp(self, self._mount_path[vm])
+        remove_temp(self, self._mount_path[vm])
+        del self._mount_path[vm]
+
+    def destroy_vm_storage(self, vm):
+        """Delete logical volume of a VM."""
+        if self.vm_defined(vm):
+            raise HypervisorError(
+                'Refusing to delete storage of defined VM {}'
+                .format(vm.hostname)
+            )
+        remove_logical_volume(self, self.vm_disk_path(vm))
+        del self._disk_path[vm]
 
 
 class KVMHypervisor(Hypervisor):
@@ -111,7 +187,7 @@ class KVMHypervisor(Hypervisor):
 
         # This only returns list of running domain ids.
         domain_ids = conn.listDomainsID()
-        if domain_ids == None:
+        if domain_ids is None:
             raise HypervisorError('Failed to get a list of domain IDs')
 
         for domain_id in domain_ids:
