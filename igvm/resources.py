@@ -8,8 +8,8 @@
 
 from fabric.api import run, settings
 
-from igvm.utils.config import get_server, get_vm_volume
-from igvm.utils.storage import lvresize
+from igvm.utils.config import get_server
+from igvm.utils.storage import lvresize, get_vm_volume
 
 
 def disk_set(vm_hostname, size):

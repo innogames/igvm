@@ -3,7 +3,7 @@ from __future__ import division
 import math
 
 from fabric.api import run
-from igvm.utils.storage import get_logical_volumes
+from igvm.utils.storage import get_logical_volumes, get_vm_volume
 from igvm.utils.resources import get_cpuinfo
 
 # get_server moved to host.py to avoid dependency cycles
@@ -21,22 +21,6 @@ def init_vm_config(config):
     config['swap_size'] = 1024
     config['mailname'] = config['vm_hostname'] + '.ig.local'
     config['dns_servers'] = ['10.0.0.102', '10.0.0.85', '10.0.0.83']
-
-
-def get_vm_volume(hv, vm):
-    for lv in get_logical_volumes(hv):
-        if lv['name'] == vm.hostname:
-            disk_size = vm.admintool['disk_size_gib']
-            if disk_size != int(math.ceil(lv['size_MiB'] / 1024)):
-                raise Exception((
-                    "Server disk_size_gib {0} on Serveradmin doesn't "
-                    'match the volume size {1} MiB.'
-                ).format(disk_size, lv['size_MiB']))
-
-            return lv['path']
-
-    raise Exception('Unable to find source LV and determine its size.')
-
 
 def import_vm_disk(config):
     lvs = get_logical_volumes()

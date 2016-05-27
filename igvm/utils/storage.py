@@ -31,6 +31,21 @@ def get_logical_volumes(host):
     return lvolumes
 
 
+def get_vm_volume(hv, vm):
+    """Returns the path of the LV belonging to the given VM."""
+    for lv in get_logical_volumes(hv):
+        if lv['name'] == vm.hostname:
+            disk_size = vm.admintool['disk_size_gib']
+            if disk_size != int(math.ceil(lv['size_MiB'] / 1024)):
+                raise StorageError((
+                    "Server disk_size_gib {0} on Serveradmin doesn't "
+                    'match the volume size {1} MiB.'
+                ).format(disk_size, lv['size_MiB']))
+
+            return lv['path']
+    raise StorageError('Unable to find source LV of {}'.format(vm.hostname))
+
+
 def remove_logical_volume(host, lv):
     host.run(cmd('lvremove -f {0}', lv))
 
