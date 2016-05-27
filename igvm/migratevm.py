@@ -288,4 +288,3 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         pass
     finally:
         close_virtconns()
-        disconnect_all()
