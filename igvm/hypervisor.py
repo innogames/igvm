@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import time
 import uuid
 from StringIO import StringIO
 
@@ -10,30 +9,26 @@ from xml.dom import minidom
 
 from adminapi.dataset import ServerObject
 
-from icinga_utils import downtimer
-
 from fabric.api import run, puts, settings
 from fabric.context_managers import hide
 
 from jinja2 import Environment, PackageLoader
 
+from igvm.host import Host
 from igvm.utils import cmd
 from igvm.utils.config import get_server
 from igvm.utils.template import upload_template
 from igvm.utils.virtutils import get_virtconn
 
-
 log = logging.getLogger(__name__)
+
 
 class HypervisorError(Exception):
     pass
 
 
-class Hypervisor(object):
+class Hypervisor(Host):
     """Hypervisor interface."""
-    def __init__(self, hv_admintool):
-        self.admintool = hv_admintool
-        self.hostname = hv_admintool['hostname']
 
     @staticmethod
     def get(hv_admintool):

@@ -1,10 +1,9 @@
 import logging
 import time
 
-from adminapi.dataset import ServerObject
-
+from igvm.host import Host
 from igvm.hypervisor import Hypervisor
-from igvm.utils.config import get_server
+
 
 log = logging.getLogger(__name__)
 
@@ -13,21 +12,14 @@ class VMError(Exception):
     pass
 
 
-class VM(object):
+class VM(Host):
     """VM interface."""
     def __init__(self, vm_admintool, hv=None):
-        # Support passing hostname or admintool object.
-        if not isinstance(vm_admintool, ServerObject):
-            vm_admintool = get_server(vm_admintool, 'vm')
+        super(VM, self).__init__(vm_admintool, servertype='vm')
+
         if not hv:
-            hv = Hypervisor.get(get_server(vm_admintool['xen_host']))
-
-        assert isinstance(vm_admintool, ServerObject)
+            hv = Hypervisor.get(self.admintool['xen_host'])
         assert isinstance(hv, Hypervisor)
-        assert vm_admintool['servertype'] == 'vm'
-
-        self.admintool = vm_admintool
-        self.hostname = vm_admintool['hostname']
         self.hypervisor = hv
 
     def create(self, config):

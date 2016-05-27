@@ -6,39 +6,15 @@ import re
 from glob import glob
 import math
 
-from adminapi.dataset import query, DatasetError
 from fabric.api import run
 from igvm.utils.storage import get_logical_volumes
 from igvm.utils.resources import get_cpuinfo
 
-def get_server(hostname, servertype=None):
-    """Get a server from admintool by hostname
+# get_server moved to host.py to avoid dependency cycles
+# Many consumers still use get_server, so don't remove it!
+import igvm.host
+get_server = igvm.host.get_server
 
-    Optionally check the servertype of the server.  Return the adminapi
-    Server object."""
-
-    # We want to return the server only, if matches with some conditions,
-    # but we are not using those conditions on the query to give better errors.
-    servers = tuple(query(hostname=hostname))
-
-    if not servers:
-        raise Exception('Server "{0}" not found.'.format(hostname))
-
-    # Hostnames are unique on the serveradmin.  The query cannot return more
-    # than one server.
-    assert len(servers) == 1
-    server = servers[0]
-
-    if servertype and server['servertype'] != servertype:
-        raise Exception('Server "{0}" is not a "{1}".'.format(
-                hostname,
-                servertype,
-            ))
-
-    if server.get('state') == 'retired':
-        raise Exception('Server "{0}" is retired.'.format(hostname))
-
-    return server
 
 def init_vm_config(config):
     """ Put some hardcoded defaults into config dictionary.
