@@ -1,9 +1,5 @@
 from __future__ import division
 
-import os
-import sys
-import re
-from glob import glob
 import math
 
 from fabric.api import run
@@ -24,17 +20,18 @@ def init_vm_config(config):
 
     config['swap_size'] = 1024
     config['mailname'] = config['vm_hostname'] + '.ig.local'
-    config['dns_servers']=['10.0.0.102', '10.0.0.85', '10.0.0.83']
+    config['dns_servers'] = ['10.0.0.102', '10.0.0.85', '10.0.0.83']
 
 
-def get_vm_volume(vm):
-    for lv in get_logical_volumes():
-        if lv['name'] == vm['hostname']:
-            if vm['disk_size_gib'] != int(math.ceil(lv['size_MiB'] / 1024)):
+def get_vm_volume(hv, vm):
+    for lv in get_logical_volumes(hv):
+        if lv['name'] == vm.hostname:
+            disk_size = vm.admintool['disk_size_gib']
+            if disk_size != int(math.ceil(lv['size_MiB'] / 1024)):
                 raise Exception((
                     "Server disk_size_gib {0} on Serveradmin doesn't "
                     'match the volume size {1} MiB.'
-                ).format(vm['disk_size_gib'], lv['size_MiB']))
+                ).format(disk_size, lv['size_MiB']))
 
             return lv['path']
 
@@ -62,7 +59,7 @@ def import_vm_config_from_admintool(config):
     config['os'] = config['vm']['os']
     config['disk_size_gib'] = config['vm']['disk_size_gib']
 
-def import_vm_config_from_kvm(config):
+def import_vm_config_from_kvm(vm, config):
     """ Import configuration from Hypervisor currently hosting the VM.
 
         Returns nothing, data is stored in 'config' dictionary."""
@@ -89,9 +86,9 @@ def import_vm_config_from_kvm(config):
 
     # The source device name must be retrieved from running source
     # hypervisor OS to be on the safer side.
-    config['src_device'] = get_vm_volume(config['vm'])
+    config['src_device'] = get_vm_volume(vm.hypervisor, vm)
 
-def import_vm_config_from_xen(config):
+def import_vm_config_from_xen(vm, config):
     """ Import configuration from Hypervisor currently hosting the VM.
 
         Returns nothing, data is stored in 'config' dictionary."""
@@ -106,7 +103,7 @@ def import_vm_config_from_xen(config):
     config['os']      = config['srchv']['os']
 
     # But not for disk size
-    config['src_device'] = get_vm_volume(config['vm'])
+    config['src_device'] = get_vm_volume(vm.hypervisor, vm)
 
 def check_dsthv_vm(config):
     """ Check if VM is already defined on Destination Hypervisor.

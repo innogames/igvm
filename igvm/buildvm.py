@@ -57,6 +57,8 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     config['network']['vlan'] = get_vlan_info(config['vm'], None, config['dsthv'], None)[0]
     config['vlan_tag'] = config['network']['vlan']
 
+    config['vm_object'] = VM(config['vm'], config['dsthv'])
+
     if not config['vm']['puppet_classes']:
         if nopuppet or config['vm']['puppet_disabled']:
             log.warn(yellow('VM has no puppet_classes and will not receive network configuration.\n' \
@@ -102,9 +104,8 @@ def setup_dsthv(config):
     config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
 
     # Config completely generated -> start doing stuff.
-    config['device'] = create_storage(
-        config['vm']['hostname'], config['vm']['disk_size_gib']
-    )
+    vm = config['vm_object']
+    config['device'] = create_storage(vm.hypervisor, vm)
     mount_path = mount_storage(config['device'], config['vm_hostname'])
 
     if not config.has_key('localimage'):
@@ -134,7 +135,6 @@ def setup_dsthv(config):
     umount_temp(config['device'])
     remove_temp(mount_path)
 
-    vm = VM(config['vm_hostname'])
     vm.create(config)
 
     vm.start()

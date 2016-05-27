@@ -51,7 +51,8 @@ def setup_dsthv(config, offline):
 
     config['vm_block_dev'] = get_vm_block_dev(config['dsthv']['hypervisor'])
     config['dst_device'] = create_storage(
-        config['vm']['hostname'], config['vm']['disk_size_gib']
+        config['dsthv_object'],
+        config['vm_object'],
     )
 
     if offline:
@@ -147,7 +148,10 @@ def _migratevm(config, newip, nolbdowntime, offline):
         raise Exception('Server "{0}" is not online.'.format(config['dsthv']['hostname']))
 
     source_hv = Hypervisor.get(config['srchv'])
+    destination_hv = Hypervisor.get(config['dsthv'])
     source_vm = VM(config['vm'], source_hv)
+    config['vm_object'] = source_vm
+    config['dsthv_object'] = destination_hv
 
     # There is no point of online migration, if the VM is already
     # shutdown.
@@ -207,10 +211,10 @@ def _migratevm(config, newip, nolbdowntime, offline):
 
     # Import information about VM from source Hypervisor
     if config['srchv']['hypervisor'] == 'xen':
-        execute(import_vm_config_from_xen, config, hosts=[config['srchv']['hostname']])
+        execute(import_vm_config_from_xen, source_vm, config, hosts=[config['srchv']['hostname']])
     elif config['srchv']['hypervisor'] == 'kvm':
         config['srchv_conn'] = get_virtconn(config['srchv']['hostname'], 'kvm')
-        execute(import_vm_config_from_kvm, config, hosts=[config['srchv']['hostname']])
+        execute(import_vm_config_from_kvm, source_vm, config, hosts=[config['srchv']['hostname']])
     else:
         raise ManageVMError("Migration from Hypervisor type {0} is not supported".format(config['srchv']['hypervisor']))
 
@@ -264,11 +268,8 @@ def _migratevm(config, newip, nolbdowntime, offline):
 
     # Remove the existing VM
     source_vm.undefine()
-    execute(
-        remove_logical_volume,
-        config['src_device'],
-        hosts=[config['srchv']['hostname']],
-    )
+
+    remove_logical_volume(source_hv, config['src_device'])
 
 
 def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):
