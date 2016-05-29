@@ -4,6 +4,7 @@ from fabric.api import env, execute, run
 from fabric.colors import yellow
 from time import sleep
 
+from igvm.hypervisor import Hypervisor
 from igvm.utils.config import (
         get_server,
         init_vm_config,
@@ -16,7 +17,6 @@ from igvm.utils.config import (
 from igvm.utils.resources import get_ssh_keytypes, get_hw_model
 from igvm.utils.storage import get_vm_block_dev
 from igvm.utils.image import download_image, extract_image
-from igvm.utils.network import get_network_config, get_vlan_info
 from igvm.utils.preparevm import (
         prepare_vm,
         copy_postboot_script,
@@ -46,12 +46,16 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     config['vm'] = get_server(vm_hostname, 'vm')
     config['dsthv_hostname'] = config['vm']['xen_host']
     config['dsthv'] = get_server(config['dsthv_hostname'])
-    config['network'] = get_network_config(config['vm'])
-    # Override VLAN information
-    config['network']['vlan'] = get_vlan_info(config['vm'], None, config['dsthv'], None)[0]
-    config['vlan_tag'] = config['network']['vlan']
 
-    config['vm_object'] = VM(config['vm'], config['dsthv'])
+    hv = Hypervisor.get(config['dsthv'])
+    vm = VM(config['vm'], hv)
+    config['vm_object'] = vm
+
+    # Populate initial networking attributes, such as segment.
+    vm._set_ip(vm.admintool['intern_ip'])
+
+    # Can VM run on given hypervisor?
+    vm.hypervisor.check_vm(vm)
 
     if not config['vm']['puppet_classes']:
         if nopuppet or config['vm']['puppet_disabled']:
@@ -113,7 +117,7 @@ def setup_dsthv(config):
             server=config['vm'],
             mailname=config['mailname'],
             dns_servers=config['dns_servers'],
-            network_config=config['network'],
+            network_config=vm.network_config,
             swap_size=config['swap_size'],
             blk_dev=config['vm_block_dev'],
             ssh_keytypes=get_ssh_keytypes(config['os']))

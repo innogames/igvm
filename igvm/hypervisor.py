@@ -67,6 +67,49 @@ class Hypervisor(Host):
         if vm not in self._disk_path:
             self._disk_path[vm] = get_vm_volume(self, vm)
         return self._disk_path[vm]
+    
+    def vlan_for_vm(self, vm):
+        """Returns the VLAN number a VM should use on this hypervisor.
+        None for untagged."""
+        hv_vlans = self.admintool.get('network_vlans', [])
+        vm_vlan = vm.network_config['vlan']
+        if not hv_vlans:
+            if self.network_config['vlan'] != vm_vlan:
+                raise HypervisorError(
+                    'Destination Hypervisor is not on same VLAN {0} as VM {1}.'
+                    .format(self.network_config['vlan'], vm_vlan)
+                )
+            # For untagged Hypervisors VM must be untagged, too.
+            return None
+
+        if vm_vlan not in hv_vlans:
+            raise HypervisorError(
+                'Destination Hypervisor does not support VLAN {0}.'
+                .format(vm_vlan)
+            )
+        return vm_vlan
+
+    def check_vm(self, vm):
+        """Checks whether a VM can run on this hypervisor."""
+        # TODO: More checks in here.
+
+        # Proper VLAN?
+        self.vlan_for_vm(vm)
+
+    def check_migration(self, vm, dst_hv, offline):
+        """Checks whether a VM can be migrated to the given hypervisor."""
+
+        if self.hostname == dst_hv.hostname:
+            raise HypervisorError(
+                'Source and destination Hypervisor is the same machine {0}!'
+                .format(self.hostname)
+            )
+
+        if not offline and type(self) != type(dst_hv):
+            raise HypervisorError(
+                'Online migration between different hypervisor technologies'
+                'is not supported.'
+            )
 
     def create_vm(self, **kwargs):
         raise NotImplementedError(type(self).__name__)
@@ -144,6 +187,16 @@ class Hypervisor(Host):
 
 
 class KVMHypervisor(Hypervisor):
+    def check_migration(self, vm, dst_hv, offline):
+        super(KVMHypervisor, self).check_migration(vm, dst_hv, offline)
+
+        # Online migration only works with the same VLAN
+        if not offline and self.vlan_for_vm(vm) != dst_hv.vlan_for_vm(vm):
+            raise HypervisorError(
+                'Online migration is not possible with the current network '
+                'configuration (different VLAN).'
+            )
+
     def create_vm(self, vm, config):
         domain_xml = self.generate_xml(vm, config)
         conn = get_virtconn(self.hostname, 'kvm')
@@ -159,6 +212,7 @@ class KVMHypervisor(Hypervisor):
         if config.get('uuid'):
             config['uuid'] = uuid.uuid1()
         config['hostname'] = vm.hostname
+        config['vlan_tag'] = self.vlan_for_vm(vm)
 
         jenv = Environment(loader=PackageLoader('igvm', 'templates'))
         domain_xml = jenv.get_template('libvirt/domain.xml').render(**config)
@@ -214,6 +268,14 @@ class KVMHypervisor(Hypervisor):
 
 
 class XenHypervisor(Hypervisor):
+    def check_migration(self, vm, dst_hv, offline):
+        super(XenHypervisor, self).check_migration(vm, dst_hv, offline)
+        if not offline:
+            raise HypervisorError(
+                '{} does not support online migration.'
+                .format(self.hostname)
+            )
+
     def _sxp_path(self, vm):
         return os.path.join('/etc/xen/domains', vm.hostname + '.sxp')
 

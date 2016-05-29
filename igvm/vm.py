@@ -3,6 +3,7 @@ import time
 
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
+from igvm.utils.network import get_network_config
 
 
 log = logging.getLogger(__name__)
@@ -21,6 +22,25 @@ class VM(Host):
             hv = Hypervisor.get(self.admintool['xen_host'])
         assert isinstance(hv, Hypervisor)
         self.hypervisor = hv
+
+    def _set_ip(self, new_ip):
+        """Changes the IP address and updates all related attributes.
+        Internal method for VM building and migration."""
+        old_ip = self.admintool['intern_ip']
+        self.admintool['intern_ip'] = new_ip
+        self.network_config = get_network_config(self.admintool)
+        self.admintool['segment'] = self.network_config['segment']
+
+        if old_ip != new_ip:
+            log.info((
+                '{0} networking changed: '
+                'Segment {1}, IP address {2}, VLAN {3}')
+                .format(
+                    self.hostname,
+                    self.admintool['segment'],
+                    new_ip,
+                    self.network_config['vlan'],
+            ))
 
     def create(self, config):
         return self.hypervisor.create_vm(self, config)

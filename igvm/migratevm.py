@@ -1,7 +1,6 @@
 import copy
 
 from fabric.api import env, execute, run
-from fabric.network import disconnect_all
 
 from adminapi import api
 
@@ -17,7 +16,6 @@ from igvm.utils.config import (
         import_vm_config_from_xen,
         import_vm_config_from_kvm,
     )
-from igvm.utils.network import get_vlan_info
 from igvm.utils.preparevm import run_puppet
 from igvm.utils.storage import (
         get_vm_block_dev,
@@ -151,21 +149,12 @@ def _migratevm(config, newip, nolbdowntime, offline):
     if not offline and not source_vm.is_running():
         offline = True
 
+    if not offline and newip:
+        raise ManageVMError('Online migration cannot change IP address.')
+
+    source_hv.check_migration(source_vm, destination_hv, offline)
+
     lb_api = api.get('lbadmin')
-
-    if config['srchv']['hostname'] == config['dsthv']['hostname']:
-        raise ManageVMError("Source and destination Hypervisor is the same machine {0}!".format(config['srchv']['hostname']))
-
-    if not offline and not (
-                config['srchv']['hypervisor'] == 'kvm'
-            and
-                config['dsthv']['hypervisor'] == 'kvm'
-        ):
-        raise ManageVMError('Online migration is only possible from KVM to KVM.')
-
-    if not config['runpuppet'] and newip:
-        raise Exception("Changing IP requires a Puppet run, don't pass --nopuppet.")
-
     downtime_network = None
 
     if not nolbdowntime and 'testtool_downtime' in config['vm']:
@@ -182,21 +171,10 @@ def _migratevm(config, newip, nolbdowntime, offline):
             raise ManageVMError('Unable to determine network for testtool downtime. No network found.')
 
     if newip:
-        config['vm']['intern_ip'] = newip
+        source_vm._set_ip(newip)
 
-    # Configure network
-    config['vlan_tag'], offline_flag = get_vlan_info(
-            config['vm'],
-            config['srchv'],
-            config['dsthv'],
-            newip,
-        )
-
-    if not offline and offline_flag:
-        raise ManageVMError(
-                'Online migration is not possible with the current network '
-                'configuration.'
-            )
+    # Validate dst HV can run VM (needs to happen after setting new IP!)
+    destination_hv.check_vm(source_vm)
 
     # First, get the VM information from the Serveradmin.  The next
     # step should validate that information.
@@ -261,7 +239,6 @@ def _migratevm(config, newip, nolbdowntime, offline):
 
     # Remove the existing VM
     source_vm.undefine()
-
 
     source_hv.destroy_vm_storage(source_vm)
 

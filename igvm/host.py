@@ -2,6 +2,9 @@ import fabric.api
 
 from adminapi.dataset import query, DatasetError, ServerObject
 
+from igvm.utils.lazy_property import lazy_property
+from igvm.utils.network import get_network_config
+
 
 # TODO: Inherit from IGVMError
 class RemoteCommandError(Exception):
@@ -71,3 +74,7 @@ class Host(object):
             ):
             return fabric.api.run(*args, **kwargs)
 
+    @lazy_property  # Requires fabric call on HV, evaluate lazily.
+    def network_config(self):
+        """Returns networking attributes, such as IP address and segment."""
+        return get_network_config(self.admintool)
