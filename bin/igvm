@@ -9,6 +9,8 @@
 
 from argparse import ArgumentParser
 
+from fabric.network import disconnect_all
+
 import adminapi
 
 from managevm.buildvm import buildvm
@@ -96,3 +98,6 @@ adminapi.auth()
 
 args = vars(top_parser.parse_args())
 args.pop('func')(**args)
+
+# Disconnect all Fabric sessions to avoid errors during shutdown.
+disconnect_all()
