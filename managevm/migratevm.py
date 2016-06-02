@@ -185,6 +185,9 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdownt
         ):
         raise Exception('Online migration is only possible from KVM to KVM.')
 
+    if not config['runpuppet'] and newip:
+        raise Exception("Changing IP requires a Puppet run, don't pass --nopuppet.")
+
     downtime_network = None
 
     if not nolbdowntime and 'testtool_downtime' in config['vm']:
