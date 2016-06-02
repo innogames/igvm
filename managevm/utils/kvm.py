@@ -1,3 +1,4 @@
+import re
 import xml.etree.ElementTree as ET
 
 from fabric.api import run
@@ -101,6 +102,14 @@ def kvm_adjust_cpuset_pre(config, offline):
     conn_src = config['srchv_conn']
     conn_dst = config['dsthv_conn']
 
+    dom = conn_src.lookupByName(config['vm_hostname'])
+    if re.search(r'placement=.?auto', dom.XMLDesc()):
+        print(
+            'Skipping cpuset adjustment for old-style VM. '
+            'Please rebuild or offline-migrate to apply latest KVM settings.'
+        )
+        return
+
     # https://libvirt.org/html/libvirt-libvirt-host.html#virNodeInfo
     num_cpus_src = conn_src.getInfo()[2]
     num_cpus_dst = conn_dst.getInfo()[2]
@@ -116,7 +125,6 @@ def kvm_adjust_cpuset_pre(config, offline):
             num_cpus_src, num_cpus_dst))
     assert num_cpus_dst >= 4, 'hypervisor has at least four cores'
 
-    dom = conn_src.lookupByName(config['vm_hostname'])
     for i, mask in enumerate(dom.vcpuPinInfo()):
         # Truncate CPU mask
         dom.pinVcpu(i, mask[:num_cpus_dst])
