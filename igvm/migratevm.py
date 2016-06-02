@@ -152,6 +152,9 @@ def _migratevm(config, newip, nolbdowntime, offline):
     if not offline and newip:
         raise ManageVMError('Online migration cannot change IP address.')
 
+    if not config['runpuppet'] and newip:
+        raise ManageVMError('Changing IP requires a Puppet run, pass --runpuppet.')
+
     source_hv.check_migration(source_vm, destination_hv, offline)
 
     lb_api = api.get('lbadmin')
@@ -243,11 +246,11 @@ def _migratevm(config, newip, nolbdowntime, offline):
     source_hv.destroy_vm_storage(source_vm)
 
 
-def migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False):
+def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False, nolbdowntime=False, offline=False):
     config = {
         'vm_hostname': vm_hostname,
         'dsthv_hostname': dsthv_hostname,
-        'runpuppet': not nopuppet,
+        'runpuppet': runpuppet,
     }
 
     try:

@@ -66,9 +66,9 @@ subparser.add_argument(
     help='IP address to move VM to, in case you migrate between segments',
 )
 subparser.add_argument(
-    '--nopuppet',
+    '--runpuppet',
     action='store_true',
-    help='Skip running puppet in chroot before powering up',
+    help='Run puppet in chroot before powering up',
 )
 subparser.add_argument(
     '--nolbdowntime',
