@@ -1,6 +1,6 @@
 import fabric.api
 
-from adminapi.dataset import query, DatasetError, ServerObject
+from adminapi.dataset import query, ServerObject
 
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.network import get_network_config
@@ -30,10 +30,12 @@ def get_server(hostname, servertype=None):
     server = servers[0]
 
     if servertype and server['servertype'] != servertype:
-        raise Exception('Server "{0}" is not a "{1}".'.format(
+        raise Exception(
+            'Server "{0}" is not a "{1}".'.format(
                 hostname,
                 servertype,
-            ))
+            )
+        )
 
     if server.get('state') == 'retired':
         raise Exception('Server "{0}" is retired.'.format(hostname))
@@ -66,12 +68,11 @@ class Host(object):
         for setting in ['warn_only', 'silent']:
             if setting in kwargs:
                 del kwargs[setting]
-        with fabric.api.settings(
-                *settings,
-                abort_exception=RemoteCommandError,
-                host_string=self.hostname,
-                warn_only=warn_only
-            ):
+        with fabric.api.settings(*settings,
+                                 abort_exception=RemoteCommandError,
+                                 host_string=self.hostname,
+                                 warn_only=warn_only
+                                 ):
             return fabric.api.run(*args, **kwargs)
 
     @lazy_property  # Requires fabric call on HV, evaluate lazily.

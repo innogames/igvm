@@ -50,8 +50,10 @@ class Hypervisor(Host):
         elif hv_admintool['hypervisor'] == 'xen':
             cls = XenHypervisor
         else:
-            raise NotImplementedError('Not a valid hypervisor type: {}'.format(
-                    hv_admintool['hypervisor']))
+            raise NotImplementedError(
+                'Not a valid hypervisor type: {}'
+                .format(hv_admintool['hypervisor'])
+            )
         return cls(hv_admintool)
 
     def __init__(self, admintool):
@@ -77,7 +79,7 @@ class Hypervisor(Host):
                 .format(vm.hostname, self.hostname)
             )
         return self._mount_path[vm]
-    
+
     def vlan_for_vm(self, vm):
         """Returns the VLAN number a VM should use on this hypervisor.
         None for untagged."""
@@ -168,7 +170,9 @@ class Hypervisor(Host):
             return self._mount_path[vm]
 
         if self.vm_defined(vm) and self.vm_running(vm):
-            raise HypervisorError('Refusing to mount VM filesystem while VM is powered on')
+            raise HypervisorError(
+                'Refusing to mount VM filesystem while VM is powered on'
+            )
 
         self._mount_path[vm] = mount_temp(
             self,
@@ -260,14 +264,18 @@ class KVMHypervisor(Hypervisor):
         return False
 
     def stop_vm(self, vm):
-        log.info('Shutting down {} on {}'.format(
-                vm.hostname, self.hostname))
+        log.info(
+            'Shutting down {} on {}'
+            .format(vm.hostname, self.hostname)
+        )
         with settings(host_string=self.hostname):
             run('virsh shutdown {0}'.format(vm.hostname))
 
     def stop_vm_force(self, vm):
-        log.debug('Destroying domain {} on {}'.format(
-                vm.hostname, self.hostname))
+        log.debug(
+            'Destroying domain {} on {}'
+            .format(vm.hostname, self.hostname)
+        )
         with settings(host_string=self.hostname):
             run('virsh destroy {0}'.format(vm.hostname))
 
@@ -298,8 +306,10 @@ class XenHypervisor(Hypervisor):
         upload_template(sxp_file, self._sxp_path(vm), config)
 
     def start_vm(self, vm):
-        log.debug('Starting {} on {}'.format(
-                vm.hostname, self.hostname))
+        log.debug(
+            'Starting {} on {}'
+            .format(vm.hostname, self.hostname)
+        )
         with settings(host_string=self.hostname):
             run(cmd('xm create {0}', self._sxp_path(vm)))
 
@@ -321,14 +331,18 @@ class XenHypervisor(Hypervisor):
         return False
 
     def stop_vm(self, vm):
-        log.debug('Shutting down {} on {}'.format(
-                vm.hostname, self.hostname))
+        log.debug(
+            'Shutting down {} on {}'
+            .format(vm.hostname, self.hostname)
+        )
         with settings(host_string=self.hostname):
             run('xm shutdown {0}'.format(vm.hostname))
 
     def stop_vm_force(self, vm):
-        log.debug('Destroying domain {} on {}'.format(
-                vm.hostname, self.hostname))
+        log.debug(
+            'Destroying domain {} on {}'
+            .format(vm.hostname, self.hostname)
+        )
         with settings(host_string=self.hostname):
             run('xm destroy {0}'.format(vm.hostname))
 

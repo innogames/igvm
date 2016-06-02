@@ -55,7 +55,11 @@ def setup_dsthv(config, offline):
 def add_dsthv_to_ssh(config):
     run('touch .ssh/known_hosts'.format(config['dsthv_hostname']))
     run('ssh-keygen -R {0}'.format(config['dsthv_hostname']))
-    run('ssh-keyscan -t rsa {0} >> .ssh/known_hosts'.format(config['dsthv_hostname']))
+    run(
+        'ssh-keyscan -t rsa {0} >> .ssh/known_hosts'
+        .format(config['dsthv_hostname'])
+    )
+
 
 
 def migrate_offline(config):
@@ -81,7 +85,8 @@ def start_offline_vm(config):
 
     config['dsthv_hw_model'] = get_hw_model(config['dsthv'])
 
-    # We distinguish between src_device and dst_device, which create() doesn't know about.
+    # We distinguish between src_device and dst_device, which create()
+    # doesn't know about.
     create_config = copy.copy(config)
     create_config['device'] = config['dst_device']
 
@@ -104,24 +109,32 @@ def migrate_virsh(config):
             5 * 60,
         ))
 
-    migrate_cmd = ('virsh migrate'
-            ' --live'               # Do it live!
+    migrate_cmd = (
+            'virsh migrate'
+            # Do it live!
+            ' --live'
             ' --copy-storage-all'
-            ' --persistent'         # Define the VM on the new host
-            ' --change-protection'  # Don't let the VM configuration to be changed
-            ' --auto-converge'      # Force convergence, otherwise migrations never end
+            # Define the VM on the new host
+            ' --persistent'
+            # Don't let the VM configuration to be changed
+            ' --change-protection'
+            # Force convergence, # otherwise migrations never end
+            ' --auto-converge'
             ' --domain {vm_hostname}'
-            ' --abort-on-error'     # Don't tolerate soft errors
-            ' --desturi qemu+ssh://{dsthv_hostname}/system' # We need SSH agent forwarding
-            ' --timeout {timeout}'  # Force guest to suspend, if noting else helped
+            # Don't tolerate soft errors
+            ' --abort-on-error'
+            # We need SSH agent forwarding
+            ' --desturi qemu+ssh://{dsthv_hostname}/system'
+            # Force guest to suspend, if noting else helped
+            ' --timeout {timeout}'
             ' --verbose'
         )
 
     add_dsthv_to_ssh(config)
     run(migrate_cmd.format(
-        vm_hostname    = config['vm_hostname'],
-        dsthv_hostname = config['dsthv_hostname'],
-        timeout        = timeout,
+        vm_hostname=config['vm_hostname'],
+        dsthv_hostname=config['dsthv_hostname'],
+        timeout=timeout,
     ))
 
 
@@ -136,7 +149,10 @@ def _migratevm(config, newip, nolbdowntime, offline):
     config['dsthv'] = get_server(config['dsthv_hostname'])
 
     if config['dsthv']['state'] != 'online':
-        raise Exception('Server "{0}" is not online.'.format(config['dsthv']['hostname']))
+        raise ManageVMError(
+            'Server "{0}" is not online.'
+            .format(config['dsthv']['hostname'])
+        )
 
     source_hv = Hypervisor.get(config['srchv'])
     destination_hv = Hypervisor.get(config['dsthv'])
@@ -153,7 +169,9 @@ def _migratevm(config, newip, nolbdowntime, offline):
         raise ManageVMError('Online migration cannot change IP address.')
 
     if not config['runpuppet'] and newip:
-        raise ManageVMError('Changing IP requires a Puppet run, pass --runpuppet.')
+        raise ManageVMError(
+            'Changing IP requires a Puppet run, pass --runpuppet.'
+        )
 
     source_hv.check_migration(source_vm, destination_hv, offline)
 
@@ -185,24 +203,50 @@ def _migratevm(config, newip, nolbdowntime, offline):
 
     # Import information about VM from source Hypervisor
     if config['srchv']['hypervisor'] == 'xen':
-        execute(import_vm_config_from_xen, source_vm, config, hosts=[config['srchv']['hostname']])
+        execute(
+            import_vm_config_from_xen,
+            source_vm,
+            config,
+            hosts=[config['srchv']['hostname']]
+        )
     elif config['srchv']['hypervisor'] == 'kvm':
         config['srchv_conn'] = get_virtconn(config['srchv']['hostname'], 'kvm')
-        execute(import_vm_config_from_kvm, source_vm, config, hosts=[config['srchv']['hostname']])
+        execute(
+            import_vm_config_from_kvm,
+            source_vm,
+            config,
+            hosts=[config['srchv']['hostname']]
+        )
     else:
-        raise ManageVMError("Migration from Hypervisor type {0} is not supported".format(config['srchv']['hypervisor']))
+        raise ManageVMError(
+            "Migration from Hypervisor type {0} is not supported"
+            .format(config['srchv']['hypervisor'])
+        )
 
     # Verify if config contains all the needed parameters
     check_vm_config(config)
 
     # Setup destination Hypervisor
     if config['dsthv']['hypervisor'] == 'xen':
-        execute(setup_dsthv, config, offline, hosts=[config['dsthv']['hostname']])
+        execute(
+            setup_dsthv,
+            config,
+            offline,
+            hosts=[config['dsthv']['hostname']]
+        )
     elif config['dsthv']['hypervisor'] == 'kvm':
         config['dsthv_conn'] = get_virtconn(config['dsthv']['hostname'], 'kvm')
-        execute(setup_dsthv, config, offline, hosts=[config['dsthv']['hostname']])
+        execute(
+            setup_dsthv,
+            config,
+            offline,
+            hosts=[config['dsthv']['hostname']]
+        )
     else:
-        raise ManageVMError("Migration to Hypervisor type {0} is not supported".format(config['dsthv']['hypervisor']))
+        raise ManageVMError(
+            "Migration to Hypervisor type {0} is not supported"
+            .format(config['dsthv']['hypervisor'])
+        )
 
     # Commit previously changed IP address and segment.
     if newip:
@@ -246,7 +290,8 @@ def _migratevm(config, newip, nolbdowntime, offline):
     source_hv.destroy_vm_storage(source_vm)
 
 
-def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False, nolbdowntime=False, offline=False):
+def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
+              nolbdowntime=False, offline=False):
     config = {
         'vm_hostname': vm_hostname,
         'dsthv_hostname': dsthv_hostname,

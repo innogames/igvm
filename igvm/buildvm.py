@@ -36,10 +36,10 @@ log = logging.getLogger(__name__)
 
 def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     config = {'vm_hostname': vm_hostname}
-    if localimage != None:
+    if localimage is not None:
         config['localimage'] = localimage
     config['runpuppet'] = not nopuppet
-    if postboot != None:
+    if postboot is not None:
         config['postboot_script'] = postboot
     config['vm'] = get_server(vm_hostname, 'vm')
     config['dsthv_hostname'] = config['vm']['xen_host']
@@ -59,10 +59,16 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
 
     if not config['vm']['puppet_classes']:
         if nopuppet or config['vm']['puppet_disabled']:
-            log.warn(yellow('VM has no puppet_classes and will not receive network configuration.\n' \
-                    'You have chosen to disable Puppet. Expect things to go south.'))
+            log.warn(yellow(
+                'VM has no puppet_classes and will not receive network '
+                'configuration.\n'
+                'You have chosen to disable Puppet. Expect things to go south.'
+            ))
         else:
-            raise ManageVMError('VM has no puppet_classes and will not get any network configuration.')
+            raise ManageVMError(
+                'VM has no puppet_classes and will not get any network '
+                'configuration.'
+            )
 
     init_vm_config(config)
     import_vm_config_from_admintool(config)
@@ -84,7 +90,7 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     execute(setup_vm, config, hosts=[config['vm_hostname']])
 
     close_virtconns()
-    sleep(1) # For Paramiko's race condition.
+    sleep(1)  # For Paramiko's race condition.
 
     # Return true. This code should throw exceptions on all troubles anyway.
     return True
@@ -106,21 +112,23 @@ def setup_dsthv(config):
     config['device'] = vm.hypervisor.create_vm_storage(vm)
     mount_path = vm.hypervisor.format_vm_storage(vm)
 
-    if not config.has_key('localimage'):
+    if 'localimage' not in config:
         download_image(config['image'])
     else:
         config['image'] = config['localimage']
 
     extract_image(config['image'], mount_path, config['dsthv']['os'])
 
-    prepare_vm(mount_path,
-            server=config['vm'],
-            mailname=config['mailname'],
-            dns_servers=config['dns_servers'],
-            network_config=vm.network_config,
-            swap_size=config['swap_size'],
-            blk_dev=config['vm_block_dev'],
-            ssh_keytypes=get_ssh_keytypes(config['os']))
+    prepare_vm(
+        mount_path,
+        server=config['vm'],
+        mailname=config['mailname'],
+        dns_servers=config['dns_servers'],
+        network_config=vm.network_config,
+        swap_size=config['swap_size'],
+        blk_dev=config['vm_block_dev'],
+        ssh_keytypes=get_ssh_keytypes(config['os']),
+    )
 
     if config['runpuppet']:
         run_puppet(
@@ -136,8 +144,10 @@ def setup_dsthv(config):
     vm.create(config)
     vm.start()
 
-    host_up = wait_until(str(config['vm']['intern_ip']),
-            waitmsg='Waiting for guest to boot')
+    host_up = wait_until(
+        str(config['vm']['intern_ip']),
+        waitmsg='Waiting for guest to boot',
+    )
 
     if not host_up:
         raise ManageVMError('Guest did not boot.')
