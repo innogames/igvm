@@ -21,8 +21,6 @@ from igvm.utils.preparevm import (
         prepare_vm,
         copy_postboot_script,
         run_puppet,
-        block_autostart,
-        unblock_autostart,
     )
 from igvm.utils.portping import wait_until
 from igvm.utils.virtutils import (
@@ -48,6 +46,8 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     config['dsthv'] = get_server(config['dsthv_hostname'])
 
     hv = Hypervisor.get(config['dsthv'])
+    config['dsthv_object'] = hv
+
     vm = VM(config['vm'], hv)
     config['vm_object'] = vm
 
@@ -123,9 +123,11 @@ def setup_dsthv(config):
             ssh_keytypes=get_ssh_keytypes(config['os']))
 
     if config['runpuppet']:
-        block_autostart(mount_path)
-        run_puppet(mount_path, config['vm_hostname'], True)
-        unblock_autostart(mount_path)
+        run_puppet(
+            config['dsthv_object'],
+            config['vm_object'],
+            clear_cert=True,
+        )
 
     if 'postboot_script' in config:
         copy_postboot_script(mount_path, config['postboot_script'])

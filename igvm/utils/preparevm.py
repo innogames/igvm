@@ -7,6 +7,13 @@ from managevm.utils.template import upload_template
 from managevm.utils import cmd
 
 
+PUPPET_CA_MASTERS = (
+    # Puppet 3
+    'master.puppet.ig.local',
+    # Puppet 4
+    'ca.puppet.ig.local',
+)
+
 def set_hostname(target_dir, hostname):
     with cd(target_dir):
         run(cmd('echo {0} > etc/hostname', hostname))
@@ -55,15 +62,17 @@ def create_interfaces(network_config, target_dir):
             'network_config': network_config,
         })
 
-def block_autostart(target_dir):
+def block_autostart(hv, vm):
+    target_dir = hv.vm_mount_path(vm)
     with cd(target_dir):
-        run(cmd('echo "#!/bin/sh" >> usr/sbin/policy-rc.d' ))
-        run(cmd('echo "exit 101"  >> usr/sbin/policy-rc.d' ))
-        run(cmd('chmod +x usr/sbin/policy-rc.d' ))
+        hv.run('echo "#!/bin/sh" >> usr/sbin/policy-rc.d' )
+        hv.run('echo "exit 101"  >> usr/sbin/policy-rc.d' )
+        hv.run('chmod +x usr/sbin/policy-rc.d' )
 
-def unblock_autostart(target_dir):
+def unblock_autostart(hv, vm):
+    target_dir = hv.vm_mount_path(vm)
     with cd(target_dir):
-        run(cmd('rm usr/sbin/policy-rc.d' ))
+        hv.run('rm usr/sbin/policy-rc.d' )
 
 
 def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
@@ -86,14 +95,26 @@ def copy_postboot_script(target_dir, script):
     with cd(target_dir):
         put(script, 'buildvm-postboot', mode=755)
 
-def run_puppet(target_dir, hostname, clear_cert):
-    with settings(warn_only=True):
-        if clear_cert:
-            # Cleart certs on Puppet 3 Master
-            with settings(host_string='master.puppet.ig.local'):
-                run('/usr/bin/puppet cert clean {0}.ig.local || echo "No cert for Host found"'.format(hostname))
-            # Clear cert new Puppet 4 on CA Master
-            with settings(host_string='ca.puppet.ig.local'):
-                run('/usr/bin/puppet cert clean {0}.ig.local || echo "No cert for Host found"'.format(hostname))
-        with cd(target_dir):
-            run('chroot . /usr/bin/puppet agent -v --fqdn={}.ig.local --waitforcert 60 --onetime --no-daemonize --tags network,internal_routes'.format(hostname))
+def run_puppet(hv, vm, clear_cert):
+    """Runs Puppet in chroot on the hypervisor."""
+    target_dir = hv.vm_mount_path(vm)
+    block_autostart(hv, vm)
+
+    if clear_cert:
+        for puppet_master in PUPPET_CA_MASTERS:
+            with settings(host_string=puppet_master, warn_only=True):
+                run(cmd(
+                    '/usr/bin/puppet cert clean {0}.ig.local'
+                    ' || echo "No cert for Host found"',
+                    vm.hostname,
+                ), warn_only=True)
+
+    with cd(target_dir):
+        hv.run(
+            'chroot . /usr/bin/puppet agent -v --fqdn={}.ig.local'
+            ' --waitforcert 60 --onetime --no-daemonize'
+            ' --tags network,internal_routes'
+            .format(vm.hostname)
+        )
+
+    unblock_autostart(hv, vm)

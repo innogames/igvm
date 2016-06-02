@@ -75,8 +75,8 @@ def start_offline_vm(config):
     vm = VM(config['vm_hostname'], hv)
 
     if config['runpuppet']:
-        vm_path = hv.mount_vm_storage(vm)
-        run_puppet(vm_path, config['vm_hostname'], False)
+        hv.mount_vm_storage(vm)
+        run_puppet(hv, vm, clear_cert=False)
         hv.umount_vm_storage(vm)
 
     config['dsthv_hw_model'] = get_hw_model(config['dsthv'])

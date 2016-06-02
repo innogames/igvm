@@ -67,6 +67,16 @@ class Hypervisor(Host):
         if vm not in self._disk_path:
             self._disk_path[vm] = get_vm_volume(self, vm)
         return self._disk_path[vm]
+
+    def vm_mount_path(self, vm):
+        """Returns the mount path for a VM.
+        Raises HypervisorError if not mounted."""
+        if vm not in self._mount_path:
+            raise HypervisorError(
+                '{} is not mounted on {}'
+                .format(vm.hostname, self.hostname)
+            )
+        return self._mount_path[vm]
     
     def vlan_for_vm(self, vm):
         """Returns the VLAN number a VM should use on this hypervisor.
