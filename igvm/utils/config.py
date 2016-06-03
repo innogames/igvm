@@ -3,6 +3,7 @@ from __future__ import division
 import math
 
 from fabric.api import run
+from igvm.exceptions import IGVMError, ConfigError, HypervisorError, StorageError
 from igvm.utils.storage import get_logical_volumes, get_vm_volume
 from igvm.utils.resources import get_cpuinfo
 
@@ -30,7 +31,7 @@ def import_vm_disk(config):
             config['disk_size_gib'] = int(math.ceil(lv['size_MiB'] / 1024))
             break
     else:
-        raise Exception('Unable to find source LV and determine its size.')
+        raise StorageError('Unable to find source LV and determine its size.')
 
 def import_vm_config_from_admintool(config):
     """ Import configuration from Admintool.
@@ -99,7 +100,10 @@ def check_dsthv_vm(config):
         for dom_id in config['dsthv_conn'].listDomainsID():
             dom = config['dsthv_conn'].lookupByID(dom_id)
             if dom.name() == config['vm_hostname']:
-                raise Exception('VM {0} already defined on {1}'.format(config['vm_hostname'], config['dsthv_hostname']))
+                raise HypervisorError(
+                    'VM {0} already defined on {1}'
+                    .format(config['vm_hostname'], config['dsthv_hostname'])
+                )
 
 def check_dsthv_memory(config):
     """ Check various parameters of DstHV and VM memory.
@@ -122,24 +126,24 @@ def check_dsthv_memory(config):
             used_KiB += dom.info()[2]
         free_MiB = total_MiB - used_KiB/1024
         if config['mem'] > free_MiB:
-            raise Exception('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
+            raise HypervisorError('Not enough memory. Destination Hypervisor has {0}MiB but VM requires {1}MiB'.format(free_MiB, config['mem']))
 
 
 def check_dsthv_cpu(config):
     cpuinfo = get_cpuinfo()
     num_cpus = len(cpuinfo)
     if config['num_cpu'] > num_cpus:
-        raise Exception('Not enough CPUs. Destination Hypervisor has {0} but VM requires {1}.'.format(num_cpus, config['num_cpu']))
+        raise HypervisorError('Not enough CPUs. Destination Hypervisor has {0} but VM requires {1}.'.format(num_cpus, config['num_cpu']))
 
     assert num_cpus >= 4 and num_cpus <= 128, 'max_cpu is in sane range'
     config['max_cpu'] = min(24, num_cpus)
 
 def check_vm_config(config):
     if 'mem' not in config:
-        raise Exception('"mem" is not set.')
+        raise ConfigError('"mem" is not set.')
 
     if config['mem'] < 1:
-        raise Exception('"mem" is not greater than 0.')
+        raise ConfigError('"mem" is not greater than 0.')
 
     if 'max_mem' not in config:
         if config['mem'] > 12288:
@@ -148,7 +152,7 @@ def check_vm_config(config):
             config['max_mem'] = 16384
 
     if config['max_mem'] < 1:
-        raise Exception('"max_mem" is not greater than 0.')
+        raise ConfigError('"max_mem" is not greater than 0.')
 
     if config['max_mem'] <= config['mem']:
         # TODO: remove this dup of code and set it with libvirt api
@@ -158,19 +162,19 @@ def check_vm_config(config):
             config['max_mem'] = 16384
 
     if 'num_cpu' not in config:
-        raise Exception('"num_cpu" is not set.')
+        raise ConfigError('"num_cpu" is not set.')
 
     if config['num_cpu'] < 1:
-        raise Exception('"num_cpu" is not greater than 0')
+        raise ConfigError('"num_cpu" is not greater than 0')
 
     if 'os' not in config:
-        raise Exception('"os" is not set.')
+        raise ConfigError('"os" is not set.')
 
     if 'disk_size_gib' not in config:
-        raise Exception('"disk_size_gib" is not set.')
+        raise ConfigError('"disk_size_gib" is not set.')
 
     if config['disk_size_gib'] < 1:
-        raise Exception('"disk_size_gib" is not greater than 0')
+        raise ConfigError('"disk_size_gib" is not greater than 0')
 
     if 'image' not in config:
         config['image'] = config['os'] + '-base.tar.gz'

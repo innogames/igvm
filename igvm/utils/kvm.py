@@ -253,4 +253,4 @@ def kvm_place_numa(vm, config, tree):
                 }
             # </numatune>
     else:
-        raise Exception('NUMA mode not supported: {0}'.format(numa_mode))
+        raise NotImplementedError('NUMA mode not supported: {0}'.format(numa_mode))

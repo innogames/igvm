@@ -4,6 +4,7 @@ from fabric.api import env, execute, run
 from fabric.colors import yellow
 from time import sleep
 
+from igvm.exceptions import ConfigError, IGVMError
 from igvm.hypervisor import Hypervisor
 from igvm.utils.config import (
         get_server,
@@ -27,7 +28,6 @@ from igvm.utils.virtutils import (
         get_virtconn,
         close_virtconns,
     )
-from igvm.utils import ManageVMError
 from igvm.vm import VM
 
 
@@ -65,7 +65,7 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
                 'You have chosen to disable Puppet. Expect things to go south.'
             ))
         else:
-            raise ManageVMError(
+            raise ConfigError(
                 'VM has no puppet_classes and will not get any network '
                 'configuration.'
             )
@@ -150,7 +150,7 @@ def setup_dsthv(config):
     )
 
     if not host_up:
-        raise ManageVMError('Guest did not boot.')
+        raise IGVMError('Guest did not boot.')
 
 
 def setup_vm(config):

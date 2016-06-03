@@ -4,10 +4,6 @@ from pipes import quote
 import igvm
 
 
-class ManageVMError(Exception):
-    pass
-
-
 def get_installdir():
     return os.path.dirname(igvm.__file__)
 

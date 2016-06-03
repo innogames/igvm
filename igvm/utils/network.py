@@ -5,10 +5,9 @@ from fabric.api import abort
 
 from adminapi import api
 
-log = logging.getLogger(__name__)
+from igvm.exceptions import NetworkError
 
-class NetworkError(Exception):
-    pass
+log = logging.getLogger(__name__)
 
 def get_network_config(server):
     ip_api = api.get('ip')
@@ -34,7 +33,7 @@ def get_network_config(server):
         except Exception as e:
             log.warn('Could not configure network automatically!')
             log.warn('Make sure that IP ranges are configured correctly in admintool.')
-            abort('Error was: {0}'.format(e))
+            raise
         else:
             # Copy settings from Admintool. Use only internal gateway, it should be enough for installation.
             ip_info['netmask4'] = net4['prefix_hi']
@@ -48,7 +47,7 @@ def get_network_config(server):
         except Exception as e:
             log.warn('Could not configure network automatically!')
             log.warn('Make sure that IP ranges are configured correctly in admintool.')
-            abort('Error was: {0}'.format(e))
+            raise
         else:
             # Copy settings from Admintool. Use only internal gateway, it should be enough for installation.
             ip_info['netmask6'] = net6['prefix_hi']

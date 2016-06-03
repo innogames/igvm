@@ -5,13 +5,10 @@ import math
 
 from fabric.api import run, settings
 
-from igvm.utils import cmd, ManageVMError
+from igvm.exceptions import StorageError
+from igvm.utils import cmd
 
 log = logging.getLogger(__name__)
-
-
-class StorageError(ManageVMError):
-    pass
 
 
 def get_logical_volumes(host):

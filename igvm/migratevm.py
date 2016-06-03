@@ -4,9 +4,9 @@ from fabric.api import env, execute, run
 
 from adminapi import api
 
+from igvm.exceptions import ConfigError, IGVMError
 from igvm.hypervisor import Hypervisor
 from igvm.utils.resources import get_hw_model
-from igvm.utils import ManageVMError
 from igvm.utils.config import (
         get_server,
         check_dsthv_memory,
@@ -21,7 +21,6 @@ from igvm.utils.storage import (
         get_vm_block_dev,
         netcat_to_device,
         device_to_netcat,
-        StorageError,
     )
 from igvm.utils.virtutils import (
         get_virtconn,
@@ -149,8 +148,8 @@ def _migratevm(config, newip, nolbdowntime, offline):
     config['dsthv'] = get_server(config['dsthv_hostname'])
 
     if config['dsthv']['state'] != 'online':
-        raise ManageVMError(
-            'Server "{0}" is not online.'
+        raise ConfigError(
+            'Server "{0}" is not in online state.'
             .format(config['dsthv']['hostname'])
         )
 
@@ -166,10 +165,10 @@ def _migratevm(config, newip, nolbdowntime, offline):
         offline = True
 
     if not offline and newip:
-        raise ManageVMError('Online migration cannot change IP address.')
+        raise IGVMError('Online migration cannot change IP address.')
 
     if not config['runpuppet'] and newip:
-        raise ManageVMError(
+        raise IGVMError(
             'Changing IP requires a Puppet run, pass --runpuppet.'
         )
 
@@ -184,12 +183,12 @@ def _migratevm(config, newip, nolbdowntime, offline):
             for iprange in network_api.get_matching_ranges(config['vm']['intern_ip']):
                 if iprange['belongs_to'] == None and iprange['type'] == 'private':
                     if downtime_network:
-                        raise ManageVMError('Unable to determine network for testtool downtime. Multiple networks found.')
+                        raise IGVMError('Unable to determine network for testtool downtime. Multiple networks found.')
                     downtime_network = iprange['range_id']
         else:
             downtime_network = config['vm']['segment']
         if not downtime_network:
-            raise ManageVMError('Unable to determine network for testtool downtime. No network found.')
+            raise IGVMError('Unable to determine network for testtool downtime. No network found.')
 
     if newip:
         source_vm._set_ip(newip)
@@ -218,7 +217,7 @@ def _migratevm(config, newip, nolbdowntime, offline):
             hosts=[config['srchv']['hostname']]
         )
     else:
-        raise ManageVMError(
+        raise IGVMError(
             "Migration from Hypervisor type {0} is not supported"
             .format(config['srchv']['hypervisor'])
         )
@@ -243,7 +242,7 @@ def _migratevm(config, newip, nolbdowntime, offline):
             hosts=[config['dsthv']['hostname']]
         )
     else:
-        raise ManageVMError(
+        raise IGVMError(
             "Migration to Hypervisor type {0} is not supported"
             .format(config['dsthv']['hypervisor'])
         )
@@ -300,10 +299,5 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
 
     try:
         _migratevm(config, newip, nolbdowntime, offline)
-    except StorageError as e:
-        # TODO: Perform cleanup
-        raise ManageVMError(e)
-    else:
-        pass
     finally:
         close_virtconns()

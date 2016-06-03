@@ -14,6 +14,7 @@ from fabric.context_managers import hide
 
 from jinja2 import Environment, PackageLoader
 
+from igvm.exceptions import HypervisorError
 from igvm.host import Host
 from igvm.utils import cmd
 from igvm.utils.config import get_server
@@ -30,10 +31,6 @@ from igvm.utils.storage import (
 )
 
 log = logging.getLogger(__name__)
-
-
-class HypervisorError(Exception):
-    pass
 
 
 class Hypervisor(Host):

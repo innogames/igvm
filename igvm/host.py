@@ -2,13 +2,9 @@ import fabric.api
 
 from adminapi.dataset import query, ServerObject
 
+from igvm.exceptions import ConfigError, RemoteCommandError
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.network import get_network_config
-
-
-# TODO: Inherit from IGVMError
-class RemoteCommandError(Exception):
-    pass
 
 
 def get_server(hostname, servertype=None):
@@ -22,7 +18,7 @@ def get_server(hostname, servertype=None):
     servers = tuple(query(hostname=hostname))
 
     if not servers:
-        raise Exception('Server "{0}" not found.'.format(hostname))
+        raise ConfigError('Server "{0}" not found.'.format(hostname))
 
     # Hostnames are unique on the serveradmin.  The query cannot return more
     # than one server.
@@ -30,7 +26,7 @@ def get_server(hostname, servertype=None):
     server = servers[0]
 
     if servertype and server['servertype'] != servertype:
-        raise Exception(
+        raise ConfigError(
             'Server "{0}" is not a "{1}".'.format(
                 hostname,
                 servertype,
@@ -38,7 +34,7 @@ def get_server(hostname, servertype=None):
         )
 
     if server.get('state') == 'retired':
-        raise Exception('Server "{0}" is retired.'.format(hostname))
+        raise ConfigError('Server "{0}" is retired.'.format(hostname))
 
     return server
 
