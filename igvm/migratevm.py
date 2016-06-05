@@ -1,11 +1,12 @@
 import copy
 
-from fabric.api import env, execute, run
+from fabric.api import execute, run, settings
 
 from adminapi import api
 
 from igvm.exceptions import ConfigError, IGVMError
 from igvm.hypervisor import Hypervisor
+from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.resources import get_hw_model
 from igvm.utils.config import (
         get_server,
@@ -27,14 +28,6 @@ from igvm.utils.virtutils import (
         close_virtconns,
     )
 from igvm.vm import VM
-
-# Configuration of Fabric:
-env.disable_known_hosts = True
-env.use_ssh_config = True
-env.always_use_pty = False
-env.forward_agent = True
-env.user = 'root'
-env.shell = '/bin/bash -c'
 
 
 def setup_dsthv(config, offline):
@@ -298,6 +291,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     }
 
     try:
-        _migratevm(config, newip, nolbdowntime, offline)
+        with settings(**COMMON_FABRIC_SETTINGS):
+            _migratevm(config, newip, nolbdowntime, offline)
     finally:
         close_virtconns()

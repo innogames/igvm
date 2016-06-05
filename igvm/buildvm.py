@@ -1,11 +1,12 @@
 import logging
 
-from fabric.api import env, execute, run
+from fabric.api import execute, run, settings
 from fabric.colors import yellow
 from time import sleep
 
 from igvm.exceptions import ConfigError, IGVMError
 from igvm.hypervisor import Hypervisor
+from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.config import (
         get_server,
         init_vm_config,
@@ -34,7 +35,12 @@ from igvm.vm import VM
 log = logging.getLogger(__name__)
 
 
-def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
+def buildvm(*args, **kwargs):
+    with settings(**COMMON_FABRIC_SETTINGS):
+        return _buildvm(*args, **kwargs)
+
+
+def _buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     config = {'vm_hostname': vm_hostname}
     if localimage is not None:
         config['localimage'] = localimage
@@ -74,14 +80,6 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     import_vm_config_from_admintool(config)
 
     check_vm_config(config)
-
-    # Configuration of Fabric:
-    env.disable_known_hosts = True
-    env.use_ssh_config = True
-    env.always_use_pty = False
-    env.forward_agent = True
-    env.user = 'root'
-    env.shell = '/bin/bash -c'
 
     # Perform operations on Hypervisor
     execute(setup_dsthv, config, hosts=[config['dsthv_hostname']])
