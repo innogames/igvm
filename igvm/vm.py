@@ -1,10 +1,11 @@
 import logging
 import time
 
+from igvm.exceptions import ConfigError
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
 from igvm.utils.network import get_network_config
-
+from igvm.utils.portping import wait_until
 
 log = logging.getLogger(__name__)
 
@@ -42,8 +43,24 @@ class VM(Host):
                     self.network_config['vlan'],
             ))
 
-    def create(self, config):
-        return self.hypervisor.create_vm(self, config)
+    def check_serveradmin_config(self):
+        """Validates relevant serveradmin attributes."""
+        memory = self.admintool['memory']
+        validations = (
+            ('memory', (lambda v: v > 0, 'memory must be > 0')),
+            ('num_cpu', (lambda v: v > 0, 'num_cpu must be > 0')),
+            ('os', (lambda v: True, 'os must be set')),
+            ('disk_size_gib',
+                (lambda v: v > 0, 'disk_size_gib must be > 0')
+            ),
+        )
+
+        for (attr, (check, err)) in validations:
+            value = self.admintool[attr]
+            if not value:
+                raise ConfigError('"{}" attribute is not set'.format(attr))
+            if not check(value):
+                raise ConfigError(err)
 
     def start(self):
         log.debug('Starting {} on {}'.format(
@@ -51,6 +68,13 @@ class VM(Host):
         self.hypervisor.start_vm(self)
         if not self.wait_for_running(running=True):
             raise VMError('VM did not come online in time')
+
+        host_up = wait_until(
+            str(self.admintool['intern_ip']),
+            waitmsg='Waiting for SSH server',
+        )
+        if not host_up:
+            raise VMError('VM is not reachable over SSH')
 
     def shutdown(self):
         log.debug('Stopping {} on {}'.format(

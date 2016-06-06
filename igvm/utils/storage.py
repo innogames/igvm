@@ -3,7 +3,7 @@ from __future__ import division
 import logging
 import math
 
-from fabric.api import run, settings
+from fabric.api import run
 
 from igvm.exceptions import StorageError
 from igvm.utils import cmd
@@ -63,7 +63,10 @@ def create_storage(hv, vm):
     for lv_line in lvs.splitlines():
         vg_name, lv_name = lv_line.split()
         if lv_name == vm.hostname:
-            raise StorageError('Logical Volume {}/{} already exists!'.format(vg_name, lv_name))
+            raise StorageError(
+                'Logical Volume {}/{} already exists!'
+                .format(vg_name, lv_name)
+            )
     # Find VG with enough free space
     vgs = hv.run(
         'vgs --noheadings -o vg_name,vg_free --unit g --nosuffix',
@@ -72,7 +75,7 @@ def create_storage(hv, vm):
     disk_size_gib = vm.admintool['disk_size_gib']
     for vg_line in vgs.splitlines():
             vg_name, vg_size_GiB = vg_line.split()
-            if vg_size_GiB > disk_size_gib + 5: # Always keep a few GiB free
+            if vg_size_GiB > disk_size_gib + 5:  # Always keep a few GiB free
                 found_vg = vg_name
                 break
     else:
@@ -100,43 +103,39 @@ def remove_temp(host, mount_path):
     host.run(cmd('rm -rf {0}', mount_path))
 
 
-def get_vm_block_dev(hypervisor):
-    if hypervisor == 'xen':
-        return 'xvda1'
-    elif hypervisor == 'kvm':
-        return 'vda'
-    else:
-        raise StorageError((
-            'VM block device name unknown for hypervisor {0}'
-        ).format(hypervisor))
-
-
 def format_storage(hv, device):
     hv.run(cmd('mkfs.xfs -f {}', device))
 
 
-
 def check_netcat(port):
     if run('pgrep -f "^/bin/nc.traditional -l -p {}"'.format(port)):
-        raise StorageError('Listening netcat already found on destination hypervisor.')
+        raise StorageError(
+            'Listening netcat already found on destination hypervisor.'
+        )
 
 
 def kill_netcat(port):
     run('pkill -f "^/bin/nc.traditional -l -p {}"'.format(port))
 
 
-def netcat_to_device(device):
-    dev_minor = run('stat -L -c "%T" {}'.format(device))
+def netcat_to_device(host, device):
+    dev_minor = host.run(cmd('stat -L -c "%T" {}', device), silent=True)
     dev_minor = int(dev_minor, 16)
     port = 7000 + dev_minor
+
     # Using DD lowers load on device with big enough Block Size
-    run('nohup /bin/nc.traditional -l -p {0} | dd of={1} obs=1048576 &'.format(port, device))
-    return port
+    host.run(
+        'nohup /bin/nc.traditional -l -p {0} | dd of={1} obs=1048576 &'
+        .format(port, device)
+    )
+    return (host.hostname, port)
 
 
-def device_to_netcat(device, size, host, port):
+def device_to_netcat(host, device, size, listener):
     # Using DD lowers load on device with big enough Block Size
-    with settings(warn_only=True):
-        out = run('dd if={0} ibs=1048576 | pv -f -s {1} | /bin/nc.traditional -q 1 {2} {3}'.format(device, size, host, port))
-        if out.failed:
-            raise StorageError('Copying data over NetCat has failed!')
+    (dst_host, dst_port) = listener
+    host.run(
+        'dd if={0} ibs=1048576 | pv -f -s {1} '
+        '| /bin/nc.traditional -q 1 {2} {3}'
+        .format(device, size, dst_host, dst_port)
+    )

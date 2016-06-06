@@ -1,34 +1,31 @@
 import logging
+import math
 import os
-import re
-import uuid
-from StringIO import StringIO
-
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
+import libvirt
 
 from adminapi.dataset import ServerObject
 
-from fabric.api import run, puts, settings
-from fabric.context_managers import hide
+from fabric.api import run
+from fabric.contrib.files import exists
 
-from jinja2 import Environment, PackageLoader
-
-from igvm.exceptions import HypervisorError
-from igvm.host import Host
+from igvm.exceptions import ConfigError, HypervisorError
+from igvm.host import Host, get_server
+from igvm.settings import HOST_RESERVED_MEMORY
 from igvm.utils import cmd
-from igvm.utils.config import get_server
-from igvm.utils.template import upload_template
-from igvm.utils.virtutils import get_virtconn
+from igvm.utils.kvm import generate_domain_xml
+from igvm.utils.lazy_property import lazy_property
 from igvm.utils.storage import (
     create_storage,
     format_storage,
+    get_logical_volumes,
     get_vm_volume,
     mount_temp,
     remove_logical_volume,
     remove_temp,
     umount_temp,
 )
+from igvm.utils.template import upload_template
+from igvm.utils.virtutils import get_virtconn
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +36,10 @@ class Hypervisor(Host):
     @staticmethod
     def get(hv_admintool):
         """Factory to get matching hypervisor implementation for a VM."""
+        # TODO We are not validating the servertype of the source and target
+        # hypervisor for now, because of the old hypervisors with servertype
+        # "db_server" and "frontend_server".  Fix this after the migration is
+        # complete.
         if not isinstance(hv_admintool, ServerObject):
             hv_admintool = get_server(hv_admintool)
 
@@ -77,6 +78,11 @@ class Hypervisor(Host):
             )
         return self._mount_path[vm]
 
+    def vm_block_device_name(self):
+        """Returns the name of the rootfs block device, as seen by the guest
+        OS."""
+        raise NotImplementedError(type(self).__name__)
+
     def vlan_for_vm(self, vm):
         """Returns the VLAN number a VM should use on this hypervisor.
         None for untagged."""
@@ -98,9 +104,51 @@ class Hypervisor(Host):
             )
         return vm_vlan
 
+    def vm_max_memory(self, vm):
+        """Calculates the max amount of memory in MiB the VM may receive."""
+        mem = vm.admintool['memory']
+        if mem > 12*1024:
+            max_mem = mem + 10*1024
+        else:
+            max_mem = 16*1024
+
+        # Never go higher than HV
+        max_mem = min(self.total_vm_memory(), max_mem)
+
+        return max_mem
+
     def check_vm(self, vm):
         """Checks whether a VM can run on this hypervisor."""
-        # TODO: More checks in here.
+        if self.admintool['state'] != 'online':
+            raise ConfigError(
+                'Hypervisor {0} is not in online state ({1}).'
+                .format(self.hostname, self.admintool['state'])
+            )
+
+        if self.vm_defined(vm):
+            raise HypervisorError(
+                'VM {0} is already defined on {1}'
+                .format(vm.hostname, self.hostname)
+            )
+
+        # Enough CPUs?
+        if vm.admintool['num_cpu'] > self.num_cpus:
+            raise HypervisorError(
+                'Not enough CPUs. Destination Hypervisor has {0}, '
+                'but VM requires {1}.'
+                .format(self.num_cpus, vm.admintool['num_cpu'])
+            )
+
+        # Enough memory?
+        free_mib = self.free_vm_memory()
+        if vm.admintool['memory'] > free_mib:
+            raise HypervisorError(
+                'Not enough memory. Destination Hypervisor has {0}MiB but VM '
+                'requires {1}MiB'
+                .format(free_mib, vm.admintool['memory'])
+            )
+
+        # TODO: CPU model
 
         # Proper VLAN?
         self.vlan_for_vm(vm)
@@ -120,11 +168,22 @@ class Hypervisor(Host):
                 'is not supported.'
             )
 
-    def create_vm(self, **kwargs):
+    def total_vm_memory(self):
+        """Returns amount of memory in MiB available to Hypervisor."""
         raise NotImplementedError(type(self).__name__)
 
-    def start_vm(self, vm):
+    def free_vm_memory(self):
+        """Returns MiB memory available (=unallocated) for VMs on the HV."""
         raise NotImplementedError(type(self).__name__)
+
+    def define_vm(self, vm):
+        """Creates a VM on the hypervisor."""
+        log.info('Defining {} on {}'.format(vm.hostname, self.hostname))
+        # Implementation must be subclassed
+
+    def start_vm(self, vm):
+        log.info('Starting {} on {}'.format(vm.hostname, self.hostname))
+        # Implementation must be subclassed
 
     def vm_running(self, vm):
         raise NotImplementedError(type(self).__name__)
@@ -133,13 +192,21 @@ class Hypervisor(Host):
         raise NotImplementedError(type(self).__name__)
 
     def stop_vm(self, vm):
-        raise NotImplementedError(type(self).__name__)
+        log.info('Shutting down {} on {}'.format(vm.hostname, self.hostname))
+        # Implementation must be subclassed
 
     def stop_vm_force(self, vm):
-        raise NotImplementedError(type(self).__name__)
+        log.info('Force-stopping {} on {}'.format(vm.hostname, self.hostname))
+        # Implementation must be subclassed
 
     def undefine_vm(self, vm):
-        raise NotImplementedError(type(self).__name__)
+        if self.vm_running(vm):
+            raise HypervisorError(
+                'Refusing to undefine running VM {}'
+                .format(vm.hostname)
+            )
+        log.info('Undefining {} on {}'.format(vm.hostname, self.hostname))
+        # Implementation must be subclassed
 
     def create_vm_storage(self, vm):
         """Allocate storage for a VM. Returns the disk path."""
@@ -196,8 +263,53 @@ class Hypervisor(Host):
         remove_logical_volume(self, self.vm_disk_path(vm))
         del self._disk_path[vm]
 
+    def vm_sync_from_hypervisor(self, vm, result):
+        """Synchronizes serveradmin information from the actual data on
+        the hypervisor.
+        :param result: A dictionary-like object that receives the updated
+                       values."""
+        # Update disk size
+        lvs = get_logical_volumes(self)
+        for lv in lvs:
+            if lv['name'] == vm.hostname:
+                assert self._disk_path.get(vm, lv['path']) == lv['path'], \
+                    'Inconsistent LV path'
+                self._disk_path[vm] = lv['path']
+                result['disk_size_gib'] = int(math.ceil(lv['size_MiB'] / 1024))
+                break
+        else:
+            raise HypervisorError(
+                'Unable to find source LV and determine its size.'
+            )
+
 
 class KVMHypervisor(Hypervisor):
+    @lazy_property
+    def conn(self):
+        conn = get_virtconn(self.hostname, 'kvm')
+        if not conn:
+            raise HypervisorError(
+                'Unable to connect to Hypervisor {}!'
+                .format(self.hostname)
+            )
+        return conn
+
+    def _find_domain(self, vm):
+        domain = self.conn.lookupByName(vm.hostname)
+        return domain
+
+    def _domain(self, vm):
+        domain_obj = self._find_domain(vm)
+        if not domain_obj:
+            raise HypervisorError(
+                'Unable to find domain {}.'
+                .format(vm.hostname)
+            )
+        return domain_obj
+
+    def vm_block_device_name(self):
+        return 'vda1'
+
     def check_migration(self, vm, dst_hv, offline):
         super(KVMHypervisor, self).check_migration(vm, dst_hv, offline)
 
@@ -208,81 +320,85 @@ class KVMHypervisor(Hypervisor):
                 'configuration (different VLAN).'
             )
 
-    def create_vm(self, vm, config):
-        domain_xml = self.generate_xml(vm, config)
-        conn = get_virtconn(self.hostname, 'kvm')
-        puts('Defining domain on libvirt')
-        conn.defineXML(domain_xml)
+    def total_vm_memory(self):
+        # Start with what OS sees as total memory (not installed memory)
+        total_mib = self.conn.getMemoryStats(-1)['total'] / 1024
+        # Always keep some extra memory free for Hypervisor
+        total_mib -= HOST_RESERVED_MEMORY
+        return total_mib
+
+    def free_vm_memory(self):
+        total_mib = self.total_vm_memory()
+
+        # Calculate memory used by other VMs.
+        # We can not trust hv_conn.getFreeMemory(), sum up memory used by
+        # each VM instead
+        used_kib = 0
+        for dom_id in self.conn.listDomainsID():
+            dom = self.conn.lookupByID(dom_id)
+            used_kib += dom.info()[2]
+        free_mib = total_mib - used_kib/1024
+        return free_mib
+
+    def define_vm(self, vm):
+        super(KVMHypervisor, self).define_vm(vm)
+        domain_xml = generate_domain_xml(self, vm)
+        self.conn.defineXML(domain_xml)
 
         # Refresh storage pools to register the vm image
-        for pool_name in conn.listStoragePools():
-            pool = conn.storagePoolLookupByName(pool_name)
+        for pool_name in self.conn.listStoragePools():
+            pool = self.conn.storagePoolLookupByName(pool_name)
             pool.refresh(0)
 
-    def generate_xml(self, vm, config):
-        if config.get('uuid'):
-            config['uuid'] = uuid.uuid1()
-        config['hostname'] = vm.hostname
-        config['vlan_tag'] = self.vlan_for_vm(vm)
-
-        jenv = Environment(loader=PackageLoader('igvm', 'templates'))
-        domain_xml = jenv.get_template('libvirt/domain.xml').render(**config)
-
-        tree = ET.fromstring(domain_xml)
-        # TODO: Domain XML customization for NUMA etc
-
-        # Remove whitespace and re-indent properly.
-        out = re.sub('>\s+<', '><', ET.tostring(tree))
-        domain_xml = minidom.parseString(out).toprettyxml()
-        return domain_xml
-
     def start_vm(self, vm):
-        conn = get_virtconn(self.hostname, 'kvm')
-        log.info('Starting {} on {}'.format(vm.hostname, self.hostname))
-        domain = conn.lookupByName(vm.hostname)
-        domain.create()
+        super(KVMHypervisor, self).start_vm(vm)
+        if self._domain(vm).create() != 0:
+            raise HypervisorError('{0} failed to start'.format(vm.hostname))
 
     def vm_defined(self, vm):
         # Don't use lookupByName, it prints ugly messages to the console
-        conn = get_virtconn(self.hostname, 'kvm')
-        return vm.hostname in [dom.name() for dom in conn.listAllDomains()]
+        domains = self.conn.listAllDomains()
+        return vm.hostname in [dom.name() for dom in domains]
 
     def vm_running(self, vm):
-        conn = get_virtconn(self.hostname, 'kvm')
-
-        # This only returns list of running domain ids.
-        domain_ids = conn.listDomainsID()
-        if domain_ids is None:
-            raise HypervisorError('Failed to get a list of domain IDs')
-
-        for domain_id in domain_ids:
-            if vm.hostname == conn.lookupByID(domain_id).name():
-                return True
-        return False
+        if self._domain(vm).info()[0] == libvirt.VIR_DOMAIN_SHUTOFF:
+            return False
+        return True
 
     def stop_vm(self, vm):
-        log.info(
-            'Shutting down {} on {}'
-            .format(vm.hostname, self.hostname)
-        )
-        with settings(host_string=self.hostname):
-            run('virsh shutdown {0}'.format(vm.hostname))
+        super(KVMHypervisor, self).stop_vm(vm)
+        if self._domain(vm).shutdown() != 0:
+            raise HypervisorError('Unable to stop {}'.format(vm.hostname))
 
     def stop_vm_force(self, vm):
-        log.debug(
-            'Destroying domain {} on {}'
-            .format(vm.hostname, self.hostname)
-        )
-        with settings(host_string=self.hostname):
-            run('virsh destroy {0}'.format(vm.hostname))
+        super(KVMHypervisor, self).stop_vm_force(vm)
+        if self._domain(vm).destroy() != 0:
+            raise HypervisorError(
+                'Unable to force-stop {}'.format(vm.hostname)
+            )
 
     def undefine_vm(self, vm):
-        # TODO: Check if still running
-        with settings(host_string=self.hostname):
-            run('virsh undefine {0}'.format(vm.hostname))
+        super(KVMHypervisor, self).undefine_vm(vm)
+        if self._domain(vm).undefine() != 0:
+            raise HypervisorError('Unable to undefine {}'.format(vm.hostname))
+
+    def vm_sync_from_hypervisor(self, vm, result):
+        super(KVMHypervisor, self).vm_sync_from_hypervisor(vm, result)
+        vm_info = self._domain(vm).info()
+
+        mem = int(vm_info[2] / 1024)
+        if mem > 0:
+            result['memory'] = mem
+
+        num_cpu = vm_info[3]
+        if num_cpu > 0:
+            result['num_cpu'] = num_cpu
 
 
 class XenHypervisor(Hypervisor):
+    def vm_block_device_name(self):
+        return 'xvda1'
+
     def check_migration(self, vm, dst_hv, offline):
         super(XenHypervisor, self).check_migration(vm, dst_hv, offline)
         if not offline:
@@ -291,59 +407,69 @@ class XenHypervisor(Hypervisor):
                 .format(self.hostname)
             )
 
+    def total_vm_memory(self):
+        mem = int(self.run(
+            "cat /proc/meminfo | grep MemTotal | awk '{ print $2 }'",
+            silent=True,
+        )) / 1024
+        return mem - HOST_RESERVED_MEMORY
+
+    def free_vm_memory(self):
+        # FIXME: We don't seem to know, so let's assume it's fine.
+        return 99999
+
     def _sxp_path(self, vm):
         return os.path.join('/etc/xen/domains', vm.hostname + '.sxp')
 
-    def create_vm(self, vm, config):
-        sxp_file = config.get('sxp_file')
-        if sxp_file is None:
-            sxp_file = 'etc/xen/domains/hostname.sxp'
-        config['hostname'] = vm.hostname
-
-        upload_template(sxp_file, self._sxp_path(vm), config)
+    def define_vm(self, vm):
+        sxp_file = 'etc/xen/domains/hostname.sxp'
+        upload_template(sxp_file, self._sxp_path(vm), {
+            'disk_device': self.vm_disk_path(vm),
+            'serveradmin': vm.admintool,
+            'max_mem': self.vm_max_memory(vm),
+        })
 
     def start_vm(self, vm):
-        log.debug(
-            'Starting {} on {}'
-            .format(vm.hostname, self.hostname)
-        )
-        with settings(host_string=self.hostname):
-            run(cmd('xm create {0}', self._sxp_path(vm)))
+        super(XenHypervisor, self).start_vm(vm)
+        self.run(cmd('xm create {0}', self._sxp_path(vm)))
 
     def vm_defined(self, vm):
         path = self._sxp_path(vm)
-        with settings(host_string=self.hostname):
+        with self.fabric_settings():
             return exists(path, use_sudo=False, verbose=False)
 
     def vm_running(self, vm):
-        xmList = StringIO()
-        with settings(host_string=self.hostname):
-            with hide('running'):
-                run("xm list", stdout=xmList)
-        xmList.seek(0)
-        for xmEntry in xmList.readlines():
-            pieces = xmEntry.split()
+        xm_list = self.run('xm list', silent=True)
+        for line in xm_list.split('\n'):
+            pieces = line.split()
             if len(pieces) >= 3 and pieces[2] == vm.hostname:
                 return True
         return False
 
     def stop_vm(self, vm):
-        log.debug(
-            'Shutting down {} on {}'
-            .format(vm.hostname, self.hostname)
-        )
-        with settings(host_string=self.hostname):
-            run('xm shutdown {0}'.format(vm.hostname))
+        super(XenHypervisor, self).stop_vm(vm)
+        self.run(cmd('xm shutdown {0}', vm.hostname))
 
     def stop_vm_force(self, vm):
-        log.debug(
-            'Destroying domain {} on {}'
-            .format(vm.hostname, self.hostname)
-        )
-        with settings(host_string=self.hostname):
-            run('xm destroy {0}'.format(vm.hostname))
+        super(XenHypervisor, self).stop_vm_force(vm)
+        self.run(cmd('xm destroy {0}', vm.hostname))
 
     def undefine_vm(self, vm):
-        # TODO: Check if still running
-        with settings(host_string=self.hostname):
-            run(cmd('rm {0}', self._sxp_path(vm)))
+        super(XenHypervisor, self).undefine_vm(vm)
+        self.run(cmd('rm {0}', self._sxp_path(vm)))
+
+    def vm_sync_from_hypervisor(self, vm, result):
+        super(XenHypervisor, self).vm_sync_from_hypervisor(vm, result)
+
+        result['num_cpu'] = int(run(
+            'xm list --long {0} '
+            '| grep \'(online_vcpus \' '
+            '| sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''
+            .format(vm.hostname)
+        ))
+        result['memory'] = int(run(
+            'xm list --long {0} '
+            '| grep \'(memory \' '
+            '| sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''
+            .format(vm.hostname)
+        ))

@@ -1,0 +1,68 @@
+<domain type='kvm'>
+  <name>{{ serveradmin.hostname }}</name>
+  <uuid>{{ uuid }}</uuid>
+{% if mem_hotplug %}
+  <maxMemory slots='16' unit='MiB'>{{ max_mem }}</maxMemory>
+{% endif %}
+  <memory unit='MiB'>{{ serveradmin.memory }}</memory>
+  <currentMemory unit='MiB'>{{ serveradmin.memory }}</currentMemory>
+  
+  <!-- Don't put placement attribute unless NUMA settings are set! -->
+  <vcpu current='{{ serveradmin.num_cpu }}'>{{ max_cpus }}</vcpu>
+
+  <!-- These are filled by KVM hooks in managevm/utils/kvm.py. -->
+  <!-- Disabled for now, without hooks this will break.
+  <cpu></cpu>
+  <cputune></cputune>
+  <numatune></numatune>
+  -->
+
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>
+    <kernel>/vmlinuz</kernel>
+    <initrd>/initrd.img</initrd>
+    <cmdline>root=/dev/vda ro 2 console=ttyS0 init=/sbin/init rootflags=allocsize=64k elevator=noop</cmdline>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic eoi='on'/>
+    <hap/>
+  </features>
+
+  <clock offset='utc' adjustment='reset'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/usr/bin/kvm</emulator>
+    <disk type='block' device='disk'>
+      <driver name='qemu' type='raw' cache='none' io='native'/>
+      <source dev='{{ disk_device }}'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <controller type='pci' index='0' model='pci-root'/>
+    <!-- usb can only be disabled with model none -->
+    <controller type='usb' index='0' model='none'/>
+    <controller type='virtio-serial' index='0'>
+    </controller>
+    <interface type='bridge'>
+      <source bridge='br0'/>
+{% if vlan_tag %}
+      <vlan>
+        <tag id='{{ vlan_tag }}'/>
+      </vlan>
+{% endif %}
+      <virtualport type='openvswitch'/>
+      <model type='virtio'/>
+    </interface>
+    <serial type='pty'>
+      <target port='0'/>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+    <memballoon model='none'>
+    </memballoon>
+  </devices>
+</domain>

@@ -2,98 +2,86 @@ import os
 
 from fabric.api import run, cd, put, settings
 
-from managevm.utils.sshkeys import create_authorized_keys
-from managevm.utils.template import upload_template
-from managevm.utils import cmd
-
-
-PUPPET_CA_MASTERS = (
-    # Puppet 3
-    'master.puppet.ig.local',
-    # Puppet 4
-    'ca.puppet.ig.local',
+from igvm.settings import (
+    DEFAULT_DNS_SERVERS,
+    DEFAULT_SWAP_SIZE,
+    PUPPET_CA_MASTERS,
 )
+from igvm.utils.sshkeys import create_authorized_keys
+from igvm.utils.template import upload_template
+from igvm.utils.resources import get_ssh_keytypes
+from igvm.utils import cmd
 
-def set_hostname(target_dir, hostname):
-    with cd(target_dir):
-        run(cmd('echo {0} > etc/hostname', hostname))
 
-def create_ssh_keys(target_dir, ssh_keytypes):
-    with cd(target_dir):
-        for typ in ssh_keytypes:
-            run('rm -f etc/ssh/ssh_host_{0}_key'.format(typ))
-            run('ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'.format(typ))
+def _create_ssh_keys(ssh_keytypes):
+    for typ in ssh_keytypes:
+        run('rm -f etc/ssh/ssh_host_{0}_key'.format(typ))
+        run(
+            'ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'
+            .format(typ)
+        )
 
-def create_resolvconf(target_dir, dns_servers):
-    with cd(target_dir):
-        upload_template('etc/resolv.conf', 'etc/resolv.conf', {
-            'dns_servers': dns_servers
-        })
 
-def create_hosts(target_dir):
-    with cd(target_dir):
-        upload_template('etc/hosts', 'etc/hosts')
-
-def create_inittab(target_dir):
-    with cd(target_dir):
-        upload_template('etc/inittab', 'etc/inittab')
-
-def set_mailname(target_dir, mailname):
-    with cd(target_dir):
-        run(cmd('echo {0} > etc/mailname', mailname))
-
-def generate_swap(swap_path, size_MiB):
+def _generate_swap(swap_path, size_MiB):
     run(cmd('dd if=/dev/zero of={0} bs=1M count={1}', swap_path, size_MiB))
     run(cmd('/sbin/mkswap {0}', swap_path))
 
-def create_fstab(target_dir, blk_dev):
-    with cd(target_dir):
-        upload_template('etc/fstab', 'etc/fstab', {
-            'blk_dev' : blk_dev,
-            'type': 'xfs',
-            'mount_options': 'defaults'
-        })
 
-def create_interfaces(network_config, target_dir):
+def _create_interfaces(network_config):
+    run('mkdir -p etc/network')
+    upload_template('etc/network/interfaces', 'etc/network/interfaces', {
+        'network_config': network_config,
+    })
 
-    with cd(target_dir):
-        run('mkdir -p etc/network')
-        upload_template('etc/network/interfaces', 'etc/network/interfaces', {
-            'network_config': network_config,
-        })
 
 def block_autostart(hv, vm):
     target_dir = hv.vm_mount_path(vm)
     with cd(target_dir):
-        hv.run('echo "#!/bin/sh" >> usr/sbin/policy-rc.d' )
-        hv.run('echo "exit 101"  >> usr/sbin/policy-rc.d' )
-        hv.run('chmod +x usr/sbin/policy-rc.d' )
+        hv.run('echo "#!/bin/sh" >> usr/sbin/policy-rc.d')
+        hv.run('echo "exit 101"  >> usr/sbin/policy-rc.d')
+        hv.run('chmod +x usr/sbin/policy-rc.d')
+
 
 def unblock_autostart(hv, vm):
     target_dir = hv.vm_mount_path(vm)
     with cd(target_dir):
-        hv.run('rm usr/sbin/policy-rc.d' )
+        hv.run('rm usr/sbin/policy-rc.d')
 
 
-def prepare_vm(target_dir, server, mailname, dns_servers, network_config,
-               swap_size, blk_dev, ssh_keytypes):
-    set_hostname(target_dir, server['hostname'])
-    create_ssh_keys(target_dir, ssh_keytypes)
-    create_resolvconf(target_dir, dns_servers)
-    create_hosts(target_dir)
-    create_interfaces(network_config, target_dir)
-    set_mailname(target_dir, mailname)
+def prepare_vm(hv, vm):
+    """Prepares the rootfs for a VM. VM storage must be mounted on the HV."""
+    target_dir = hv.vm_mount_path(vm)
+    with hv.fabric_settings(cd(target_dir)):
+        run(cmd('echo {0} > etc/hostname', vm.hostname))
+        run(cmd('echo {0} > etc/mailname', vm.fqdn))
 
-    swap_path = os.path.join(target_dir, 'swap')
-    generate_swap(swap_path, swap_size)
+        _create_interfaces(vm.network_config)
 
-    create_fstab(target_dir, blk_dev)
-    create_inittab(target_dir)
-    create_authorized_keys(target_dir)
+        ssh_keytypes = get_ssh_keytypes(vm.admintool['os'])
+        _create_ssh_keys(ssh_keytypes)
 
-def copy_postboot_script(target_dir, script):
-    with cd(target_dir):
+        upload_template('etc/fstab', 'etc/fstab', {
+            'blk_dev': hv.vm_block_device_name(),
+            'type': 'xfs',
+            'mount_options': 'defaults'
+        })
+        upload_template('etc/hosts', 'etc/hosts')
+        upload_template('etc/inittab', 'etc/inittab')
+        upload_template('etc/resolv.conf', 'etc/resolv.conf', {
+            'dns_servers': DEFAULT_DNS_SERVERS
+        })
+
+        swap_path = os.path.join(target_dir, 'swap')
+        _generate_swap(swap_path, DEFAULT_SWAP_SIZE)
+
+        create_authorized_keys(target_dir)
+
+
+def copy_postboot_script(hv, vm, script):
+    target_dir = hv.vm_mount_path(vm)
+    with hv.fabric_settings(cd(target_dir)):
         put(script, 'buildvm-postboot', mode=755)
+
 
 def run_puppet(hv, vm, clear_cert):
     """Runs Puppet in chroot on the hypervisor."""

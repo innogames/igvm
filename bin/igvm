@@ -9,6 +9,7 @@
 
 from argparse import ArgumentParser
 import logging
+import time
 
 from fabric.network import disconnect_all
 
@@ -17,6 +18,7 @@ import adminapi
 from igvm.buildvm import buildvm
 from igvm.migratevm import migratevm
 from igvm.resources import disk_set
+from igvm.utils.virtutils import close_virtconns
 
 top_parser = ArgumentParser(__doc__)
 subparsers = top_parser.add_subparsers(
@@ -105,3 +107,6 @@ args.pop('func')(**args)
 
 # Disconnect all Fabric sessions to avoid errors during shutdown.
 disconnect_all()
+close_virtconns()
+
+time.sleep(0.1)  # For Paramiko's race condition.

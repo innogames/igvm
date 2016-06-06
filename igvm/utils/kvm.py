@@ -1,11 +1,19 @@
-import re
-import xml.etree.ElementTree as ET
 import logging
+import re
+import time
+import uuid
+from xml.dom import minidom
+import xml.etree.ElementTree as ET
 
-from fabric.api import run
-from igvm.signals import on_signal
+from igvm.settings import (
+    KVM_DEFAULT_MAX_CPUS,
+    KVM_HWMODEL_TO_CPUMODEL,
+)
+
+from jinja2 import Environment, PackageLoader
 
 log = logging.getLogger(__name__)
+
 
 def _del_if_exists(tree, name):
     """
@@ -33,43 +41,73 @@ def _find_or_create(parent, name):
     return ET.SubElement(parent, name)
 
 
-def get_qemu_version(config):
-    version = config['dsthv_conn'].getVersion()
+def generate_domain_xml(hv, vm):
+    """Generates the domain XML for a VM."""
+    version = _get_qemu_version(hv)
+
+    config = {
+        'disk_device': hv.vm_disk_path(vm),
+        'serveradmin': vm.admintool,
+        'uuid': uuid.uuid1(),
+        'vlan_tag': hv.vlan_for_vm(vm),
+        'version': version,
+        'mem_hotplug': version >= (2, 3),
+        'max_mem': hv.vm_max_memory(vm),
+        'max_cpus': _get_max_cpus(hv, vm),
+    }
+
+    jenv = Environment(loader=PackageLoader('igvm', 'templates'))
+    domain_xml = jenv.get_template('hv/domain.xml').render(**config)
+
+    tree = ET.fromstring(domain_xml)
+
+    if version >= (2, 3):
+        _set_cpu_model(vm, tree)
+        _place_numa(vm, tree, config['max_cpus'])
+
+    log.info('KVM: VCPUs current: {} max: {} available on host: {}'.format(
+        vm.admintool['num_cpu'], config['max_cpus'], hv.num_cpus,
+    ))
+    if config['mem_hotplug']:
+        _set_memory_hotplug(vm, tree, config)
+        log.info('KVM: Memory hotplug enabled, up to {} MiB'.format(
+            config['max_mem'],
+        ))
+    else:
+        log.info('KVM: Memory hotplug disabled, requires qemu 2.3')
+
+    # Remove whitespace and re-indent properly.
+    out = re.sub('>\s+<', '><', ET.tostring(tree))
+    domain_xml = minidom.parseString(out).toprettyxml()
+    return domain_xml
+
+
+def _get_max_cpus(hv, vm):
+    max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.admintool['num_cpu'])
+    max_cpus = min(max_cpus, hv.num_cpus)
+    return max_cpus
+
+
+def _get_qemu_version(hv):
+    version = hv.conn.getVersion()
     # According to documentation:
     # value is major * 1,000,000 + minor * 1,000 + release
     release = version % 1000
-    minor = int(version/1000%1000)
-    major = int(version/1000000%1000000)
-    return major, minor
+    minor = int(version/1000 % 1000)
+    major = int(version/1000000 % 1000000)
+    return major, minor, release
 
 
-#@on_signal('populate_config')
-def kvm_populate_config(config):
-    if config['dsthv']['hypervisor'] != 'kvm':
-        return
-
-    version = get_qemu_version(config)
-    config['qemu_version'] = version
-
-    config['mem_hotplug'] = (version >= (2, 3))
-
-
-#@on_signal('customize_kvm_xml')
-def kvm_hw_model(vm, config, tree):
+def _set_cpu_model(vm, tree):
     """
     Selects CPU model based on hardware model.
     """
-    if get_qemu_version(config) < (2, 3):
-        return
-    if not 'dsthv_hw_model' in config:
+    hw_model = vm.admintool.get('hardware_model')
+    if not hw_model:
         return
 
-    model2arch = {
-        'Nehalem': ['Dell_M610', 'Dell_M710'],
-        'SandyBridge': ['Dell_M620', 'Dell_M630', 'Dell_R620']
-    }
-    for arch, models in model2arch.iteritems():
-        if config['dsthv_hw_model'] in models:
+    for arch, models in KVM_HWMODEL_TO_CPUMODEL.iteritems():
+        if hw_model in models:
             cpu = _find_or_create(tree, 'cpu')
             cpu.attrib.update({
                 'match': 'exact',
@@ -80,27 +118,25 @@ def kvm_hw_model(vm, config, tree):
                 'fallback': 'allow',
             })
             model.text = arch
-            log.info('KVM: cpu model set to "%s"' % arch)
+            log.info('KVM: CPU model set to "%s"' % arch)
             break
 
 
-#@on_signal('customize_kvm_xml')
-def kvm_memory_hotplug(vm, config, tree):
-    """
-    Configures memory hotplugging.
-    """
-    if not config['mem_hotplug']:
-        return
-
+def _set_memory_hotplug(vm, tree, config):
     tree.find('vcpu').attrib['placement'] = 'static'
-    # maxMemory node is part of XML
+    max_memory = _find_or_create(tree, 'maxMemory')
+    max_memory.attrib.update({
+        'slots': '16',
+        'unit': 'MiB',
+    })
+    max_memory.text = str(config['max_mem'])
 
 
-#@on_signal('pre_migration')
 def kvm_adjust_cpuset_pre(config, offline):
     """
     Reduces the cpuset to the minimum number of CPUs on source and destination.
     """
+    # TODO: why exactly is this needed?
     if config['dsthv']['hypervisor'] != 'kvm' or offline:
         return
     conn_src = config['srchv_conn']
@@ -125,9 +161,10 @@ def kvm_adjust_cpuset_pre(config, offline):
     elif num_cpus_src == num_cpus_dst:
         return  # Nothing to do
 
-    log.info('Target hypervisor has less cores, shrinking cpuset from '
-                 '{} to {} CPUs'.format(
-            num_cpus_src, num_cpus_dst))
+    log.info(
+        'Target hypervisor has less cores, shrinking cpuset from {} to {} CPUs'
+        .format(num_cpus_src, num_cpus_dst)
+    )
     assert num_cpus_dst >= 4, 'hypervisor has at least four cores'
 
     for i, mask in enumerate(dom.vcpuPinInfo()):
@@ -135,11 +172,11 @@ def kvm_adjust_cpuset_pre(config, offline):
         dom.pinVcpu(i, mask[:num_cpus_dst])
 
 
-#@on_signal('post_migration')
 def kvm_adjust_cpuset_post(config, offline):
     """
     Includes all new physical cores in the cpuset.
-    For each new core P, the bit on VCPU V equals the bit of pcpu P-<num nodes>.
+    For each new core P, the bit on VCPU V equals the bit of pcpu
+    P-<num nodes>.
     """
     start_cpu = config.get('__postmigrate_expand_cpuset', 0)
     if not start_cpu:
@@ -160,19 +197,18 @@ def kvm_adjust_cpuset_post(config, offline):
         dom.pinVcpu(i, tuple(mask))
 
 
-#@on_signal('customize_kvm_xml')
-def kvm_place_numa(vm, config, tree):
+def _place_numa(vm, tree, max_cpus):
     """
     Configures NUMA placement.
     """
-    if get_qemu_version(config) < (2, 3):
-        return
-
-    num_vcpus = int(config['max_cpu'])
-    numa_mode = config.get('numa_mode', 'spread')
+    num_vcpus = max_cpus
+    numa_mode = 'spread'
 
     # Which physical CPU belongs to which physical node
-    pcpu_sets = run('cat /sys/devices/system/node/node*/cpulist').splitlines()
+    pcpu_sets = vm.hypervisor.run(
+        'cat /sys/devices/system/node/node*/cpulist',
+        silent=True,
+    ).splitlines()
     num_nodes = len(pcpu_sets)
     nodeset = ','.join(str(i) for i in range(0, num_nodes))
 
@@ -183,12 +219,16 @@ def kvm_place_numa(vm, config, tree):
     _del_if_exists(tree, 'cpu/numa')
 
     memory_backing = tree.find('memoryBacking')
-    hugepages = memory_backing is not None and memory_backing.find('hugepages') is not None
+    hugepages = (
+        memory_backing is not None and
+        memory_backing.find('hugepages') is not None
+    )
 
     if numa_mode == 'spread':
-        # We currently don't have any other hypervisors, so this script *might* do something weird.
-        # You may remove this check if it ever triggers and you've verified that it actually did
-        # something sane.
+        # We currently don't have any other hypervisors, so this script *might*
+        # do something weird.
+        # You may remove this check if it ever triggers and you've verified
+        # that it actually did something sane.
         if len(pcpu_sets) != 2:
             log.warn('WARNING: Found {0} NUMA nodes instead of 2. '
                      'Please double-check the placement!')
@@ -196,13 +236,17 @@ def kvm_place_numa(vm, config, tree):
             time.sleep(10)
 
         # Virtual node -> virtual cpu
-        vcpu_sets = [','.join(str(j) for j in range(i, num_vcpus, num_nodes)) for i in range(0, num_nodes)]
+        vcpu_sets = [
+            ','.join(str(j) for j in range(i, num_vcpus, num_nodes))
+            for i in range(0, num_nodes)
+        ]
 
         # Static vcpu pinning
         tree.find('vcpu').attrib['placement'] = 'static'
 
         # <cpu>
-        # Expose N NUMA nodes (= sockets+ to the guest, each with a proportionate amount of VCPUs.
+        # Expose N NUMA nodes (= sockets+ to the guest, each with a
+        # proportionate amount of VCPUs.
         cpu = _find_or_create(tree, 'cpu')
         topology = ET.SubElement(cpu, 'topology')
         topology.attrib = {
@@ -213,13 +257,14 @@ def kvm_place_numa(vm, config, tree):
         # </cpu>
 
         # <cputune>
-        # Bind VCPUs of each guest node to the corresponding host CPUs on the same node.
+        # Bind VCPUs of each guest node to the corresponding host CPUs on the
+        # same node.
         cputune = _find_or_create(tree, 'cputune')
         for i in range(0, num_vcpus):
             vcpupin = ET.SubElement(cputune, 'vcpupin')
             vcpupin.attrib = {
                 'vcpu': str(i),
-                'cpuset': pcpu_sets[i%num_nodes],
+                'cpuset': pcpu_sets[i % num_nodes],
             }
         # </cputune>
 
@@ -231,12 +276,13 @@ def kvm_place_numa(vm, config, tree):
             cell.attrib = {
                 'id': str(i),
                 'cpus': cpuset,
-                'memory': str(config['mem'] // num_nodes),
+                'memory': str(vm.admintool['memory'] // num_nodes),
                 'unit': 'MiB',
             }
         # </cell></numa>
         # </cpu>
 
+        # Hugepages appear to be incompatible with NUMA policies.
         if not hugepages:
             # <numatune>
             # Map VCPUs to guest NUMA nodes.
@@ -253,4 +299,7 @@ def kvm_place_numa(vm, config, tree):
                 }
             # </numatune>
     else:
-        raise NotImplementedError('NUMA mode not supported: {0}'.format(numa_mode))
+        raise NotImplementedError(
+            'NUMA mode not supported: {0}'
+            .format(numa_mode)
+        )

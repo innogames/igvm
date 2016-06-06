@@ -8,7 +8,7 @@
 
 from fabric.api import run, settings
 
-from igvm.utils.config import get_server
+from igvm.host import get_server
 from igvm.utils.storage import lvresize, get_vm_volume
 
 

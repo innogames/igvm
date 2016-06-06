@@ -77,5 +77,16 @@ echo "Local image works."
 # All done.
 cleanup
 
+# TODO: Error conditions:
+# - too many CPUs
+# - too much memory
+# - wrong vlan
+# - already defined
+# - LV already exists
+# - HV not online
+
+# TODO: postboot script
+# TODO: same UUID/maxmem after offline migration
+
 echo "igvm seems functional."
 

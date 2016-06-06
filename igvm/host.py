@@ -41,7 +41,6 @@ def get_server(hostname, servertype=None):
 
 class Host(object):
     """A remote host on which commands can be executed."""
-
     def __init__(self, server_object, servertype=None):
         # Support passing hostname or admintool object.
         if not isinstance(server_object, ServerObject):
@@ -49,6 +48,14 @@ class Host(object):
 
         self.hostname = server_object['hostname']
         self.admintool = server_object
+        self.fqdn = '{}.ig.local'.format(self.hostname)
+
+    def fabric_settings(self, *args, **kwargs):
+        """Builds a fabric context manager to run commands on this host."""
+        if 'abort_exception' not in kwargs:
+            kwargs['abort_exception'] = RemoteCommandError
+        kwargs['host_string'] = self.hostname
+        return fabric.api.settings(*args, **kwargs)
 
     def run(self, *args, **kwargs):
         """Runs a command on the remote host.
@@ -64,14 +71,19 @@ class Host(object):
         for setting in ['warn_only', 'silent']:
             if setting in kwargs:
                 del kwargs[setting]
-        with fabric.api.settings(*settings,
-                                 abort_exception=RemoteCommandError,
-                                 host_string=self.hostname,
-                                 warn_only=warn_only
-                                 ):
+
+        with self.fabric_settings(*settings, warn_only=warn_only):
             return fabric.api.run(*args, **kwargs)
 
     @lazy_property  # Requires fabric call on HV, evaluate lazily.
     def network_config(self):
         """Returns networking attributes, such as IP address and segment."""
         return get_network_config(self.admintool)
+
+    @lazy_property
+    def num_cpus(self):
+        """Returns the number of online CPUs"""
+        return int(self.run(
+            'grep vendor_id < /proc/cpuinfo | wc -l',
+            silent=True,
+        ))
