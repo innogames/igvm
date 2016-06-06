@@ -14,7 +14,8 @@ log = logging.getLogger(__name__)
 def get_logical_volumes(host):
     lvolumes = []
     lvs = host.run(
-        'lvs --noheadings -o name,vg_name,lv_size --unit m --nosuffix',
+        'lvs --noheadings -o name,vg_name,lv_size --unit m --nosuffix'
+        ' 2>/dev/null',
         silent=True
     )
     for lv_line in lvs.splitlines():
@@ -57,7 +58,7 @@ def create_storage(hv, vm):
     # Do not search only for the given LV.
     # `lvs` must generally not fail and give a list of LVs.
     lvs = hv.run(
-        'lvs --noheading -o vg_name,name',
+        'lvs --noheading -o vg_name,name 2>/dev/null',
         silent=True
     )
     for lv_line in lvs.splitlines():
@@ -69,7 +70,8 @@ def create_storage(hv, vm):
             )
     # Find VG with enough free space
     vgs = hv.run(
-        'vgs --noheadings -o vg_name,vg_free --unit g --nosuffix',
+        'vgs --noheadings -o vg_name,vg_free --unit g --nosuffix'
+        ' 2>/dev/null',
         silent=True
     )
     disk_size_gib = vm.admintool['disk_size_gib']
