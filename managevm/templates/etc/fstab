@@ -1,0 +1,4 @@
+proc /proc proc defaults 0 0
+/dev/{{ blk_dev }} / {{ type }} {{ mount_options }} 0 1
+/swap none swap defaults 0 0
+
