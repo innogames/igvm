@@ -3,7 +3,7 @@ import time
 import xml.etree.ElementTree as ET
 
 from fabric.api import run
-from managevm.signals import on_signal
+from igvm.signals import on_signal
 
 def _del_if_exists(tree, name):
     """

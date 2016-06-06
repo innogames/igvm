@@ -7,11 +7,11 @@ from fabric.network import disconnect_all
 
 from adminapi import api
 
-from managevm.hooks import load_hooks
-from managevm.utils.resources import get_hw_model
-from managevm.signals import send_signal
-from managevm.utils import fail_gracefully
-from managevm.utils.config import (
+from igvm.hooks import load_hooks
+from igvm.utils.resources import get_hw_model
+from igvm.signals import send_signal
+from igvm.utils import fail_gracefully
+from igvm.utils.config import (
         get_server,
         check_dsthv_memory,
         check_dsthv_cpu,
@@ -20,10 +20,10 @@ from managevm.utils.config import (
         import_vm_config_from_xen,
         import_vm_config_from_kvm,
     )
-from managevm.utils.hypervisor import VM
-from managevm.utils.network import get_vlan_info
-from managevm.utils.preparevm import run_puppet
-from managevm.utils.storage import (
+from igvm.utils.hypervisor import VM
+from igvm.utils.network import get_vlan_info
+from igvm.utils.preparevm import run_puppet
+from igvm.utils.storage import (
         remove_logical_volume,
         mount_temp,
         umount_temp,
@@ -33,7 +33,7 @@ from managevm.utils.storage import (
         netcat_to_device,
         device_to_netcat
     )
-from managevm.utils.virtutils import (
+from igvm.utils.virtutils import (
         get_virtconn,
         close_virtconns,
     )

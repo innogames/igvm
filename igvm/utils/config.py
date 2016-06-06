@@ -8,9 +8,9 @@ import math
 
 from adminapi.dataset import query, DatasetError
 from fabric.api import run
-from managevm.signals import send_signal
-from managevm.utils.storage import get_logical_volumes
-from managevm.utils.resources import get_cpuinfo
+from igvm.signals import send_signal
+from igvm.utils.storage import get_logical_volumes
+from igvm.utils.resources import get_cpuinfo
 
 def get_server(hostname, servertype=None):
     """Get a server from admintool by hostname

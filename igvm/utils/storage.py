@@ -8,8 +8,8 @@ from fabric.utils import warn
 from fabric.api import run, settings, hide, puts, prompt
 from fabric.contrib.console import confirm
 
-from managevm.utils.units import convert_size
-from managevm.utils import cmd, fail_gracefully, raise_failure
+from igvm.utils.units import convert_size
+from igvm.utils import cmd, fail_gracefully, raise_failure
 
 run = fail_gracefully(run)
 

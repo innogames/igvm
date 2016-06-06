@@ -4,10 +4,10 @@ from fabric.api import env, execute, run, warn
 from fabric.colors import yellow
 from time import sleep
 
-from managevm.hooks import load_hooks
+from igvm.hooks import load_hooks
 
-from managevm.utils import raise_failure, fail_gracefully
-from managevm.utils.config import (
+from igvm.utils import raise_failure, fail_gracefully
+from igvm.utils.config import (
         get_server,
         init_vm_config,
         import_vm_config_from_admintool,
@@ -16,30 +16,30 @@ from managevm.utils.config import (
         check_dsthv_cpu,
         check_vm_config,
     )
-from managevm.utils.resources import get_ssh_keytypes, get_hw_model
-from managevm.utils.storage import (
+from igvm.utils.resources import get_ssh_keytypes, get_hw_model
+from igvm.utils.storage import (
         create_storage,
         mount_storage,
         umount_temp,
         remove_temp,
         get_vm_block_dev,
     )
-from managevm.utils.image import download_image, extract_image
-from managevm.utils.network import get_network_config, get_vlan_info
-from managevm.utils.preparevm import (
+from igvm.utils.image import download_image, extract_image
+from igvm.utils.network import get_network_config, get_vlan_info
+from igvm.utils.preparevm import (
         prepare_vm,
         copy_postboot_script,
         run_puppet,
         block_autostart,
         unblock_autostart,
     )
-from managevm.utils.hypervisor import VM
-from managevm.utils.portping import wait_until
-from managevm.utils.virtutils import (
+from igvm.utils.hypervisor import VM
+from igvm.utils.portping import wait_until
+from igvm.utils.virtutils import (
         get_virtconn,
         close_virtconns,
     )
-from managevm.signals import send_signal
+from igvm.signals import send_signal
 
 run = fail_gracefully(run)
 

@@ -6,10 +6,10 @@ from fabric.api import open_shell, prompt, warn
 from fabric.colors import red
 from fabric.contrib.files import upload_template
 
-import managevm
+import igvm
 
 def get_installdir():
-    return os.path.dirname(managevm.__file__)
+    return os.path.dirname(igvm.__file__)
 
 def cmd(cmd, *args, **kwargs):
     escaped_args = [quote(str(arg)) for arg in args]

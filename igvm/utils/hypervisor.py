@@ -15,11 +15,11 @@ from fabric.contrib.files import exists
 
 from jinja2 import Environment, PackageLoader
 
-from managevm.utils import cmd, fail_gracefully
-from managevm.utils.template import upload_template
-from managevm.utils.virtutils import get_virtconn, close_virtconns
-from managevm.utils.resources import get_cpuinfo
-from managevm.signals import send_signal
+from igvm.utils import cmd, fail_gracefully
+from igvm.utils.template import upload_template
+from igvm.utils.virtutils import get_virtconn, close_virtconns
+from igvm.utils.resources import get_cpuinfo
+from igvm.signals import send_signal
 
 run = fail_gracefully(run)
 exists = fail_gracefully(exists)
@@ -91,7 +91,7 @@ class KVMVM(VM):
             config['uuid'] = uuid.uuid1()
         config['hostname'] = self.hostname
 
-        jenv = Environment(loader=PackageLoader('managevm', 'templates'))
+        jenv = Environment(loader=PackageLoader('igvm', 'templates'))
         domain_xml = jenv.get_template('libvirt/domain.xml').render(**config)
 
         tree = ET.fromstring(domain_xml)

@@ -13,9 +13,9 @@ from fabric.network import disconnect_all
 
 import adminapi
 
-from managevm.buildvm import buildvm
-from managevm.migratevm import migratevm
-from managevm.resources import disk_set
+from igvm.buildvm import buildvm
+from igvm.migratevm import migratevm
+from igvm.resources import disk_set
 
 top_parser = ArgumentParser(__doc__)
 subparsers = top_parser.add_subparsers(

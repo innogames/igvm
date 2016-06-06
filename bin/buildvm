@@ -7,7 +7,7 @@ from fabric.network import disconnect_all
 
 import adminapi
 
-from managevm.buildvm import buildvm
+from igvm.buildvm import buildvm
 
 print('This is deprecated use "igvm create"')
 

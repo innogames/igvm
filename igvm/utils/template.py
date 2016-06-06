@@ -1,7 +1,7 @@
 import os
 from fabric.contrib.files import upload_template as _upload_template
 
-from managevm.utils import fail_gracefully
+from igvm.utils import fail_gracefully
 
 
 def upload_template(filename, destination, context=None):

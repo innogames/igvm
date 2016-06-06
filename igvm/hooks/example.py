@@ -1,4 +1,4 @@
-from managevm.signals import register_signal
+from igvm.signals import register_signal
 
 def print_config(config):
     if 'print' in config:

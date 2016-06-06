@@ -7,7 +7,7 @@ import os
 from fabric.api import run, cd, settings
 from fabric.contrib import files
 
-from managevm.utils import fail_gracefully, cmd
+from igvm.utils import fail_gracefully, cmd
 
 BASE_URL = 'http://aw-foreman.ig.local:8080/'
 PACKET_SERVER = 'aw-foreman.ig.local'
