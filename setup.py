@@ -24,6 +24,10 @@ setup(
             'templates/etc/resolv.conf',
             'templates/libvirt/domain.xml',
             'templates/libvirt/domain_memhotplug.xml',
+        ],
+        'igvm': [
+            'templates/hv/domain.sxp',
+            'templates/hv/domain.xml',
         ]
     },
     author='Henning Pridohl',
