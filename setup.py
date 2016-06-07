@@ -5,7 +5,7 @@ setup(
     name='igvm',
     version='1.0',
     url='https://gitlab.innogames.de/sysadmins/igvm',
-    packages=['managevm', 'managevm.utils', 'managevm.hooks'],
+    packages=['igvm', 'igvm.utils', 'managevm', 'managevm.utils', 'managevm.hooks'],
     scripts=[
         'bin/igvm',
         'bin/buildvm',
