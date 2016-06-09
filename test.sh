@@ -5,8 +5,10 @@ set -e
 IP1="10.20.6.16"
 IP2="10.20.6.21"
 VM=stelter-hv55-1-test
+# 48 cores
 HV1=aw-hv-055
-HV2=aw-hv-057
+# 16 cores
+HV2=aw-hv-082
 
 function test_vm {
     IP=$1
@@ -73,6 +75,12 @@ cleanup
 test_vm $IP1 $HV1
 ssh -o ConnectTimeout=4 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $IP "md5sum /root/local_image_canary | grep df60e346faccb1afa04b50eea3c1a87c" || (echo "Local image canary broken" >&2; exit 1)
 echo "Local image works."
+
+# Offline migration to host with less CPUs
+./bin/igvm migrate --offline $VM $HV2
+test_vm $IP1 $HV2
+test_absent $HV1
+echo "Offline migration to host with less CPUs works"
 
 # All done.
 cleanup
