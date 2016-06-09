@@ -62,8 +62,8 @@ def generate_domain_xml(hv, vm):
     tree = ET.fromstring(domain_xml)
 
     if version >= (2, 3):
-        _set_cpu_model(vm, tree)
-        _place_numa(vm, tree, config['max_cpus'])
+        _set_cpu_model(hv, vm, tree)
+        _place_numa(hv, vm, tree, config['max_cpus'])
 
     log.info('KVM: VCPUs current: {} max: {} available on host: {}'.format(
         vm.admintool['num_cpu'], config['max_cpus'], hv.num_cpus,
@@ -98,11 +98,11 @@ def _get_qemu_version(hv):
     return major, minor, release
 
 
-def _set_cpu_model(vm, tree):
+def _set_cpu_model(hv, vm, tree):
     """
     Selects CPU model based on hardware model.
     """
-    hw_model = vm.admintool.get('hardware_model')
+    hw_model = hv.admintool.get('hardware_model')
     if not hw_model:
         return
 
@@ -197,7 +197,7 @@ def kvm_adjust_cpuset_post(config, offline):
         dom.pinVcpu(i, tuple(mask))
 
 
-def _place_numa(vm, tree, max_cpus):
+def _place_numa(hv, vm, tree, max_cpus):
     """
     Configures NUMA placement.
     """
@@ -205,7 +205,7 @@ def _place_numa(vm, tree, max_cpus):
     numa_mode = 'spread'
 
     # Which physical CPU belongs to which physical node
-    pcpu_sets = vm.hypervisor.run(
+    pcpu_sets = hv.run(
         'cat /sys/devices/system/node/node*/cpulist',
         silent=True,
     ).splitlines()
