@@ -28,6 +28,11 @@ setup(
         'igvm': [
             'templates/hv/domain.sxp',
             'templates/hv/domain.xml',
+            'templates/etc/network/interfaces',
+            'templates/etc/fstab',
+            'templates/etc/hosts',
+            'templates/etc/inittab',
+            'templates/etc/resolv.conf',
         ]
     },
     author='Henning Pridohl',
