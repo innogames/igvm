@@ -1,6 +1,5 @@
 #!/usr/bin/python
 from __future__ import print_function
-import sys
 
 import argparse
 from fabric.network import disconnect_all
@@ -9,7 +8,7 @@ import adminapi
 
 from managevm.buildvm import buildvm
 
-print('This is deprecated use "igvm create"')
+print('This is deprecated use "igvm build"')
 
 parser = argparse.ArgumentParser(description='Creates a new virtual machine.')
 parser.add_argument('guest',        metavar='guest',           help='Hostname of the guest system')
