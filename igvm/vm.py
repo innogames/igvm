@@ -45,12 +45,12 @@ class VM(Host):
 
     def check_serveradmin_config(self):
         """Validates relevant serveradmin attributes."""
-        memory = self.admintool['memory']
         validations = (
             ('memory', (lambda v: v > 0, 'memory must be > 0')),
             ('num_cpu', (lambda v: v > 0, 'num_cpu must be > 0')),
             ('os', (lambda v: True, 'os must be set')),
-            ('disk_size_gib',
+            (
+                'disk_size_gib',
                 (lambda v: v > 0, 'disk_size_gib must be > 0')
             ),
         )
