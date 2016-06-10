@@ -26,8 +26,8 @@ subparsers = top_parser.add_subparsers(
 )
 
 subparser = subparsers.add_parser(
-    'create',
-    description=(__doc__ + ' - Create VM'),
+    'build',
+    description=(__doc__ + ' - Build VM'),
 )
 subparser.set_defaults(func=buildvm)
 subparser.add_argument(
