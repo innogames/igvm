@@ -27,13 +27,13 @@ def download_image(image):
     url = BASE_URL + image
 
     try:
-        group = grp.getgrnam('sysadmins')
+        group = grp.getgrnam('sysadmins').gr_mem
     except:
         group = []
 
     user = pwd.getpwuid(os.geteuid()).pw_name
 
-    if user in group.gr_mem:
+    if user in group:
         sysadmin = True
     else:
         sysadmin = False
