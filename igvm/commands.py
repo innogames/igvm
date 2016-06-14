@@ -14,6 +14,15 @@ from igvm.utils.storage import lvresize, get_vm_volume
 from igvm.vm import VM
 
 
+def with_fabric_settings(fn):
+    """Decorator to run a function with COMMON_FABRIC_SETTINGS."""
+    def decorator(*args, **kwargs):
+        with settings(**COMMON_FABRIC_SETTINGS):
+            return fn(*args, **kwargs)
+    return decorator
+
+
+@with_fabric_settings
 def mem_set(vm_hostname, size):
     """Changes the memory size of a VM.
 
@@ -35,10 +44,10 @@ def mem_set(vm_hostname, size):
     if new_memory == vm.admintool['memory']:
         raise Warning('Memory size is the same.')
 
-    with settings(**COMMON_FABRIC_SETTINGS):
-        vm.set_memory(new_memory)
+    vm.set_memory(new_memory)
 
 
+@with_fabric_settings
 def disk_set(vm_hostname, size):
     """Change the disk size of a VM
 
@@ -48,11 +57,6 @@ def disk_set(vm_hostname, size):
     a relative difference in the size.  Of course, minus is going to
     error out.
     """
-    with settings(**COMMON_FABRIC_SETTINGS):
-        return _disk_set(vm_hostname, size)
-
-
-def _disk_set(vm_hostname, size):
     vm = VM(vm_hostname)
 
     if size.startswith('+'):
