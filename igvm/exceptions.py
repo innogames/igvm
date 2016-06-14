@@ -24,3 +24,26 @@ class RemoteCommandError(IGVMError):
 class StorageError(IGVMError):
     """Something related to storage went wrong."""
     pass
+
+
+class InconsistentAttributeError(IGVMError):
+    """An attribute on the VM differs from the excepted value from
+    Serveradmin."""
+    def __init__(self, vm, attribute, actual_value):
+        self.hostname = vm.hostname
+        self.attribute = attribute
+        self.actual_value = actual_value
+        self.config_value = vm.admintool[attribute]
+        assert self.config_value != self.actual_value
+
+    def __str__(self):
+        return (
+            'Attribute "{}" on {} is out of sync: '
+            '{} (config) != {} (actual)'
+            .format(
+                self.attribute,
+                self.hostname,
+                self.config_value,
+                self.actual_value,
+            )
+        )

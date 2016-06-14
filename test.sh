@@ -3,7 +3,7 @@
 set -e
 
 IP1="10.20.6.16"
-IP2="10.20.6.21"
+IP2="10.20.6.253"
 VM=stelter-hv55-1-test
 # 48 cores
 HV1=aw-hv-055
@@ -36,19 +36,54 @@ function cleanup {
     ssh $HV1 "virsh destroy $VM ; virsh undefine $VM ; umount /dev/xen-data/$VM ; lvremove -f /dev/xen-data/$VM" || true
     ssh $HV2 "virsh destroy $VM ; virsh undefine $VM ; umount /dev/xen-data/$VM ; lvremove -f /dev/xen-data/$VM" || true
 
-    test -z "$(adminapi_query "intern_ip=$IP1" | grep -v $VM)" || (echo $IP1 already in use!; exit 1)
-    test -z "$(adminapi_query "intern_ip=$IP2" | grep -v $VM)" || (echo $IP2 already in use!; exit 1)
+    test -z "$(adminapi_query "intern_ip=$IP1" | grep -v $VM)" || (echo "$IP1 already in use!" >&2; exit 1)
+    test -z "$(adminapi_query "intern_ip=$IP2" | grep -v $VM)" || (echo "$IP2 already in use!" >&2; exit 1)
 
     python -c 'import adminapi; adminapi.auth(); from igvm.host import get_server; srv = get_server("'"$VM"'"); srv["intern_ip"] = "'"$IP1"'"; srv["xen_host"] = "'"$HV1"'"; srv.commit();'
     echo $VM reset to ${IP1}@${HV1}
 }
 
+function vm_ssh {
+    ssh -o ConnectTimeout=4 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$@"
+}
+
+function get_mem {
+    IP=$1
+    echo $(($(vm_ssh $IP "cat /proc/meminfo" | grep MemTotal | awk '{ print $2 }')/1024))
+}
+
 cleanup
 
 # buildvm
-./bin/igvm create $VM
+./bin/igvm build $VM
 test_vm $IP1 $HV1
 echo "VM building works."
+
+# mem-set
+./bin/igvm mem-set $VM +1024M
+
+set +e
+./bin/igvm mem-set $VM -1024
+if [ "$?" -eq 0 ]; then
+    echo "Online memory shrink should be rejected!" >&2
+    exit 1
+fi
+
+./bin/igvm mem-set $VM +0
+if [ "$?" -eq 0 ]; then
+    echo "No-op mem-set should be rejected!" >&2
+    exit 1
+fi
+set -e
+
+echo "Online mem-set works (not verified in VM)"
+
+# mem-set (offline)
+ssh $HV1 virsh destroy $VM
+./bin/igvm mem-set $VM -512
+ssh $HV1 virsh start $VM
+test_vm $IP1 $HV1
+echo "Offline mem-set works (not verified in VM)"
 
 # Online migration
 ./bin/igvm migrate $VM $HV2
@@ -71,7 +106,7 @@ echo "Offline migration with new IP works."
 
 # buildvm with local image
 cleanup
-./bin/igvm create --localimage /root/jessie-localimage.tar.gz $VM
+./bin/igvm build --localimage /root/jessie-localimage.tar.gz $VM
 test_vm $IP1 $HV1
 ssh -o ConnectTimeout=4 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $IP "md5sum /root/local_image_canary | grep df60e346faccb1afa04b50eea3c1a87c" || (echo "Local image canary broken" >&2; exit 1)
 echo "Local image works."

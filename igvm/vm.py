@@ -43,6 +43,10 @@ class VM(Host):
                     self.network_config['vlan'],
             ))
 
+    def set_memory(self, memory):
+        """Resizes the host memory."""
+        self.hypervisor.vm_set_memory(self, memory)
+
     def check_serveradmin_config(self):
         """Validates relevant serveradmin attributes."""
         validations = (

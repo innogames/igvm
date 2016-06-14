@@ -14,6 +14,31 @@ from igvm.utils.storage import lvresize, get_vm_volume
 from igvm.vm import VM
 
 
+def mem_set(vm_hostname, size):
+    """Changes the memory size of a VM.
+
+    Currently only increasing the disk is implemented.  Size argument is
+    allowed as text, but it must always be in MiBs without a decimal
+    place.  The plus (+) and minus (-) prefixes are allowed to specify
+    a relative difference in the size.  Of course, minus is going to
+    error out.
+    """
+    vm = VM(vm_hostname)
+
+    if size.startswith('+'):
+        new_memory = vm.admintool['memory'] + parse_size(size[1:], 'm')
+    elif size.startswith('-'):
+        new_memory = vm.admintool['memory'] - parse_size(size[1:], 'm')
+    else:
+        new_memory = parse_size(size, 'm')
+
+    if new_memory == vm.admintool['memory']:
+        raise Warning('Memory size is the same.')
+
+    with settings(**COMMON_FABRIC_SETTINGS):
+        vm.set_memory(new_memory)
+
+
 def disk_set(vm_hostname, size):
     """Change the disk size of a VM
 
@@ -31,9 +56,9 @@ def _disk_set(vm_hostname, size):
     vm = VM(vm_hostname)
 
     if size.startswith('+'):
-        new_size_gib = vm.admintool['disk_size_gib'] + parse_size(size[1:])
+        new_size_gib = vm.admintool['disk_size_gib'] + parse_size(size[1:], 'g')
     elif not size.startswith('-'):
-        new_size_gib = parse_size(size)
+        new_size_gib = parse_size(size, 'g')
 
     if size.startswith('-') or new_size_gib < vm.admintool['disk_size_gib']:
         raise NotImplementedError('Cannot shrink the disk.')
@@ -56,23 +81,46 @@ def _disk_set(vm_hostname, size):
     vm.admintool.commit()
 
 
-def parse_size(text):
-    """Return the size as integer
+def parse_size(text, unit):
+    """Return the size as integer in the desired unit.
 
-    The GiB prefix is allowed as long as long as not ambiguous.
+    The TiB/GiB/MiB/KiB prefix is allowed as long as long as not ambiguous.
+    We are dealing with the units case in-sensitively.
     """
 
     # First, handle the suffixes
     text = text.lower()
+
     if text.endswith('b'):
         text = text[:-1]
         if text.endswith('i'):
             text = text[:-1]
-    if text.endswith('g'):
+
+    if not text:
+        return ValueError('Empty size')
+
+    FACTORS = {
+        't': 1024**4,
+        'g': 1024**3,
+        'm': 1024**2,
+        'k': 1024,
+    }
+
+    if text[-1] in FACTORS:
+        factor = FACTORS[text[-1]]
         text = text[:-1]
+    else:
+        factor = FACTORS[unit]
+
     text = text.strip()
 
     if not unicode(text).isnumeric():
-        raise ValueError("Size has to be in GiB without decimal place.")
+        raise ValueError(
+            'Size has to be in {}iB without decimal place.'
+            .format(unit.upper())
+        )
 
-    return int(text)
+    value = int(text) * factor
+    if value % FACTORS[unit]:
+        raise ValueError('Value must be multiple of 1 {}iB'.format(unit.upper()))
+    return int(value / FACTORS[unit])

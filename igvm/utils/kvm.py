@@ -5,6 +5,8 @@ import uuid
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
 
+import libvirt
+
 from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
@@ -39,6 +41,57 @@ def _find_or_create(parent, name):
     if el is not None:
         return el
     return ET.SubElement(parent, name)
+
+
+def memballoon_supported(domain):
+    """Returns whether the given domain supports memory ballooning."""
+    tree = ET.fromstring(domain.XMLDesc())
+    search = tree.findall('devices/memballoon')
+    if not search:
+        return False
+    return search[0].attrib.get('model') == 'virtio'
+
+
+def attach_memory_dimms(hv, vm, domain, memory_mib):
+    """Attaches memory DIMMs of the given size."""
+
+    # TODO: Is there an API way to query number of NUMA nodes via libvirt?
+    num_nodes = int(hv.run(
+        'cat /sys/devices/system/node/node*/cpulist | wc -l',
+        silent=True,
+    ))
+
+    # https://medium.com/@juergen_thomann/memory-hotplug-with-qemu-kvm-and-libvirt-558f1c635972#.sytig6o9h
+    if memory_mib % (128 * num_nodes):
+        raise ValueError(
+            'Added memory must be multiple of 128 MiB * <number of NUMA nodes>'
+        )
+
+    dimm_size = int(memory_mib / num_nodes)
+    for i in range(0, num_nodes):
+        xml = (
+            "<memory model='dimm'>"
+            "<target><size unit='MiB'>{}</size><node>{}</node></target>"
+            "</memory>"
+            .format(dimm_size, i)
+        )
+
+        domain.attachDeviceFlags(
+            xml,
+            libvirt.VIR_DOMAIN_AFFECT_LIVE | libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+        )
+
+    log.info(
+        'KVM: Added {} DIMMs with {} MiB each'
+        .format(num_nodes, dimm_size)
+    )
+
+    # Now activate all DIMMs in the guest
+    log.info('KVM: Activating new DIMMs in guest')
+    vm.run(
+        'for i in `grep -l offline /sys/devices/system/memory/memory*/state`; '
+        'do echo online > $i; done'
+    )
 
 
 def generate_domain_xml(hv, vm):
