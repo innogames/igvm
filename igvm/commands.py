@@ -11,6 +11,7 @@ from fabric.api import run, settings
 from igvm.host import get_server
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.storage import lvresize, get_vm_volume
+from igvm.utils.units import parse_size
 from igvm.vm import VM
 
 
@@ -83,48 +84,3 @@ def disk_set(vm_hostname, size):
 
     vm.admintool['disk_size_gib'] = new_size_gib
     vm.admintool.commit()
-
-
-def parse_size(text, unit):
-    """Return the size as integer in the desired unit.
-
-    The TiB/GiB/MiB/KiB prefix is allowed as long as long as not ambiguous.
-    We are dealing with the units case in-sensitively.
-    """
-
-    # First, handle the suffixes
-    text = text.lower()
-
-    if text.endswith('b'):
-        text = text[:-1]
-        if text.endswith('i'):
-            text = text[:-1]
-
-    if not text:
-        return ValueError('Empty size')
-
-    FACTORS = {
-        't': 1024**4,
-        'g': 1024**3,
-        'm': 1024**2,
-        'k': 1024,
-    }
-
-    if text[-1] in FACTORS:
-        factor = FACTORS[text[-1]]
-        text = text[:-1]
-    else:
-        factor = FACTORS[unit]
-
-    text = text.strip()
-
-    if not unicode(text).isnumeric():
-        raise ValueError(
-            'Size has to be in {}iB without decimal place.'
-            .format(unit.upper())
-        )
-
-    value = int(text) * factor
-    if value % FACTORS[unit]:
-        raise ValueError('Value must be multiple of 1 {}iB'.format(unit.upper()))
-    return int(value / FACTORS[unit])
