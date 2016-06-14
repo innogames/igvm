@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+
 import libvirt
 
 from adminapi.dataset import ServerObject
@@ -8,11 +9,19 @@ from adminapi.dataset import ServerObject
 from fabric.api import run
 from fabric.contrib.files import exists
 
-from igvm.exceptions import ConfigError, HypervisorError
+from igvm.exceptions import (
+    ConfigError,
+    HypervisorError,
+    InconsistentAttributeError,
+)
 from igvm.host import Host, get_server
 from igvm.settings import HOST_RESERVED_MEMORY
 from igvm.utils import cmd
-from igvm.utils.kvm import generate_domain_xml
+from igvm.utils.kvm import (
+    attach_memory_dimms,
+    generate_domain_xml,
+    memballoon_supported,
+)
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.storage import (
     create_storage,
@@ -208,6 +217,50 @@ class Hypervisor(Host):
         log.info('Undefining {} on {}'.format(vm.hostname, self.hostname))
         # Implementation must be subclassed
 
+    def vm_set_memory(self, vm, memory):
+        if vm.admintool.is_dirty():
+            raise ValueError(
+                'VM object has uncommitted changes, commit them first!'
+            )
+
+        # Validate current value
+        current_memory = self.vm_sync_from_hypervisor(vm)['memory']
+        if current_memory != vm.admintool['memory']:
+            raise InconsistentAttributeError(vm, 'memory', current_memory)
+
+        running = self.vm_running(vm)
+
+        if running and memory < vm.admintool['memory']:
+            raise NotImplementedError(
+                'Cannot shrink memory while VM is running'
+            )
+
+        if self.free_vm_memory() < memory - vm.admintool['memory']:
+            raise HypervisorError('Not enough free memory on hypervisor.')
+
+        log.info('Changing memory of {} on {}: {} MiB -> {} MiB'.format(
+            vm.hostname, self.hostname, vm.admintool['memory'], memory))
+
+        # If VM is offline, we can just rebuild the domain
+        if not running:
+            log.info('VM is offline, rebuilding domain with new settings')
+            vm.admintool['memory'] = memory
+            self.undefine_vm(vm)
+            self.define_vm(vm)
+        else:
+            self._vm_set_memory(vm, memory)
+
+        # Validate changes
+        current_memory = self.vm_sync_from_hypervisor(vm)['memory']
+        if current_memory != memory:
+            raise HypervisorError(
+                'New memory is not visible to hypervisor, '
+                'changes will not be committed.'
+            )
+
+        vm.admintool['memory'] = memory
+        vm.admintool.commit()
+
     def create_vm_storage(self, vm):
         """Allocate storage for a VM. Returns the disk path."""
         assert vm not in self._disk_path, 'Disk already created?'
@@ -263,12 +316,11 @@ class Hypervisor(Host):
         remove_logical_volume(self, self.vm_disk_path(vm))
         del self._disk_path[vm]
 
-    def vm_sync_from_hypervisor(self, vm, result):
+    def vm_sync_from_hypervisor(self, vm):
         """Synchronizes serveradmin information from the actual data on
-        the hypervisor.
-        :param result: A dictionary-like object that receives the updated
-                       values."""
+        the hypervisor. Returns a dict with all collected values."""
         # Update disk size
+        result = {}
         lvs = get_logical_volumes(self)
         for lv in lvs:
             if lv['name'] == vm.hostname:
@@ -281,6 +333,9 @@ class Hypervisor(Host):
             raise HypervisorError(
                 'Unable to find source LV and determine its size.'
             )
+
+        self._vm_sync_from_hypervisor(vm, result)
+        return result
 
 
 class KVMHypervisor(Hypervisor):
@@ -340,6 +395,28 @@ class KVMHypervisor(Hypervisor):
         free_mib = total_mib - used_kib/1024
         return free_mib
 
+    def _vm_set_memory(self, vm, memory_mib):
+        # First try to adjust memory with ballooning:
+        log.info('Attempting to increase memory with ballooning')
+        domain = self._domain(vm)
+
+        if memballoon_supported(domain):
+            try:
+                domain.setMemoryFlags(
+                    memory_mib * 1024,
+                    libvirt.VIR_DOMAIN_AFFECT_LIVE |
+                    libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+                )
+            except libvirt.libvirtError:
+                log.info(
+                    'virsh setmem failed, falling back to hotplug'
+                )
+
+        add_memory = memory_mib - vm.admintool['memory']
+        assert add_memory > 0
+
+        attach_memory_dimms(self, vm, domain, add_memory)
+
     def define_vm(self, vm):
         super(KVMHypervisor, self).define_vm(vm)
         domain_xml = generate_domain_xml(self, vm)
@@ -382,8 +459,7 @@ class KVMHypervisor(Hypervisor):
         if self._domain(vm).undefine() != 0:
             raise HypervisorError('Unable to undefine {}'.format(vm.hostname))
 
-    def vm_sync_from_hypervisor(self, vm, result):
-        super(KVMHypervisor, self).vm_sync_from_hypervisor(vm, result)
+    def _vm_sync_from_hypervisor(self, vm, result):
         vm_info = self._domain(vm).info()
 
         mem = int(vm_info[2] / 1024)
@@ -458,9 +534,7 @@ class XenHypervisor(Hypervisor):
         super(XenHypervisor, self).undefine_vm(vm)
         self.run(cmd('rm {0}', self._sxp_path(vm)))
 
-    def vm_sync_from_hypervisor(self, vm, result):
-        super(XenHypervisor, self).vm_sync_from_hypervisor(vm, result)
-
+    def _vm_sync_from_hypervisor(self, vm, result):
         result['num_cpu'] = int(run(
             'xm list --long {0} '
             '| grep \'(online_vcpus \' '

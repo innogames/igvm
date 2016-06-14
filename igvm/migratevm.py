@@ -4,7 +4,7 @@ from fabric.api import settings
 
 from adminapi import api
 
-from igvm.exceptions import IGVMError
+from igvm.exceptions import IGVMError, InconsistentAttributeError
 from igvm.hypervisor import Hypervisor
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.preparevm import run_puppet
@@ -98,10 +98,7 @@ def _migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     source_hv.vm_sync_from_hypervisor(vm, synced_attributes)
     for attr, value in synced_attributes.iteritems():
         if vm.admintool[attr] != value:
-            raise IGVMError(
-                'Attribute "{}" is out of sync: {} (config) != {} (actual)'
-                .format(attr, vm.admintool[attr], value)
-            )
+            raise InconsistentAttributeError(vm, attr, value)
 
     vm.check_serveradmin_config()
     source_hv.check_migration(vm, destination_hv, offline)
