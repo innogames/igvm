@@ -9,7 +9,9 @@
 from fabric.api import run, settings
 
 from igvm.host import get_server
+from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.storage import lvresize, get_vm_volume
+from igvm.vm import VM
 
 
 def disk_set(vm_hostname, size):
@@ -21,35 +23,37 @@ def disk_set(vm_hostname, size):
     a relative difference in the size.  Of course, minus is going to
     error out.
     """
+    with settings(**COMMON_FABRIC_SETTINGS):
+        return _disk_set(vm_hostname, size)
 
-    vm = get_server(vm_hostname, 'vm')
-    hypervisor = get_server(vm['xen_host'], 'hypervisor')
+
+def _disk_set(vm_hostname, size):
+    vm = VM(vm_hostname)
 
     if size.startswith('+'):
-        new_size_gib = vm['disk_size_gib'] + parse_size(size[1:])
+        new_size_gib = vm.admintool['disk_size_gib'] + parse_size(size[1:])
     elif not size.startswith('-'):
         new_size_gib = parse_size(size)
 
-    if size.startswith('-') or new_size_gib < vm['disk_size_gib']:
+    if size.startswith('-') or new_size_gib < vm.admintool['disk_size_gib']:
         raise NotImplementedError('Cannot shrink the disk.')
-    if new_size_gib == vm['disk_size_gib']:
+    if new_size_gib == vm.admintool['disk_size_gib']:
         raise Warning('Disk size is the same.')
 
-    with settings(host_string=hypervisor['hostname']):
-        vm_volume = get_vm_volume(vm)
+    with vm.hypervisor.fabric_settings():
+        vm_volume = get_vm_volume(vm.hypervisor, vm)
         lvresize(vm_volume, new_size_gib)
 
         # TODO This should go to utils/hypervisor.py.
         run('virsh blockresize --path {0} --size {1}GiB {2}'.format(
-            vm_volume, new_size_gib, vm['hostname']
+            vm_volume, new_size_gib, vm.hostname
         ))
 
-    with settings(host_string=vm['hostname']):
-        # TODO This should go to utils/vm.py.
-        run('xfs_growfs /')
+    # TODO This should go to utils/vm.py.
+    vm.run('xfs_growfs /')
 
-    vm['disk_size_gib'] = new_size_gib
-    vm.commit()
+    vm.admintool['disk_size_gib'] = new_size_gib
+    vm.admintool.commit()
 
 
 def parse_size(text):
