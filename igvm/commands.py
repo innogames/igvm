@@ -5,14 +5,16 @@
 #
 
 """VM resources management routines"""
+import logging
 
 from fabric.api import run, settings
 
-from igvm.host import get_server
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.storage import lvresize, get_vm_volume
 from igvm.utils.units import parse_size
 from igvm.vm import VM
+
+log = logging.getLogger(__name__)
 
 
 def with_fabric_settings(fn):
@@ -60,12 +62,13 @@ def disk_set(vm_hostname, size):
     """
     vm = VM(vm_hostname)
 
+    current_size_gib = vm.admintool['disk_size_gib']
     if size.startswith('+'):
-        new_size_gib = vm.admintool['disk_size_gib'] + parse_size(size[1:], 'g')
+        new_size_gib = current_size_gib + parse_size(size[1:], 'g')
     elif not size.startswith('-'):
         new_size_gib = parse_size(size, 'g')
 
-    if size.startswith('-') or new_size_gib < vm.admintool['disk_size_gib']:
+    if size.startswith('-') or new_size_gib < current_size_gib:
         raise NotImplementedError('Cannot shrink the disk.')
     if new_size_gib == vm.admintool['disk_size_gib']:
         raise Warning('Disk size is the same.')
@@ -84,3 +87,53 @@ def disk_set(vm_hostname, size):
 
     vm.admintool['disk_size_gib'] = new_size_gib
     vm.admintool.commit()
+
+
+@with_fabric_settings
+def vm_start(vm_hostname):
+    vm = VM(vm_hostname)
+    if vm.is_running():
+        log.info('{} is already running.'.format(vm.hostname))
+        return
+    vm.start()
+
+
+@with_fabric_settings
+def vm_stop(vm_hostname, force):
+    vm = VM(vm_hostname)
+    if force:
+        vm.hypervisor.stop_vm_force(vm)
+    else:
+        vm.shutdown()
+    log.info('{} stopped.'.format(vm.hostname))
+
+
+@with_fabric_settings
+def vm_restart(vm_hostname, force):
+    vm = VM(vm_hostname)
+    if not vm.is_running():
+        raise Warning('{} is not running'.format(vm.hostname))
+
+    if force:
+        vm.hypervisor.stop_vm_force(vm)
+    else:
+        vm.shutdown()
+
+    vm.start()
+    log.info('{} restarted.'.format(vm.hostname))
+
+
+@with_fabric_settings
+def vm_delete(vm_hostname):
+    vm = VM(vm_hostname)
+
+    if vm.is_running():
+        raise Warning(
+            '{} is still running. Please stop it first.'.format(vm.hostname)
+        )
+    vm.hypervisor.undefine_vm(vm)
+    vm.hypervisor.destroy_vm_storage(vm)
+
+    vm.admintool['state'] = 'retired'
+    vm.admintool.commit()
+    log.info('{} destroyed and set to "retired" state.'.format(vm.hostname))
