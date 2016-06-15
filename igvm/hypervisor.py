@@ -22,6 +22,7 @@ from igvm.utils.kvm import (
     attach_memory_dimms,
     generate_domain_xml,
     memballoon_supported,
+    memory_hotplug_supported,
 )
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.storage import (
@@ -403,26 +404,33 @@ class KVMHypervisor(Hypervisor):
         return free_mib
 
     def _vm_set_memory(self, vm, memory_mib):
-        # First try to adjust memory with ballooning:
-        log.info('Attempting to increase memory with ballooning')
         domain = self._domain(vm)
 
         if memballoon_supported(domain):
+            log.info('Attempting to increase memory with ballooning')
             try:
                 domain.setMemoryFlags(
                     memory_mib * 1024,
                     libvirt.VIR_DOMAIN_AFFECT_LIVE |
                     libvirt.VIR_DOMAIN_AFFECT_CONFIG,
                 )
+                return
             except libvirt.libvirtError:
                 log.info(
                     'virsh setmem failed, falling back to hotplug'
                 )
 
-        add_memory = memory_mib - vm.admintool['memory']
-        assert add_memory > 0
+        if memory_hotplug_supported(domain):
+            add_memory = memory_mib - vm.admintool['memory']
+            assert add_memory > 0
+            attach_memory_dimms(self, vm, domain, add_memory)
+            return
 
-        attach_memory_dimms(self, vm, domain, add_memory)
+        raise HypervisorError(
+            '{} does not support any known memory extension strategy. '
+            'You will have to power off the machine and do it offline.'
+            .format(vm.hostname)
+        )
 
     def define_vm(self, vm):
         super(KVMHypervisor, self).define_vm(vm)

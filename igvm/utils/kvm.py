@@ -52,6 +52,13 @@ def memballoon_supported(domain):
     return search[0].attrib.get('model') == 'virtio'
 
 
+def memory_hotplug_supported(domain):
+    """Returns whether memory DIMM hotplugging is supported."""
+    tree = ET.fromstring(domain.XMLDesc())
+    search = tree.findall('maxMemory')
+    return bool(search)
+
+
 def attach_memory_dimms(hv, vm, domain, memory_mib):
     """Attaches memory DIMMs of the given size."""
 
