@@ -2,27 +2,49 @@ from __future__ import division
 
 import re
 
-_size_factors = {
-    'G': 1073741824,
-    'M': 1048576,
+_SIZE_FACTORS = {
+    'T': 1024**4,
+    'G': 1024**3,
+    'M': 1024**2,
     'K': 1024,
     'B': 1
 }
-def parse_size(size):
-    match = re.match('(\d+(.\d+)?)\s*(G|M|K)?', size, re.IGNORECASE)
+def parse_size(text, unit):
+    """Return the size as integer in the desired unit.
 
-    if match:
-        unit = match.group(3)
-        factor = _size_factors.get(unit, 1)
+    The TiB/GiB/MiB/KiB prefix is allowed as long as long as not ambiguous.
+    We are dealing with the units case in-sensitively.
+    """
 
-        if match.group(2):
-            size_number = float(match.group(1))
-        else:
-            size_number = int(match.group(1))
+    text = text.upper()
+    unit = unit.upper()
 
-        return size_number * factor
+    # First, handle the suffixes
+    if text.endswith('B'):
+        text = text[:-1]
+        if text.endswith('I'):
+            text = text[:-1]
+
+    if not text:
+        return ValueError('Empty size')
+
+    if text[-1] in _SIZE_FACTORS:
+        factor = _SIZE_FACTORS[text[-1]]
+        text = text[:-1]
     else:
-        raise ValueError('Invalid size')
+        factor = _SIZE_FACTORS[unit]
+
+    text = text.strip()
+
+    if not unicode(text).isnumeric():
+        raise ValueError(
+            'Size has to be in {}iB without decimal place.'.format(unit)
+        )
+
+    value = int(text) * factor
+    if value % _SIZE_FACTORS[unit]:
+        raise ValueError('Value must be multiple of 1 {}iB'.format(unit))
+    return int(value / _SIZE_FACTORS[unit])
 
 def convert_size(size, from_name, to_name):
     return size / _size_factors[from_name.upper()] * _size_factors[to_name.upper()]

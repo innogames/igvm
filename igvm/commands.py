@@ -5,15 +5,27 @@
 #
 
 """VM resources management routines"""
+import logging
 
 from fabric.api import run, settings
 
-from igvm.host import get_server
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.storage import lvresize, get_vm_volume
+from igvm.utils.units import parse_size
 from igvm.vm import VM
 
+log = logging.getLogger(__name__)
 
+
+def with_fabric_settings(fn):
+    """Decorator to run a function with COMMON_FABRIC_SETTINGS."""
+    def decorator(*args, **kwargs):
+        with settings(**COMMON_FABRIC_SETTINGS):
+            return fn(*args, **kwargs)
+    return decorator
+
+
+@with_fabric_settings
 def mem_set(vm_hostname, size):
     """Changes the memory size of a VM.
 
@@ -35,10 +47,10 @@ def mem_set(vm_hostname, size):
     if new_memory == vm.admintool['memory']:
         raise Warning('Memory size is the same.')
 
-    with settings(**COMMON_FABRIC_SETTINGS):
-        vm.set_memory(new_memory)
+    vm.set_memory(new_memory)
 
 
+@with_fabric_settings
 def disk_set(vm_hostname, size):
     """Change the disk size of a VM
 
@@ -48,19 +60,15 @@ def disk_set(vm_hostname, size):
     a relative difference in the size.  Of course, minus is going to
     error out.
     """
-    with settings(**COMMON_FABRIC_SETTINGS):
-        return _disk_set(vm_hostname, size)
-
-
-def _disk_set(vm_hostname, size):
     vm = VM(vm_hostname)
 
+    current_size_gib = vm.admintool['disk_size_gib']
     if size.startswith('+'):
-        new_size_gib = vm.admintool['disk_size_gib'] + parse_size(size[1:], 'g')
+        new_size_gib = current_size_gib + parse_size(size[1:], 'g')
     elif not size.startswith('-'):
         new_size_gib = parse_size(size, 'g')
 
-    if size.startswith('-') or new_size_gib < vm.admintool['disk_size_gib']:
+    if size.startswith('-') or new_size_gib < current_size_gib:
         raise NotImplementedError('Cannot shrink the disk.')
     if new_size_gib == vm.admintool['disk_size_gib']:
         raise Warning('Disk size is the same.')
@@ -81,46 +89,51 @@ def _disk_set(vm_hostname, size):
     vm.admintool.commit()
 
 
-def parse_size(text, unit):
-    """Return the size as integer in the desired unit.
+@with_fabric_settings
+def vm_start(vm_hostname):
+    vm = VM(vm_hostname)
+    if vm.is_running():
+        log.info('{} is already running.'.format(vm.hostname))
+        return
+    vm.start()
 
-    The TiB/GiB/MiB/KiB prefix is allowed as long as long as not ambiguous.
-    We are dealing with the units case in-sensitively.
-    """
 
-    # First, handle the suffixes
-    text = text.lower()
-
-    if text.endswith('b'):
-        text = text[:-1]
-        if text.endswith('i'):
-            text = text[:-1]
-
-    if not text:
-        return ValueError('Empty size')
-
-    FACTORS = {
-        't': 1024**4,
-        'g': 1024**3,
-        'm': 1024**2,
-        'k': 1024,
-    }
-
-    if text[-1] in FACTORS:
-        factor = FACTORS[text[-1]]
-        text = text[:-1]
+@with_fabric_settings
+def vm_stop(vm_hostname, force):
+    vm = VM(vm_hostname)
+    if force:
+        vm.hypervisor.stop_vm_force(vm)
     else:
-        factor = FACTORS[unit]
+        vm.shutdown()
+    log.info('{} stopped.'.format(vm.hostname))
 
-    text = text.strip()
 
-    if not unicode(text).isnumeric():
-        raise ValueError(
-            'Size has to be in {}iB without decimal place.'
-            .format(unit.upper())
+@with_fabric_settings
+def vm_restart(vm_hostname, force):
+    vm = VM(vm_hostname)
+    if not vm.is_running():
+        raise Warning('{} is not running'.format(vm.hostname))
+
+    if force:
+        vm.hypervisor.stop_vm_force(vm)
+    else:
+        vm.shutdown()
+
+    vm.start()
+    log.info('{} restarted.'.format(vm.hostname))
+
+
+@with_fabric_settings
+def vm_delete(vm_hostname):
+    vm = VM(vm_hostname)
+
+    if vm.is_running():
+        raise Warning(
+            '{} is still running. Please stop it first.'.format(vm.hostname)
         )
+    vm.hypervisor.undefine_vm(vm)
+    vm.hypervisor.destroy_vm_storage(vm)
 
-    value = int(text) * factor
-    if value % FACTORS[unit]:
-        raise ValueError('Value must be multiple of 1 {}iB'.format(unit.upper()))
-    return int(value / FACTORS[unit])
+    vm.admintool['state'] = 'retired'
+    vm.admintool.commit()
+    log.info('{} destroyed and set to "retired" state.'.format(vm.hostname))
