@@ -4,12 +4,18 @@
 # Copyright (c) 2016, InnoGames GmbH
 #
 
-"""VM resources management routines"""
+"""IGVM command routines"""
 import logging
+import sys
 
-from fabric.api import run, settings
+from adminapi.dataset import query, filters
+from adminapi.utils.parse import parse_query
+
+from fabric.api import run, settings, parallel, execute, env, hide
+from fabric.network import disconnect_all
 
 from igvm.exceptions import InvalidStateError
+from igvm.hypervisor import Hypervisor
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.storage import lvresize, get_vm_volume
 from igvm.utils.units import parse_size
@@ -224,3 +230,59 @@ def vm_sync(vm_hostname):
             '{}: Serveradmin is already synchronized.'
             .format(vm.hostname)
         )
+
+
+def _bold(s):
+    if not sys.stdout.isatty():
+        return s
+    return '\033[1m{}\033[0m'.format(s)
+
+
+@with_fabric_settings
+def host_info(vm_hostname):
+    vm = VM(vm_hostname)
+
+    info = vm.info()
+
+    # Disconnect fabric now to avoid messages after the table
+    disconnect_all()
+
+    categories = (
+        ('General', (
+            'hypervisor',
+            'status',
+        )),
+        ('Network', (
+            'intern_ip',
+            'mac_address',
+        )),
+        ('Resources', (
+            'num_cpu',
+            'max_cpus',
+            'memory',
+            'memory_free',
+            'max_mem',
+            'disk_size_gib',
+            'disk_free_gib',
+        )),
+    )
+
+    key_len = max(len(k) for k in info.keys())
+
+    for (category, keys) in categories:
+        if not any(k in info for k in keys):
+            continue
+        print('')
+        print(_bold(category))
+        for k in keys:
+            if not k in info:
+                continue
+            print('{} : {}'.format(k.ljust(key_len), str(info[k])))
+            del info[k]
+
+    if info:
+        print('')
+        print(_bold('Other'))
+        for k, v in sorted(info.items()):
+            print('{} : {}'.format(k.ljust(key_len), str(v)))
+    return info

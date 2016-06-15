@@ -19,6 +19,7 @@ from igvm.host import Host, get_server
 from igvm.settings import HOST_RESERVED_MEMORY
 from igvm.utils import cmd
 from igvm.utils.kvm import (
+    DomainProperties,
     generate_domain_xml,
     set_memory,
     set_vcpus,
@@ -393,6 +394,10 @@ class Hypervisor(Host):
         self._vm_sync_from_hypervisor(vm, result)
         return result
 
+    def vm_info(self, vm):
+        """Return runtime information about a VM."""
+        raise NotImplementedError(type(self).__name__)
+
 
 class KVMHypervisor(Hypervisor):
     @lazy_property
@@ -516,6 +521,10 @@ class KVMHypervisor(Hypervisor):
         num_cpu = vm_info[3]
         if num_cpu > 0:
             result['num_cpu'] = num_cpu
+
+    def vm_info(self, vm):
+        props = DomainProperties.from_running(self, vm, self._domain(vm))
+        return props.info()
 
 
 class XenHypervisor(Hypervisor):

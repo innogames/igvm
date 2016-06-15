@@ -19,6 +19,7 @@ from igvm.buildvm import buildvm
 from igvm.migratevm import migratevm
 from igvm.commands import (
     disk_set,
+    host_info,
     mem_set,
     vcpu_set,
     vm_start,
@@ -200,6 +201,15 @@ subparser.add_argument(
     help='Hostname of the guest system',
 )
 
+subparser = subparsers.add_parser(
+    'info',
+    description=(__doc__ + ' - VM information'),
+)
+subparser.set_defaults(func=host_info)
+subparser.add_argument(
+    'vm_hostname',
+    help='Hostname of the guest system',
+)
 
 subparser = subparsers.add_parser(
     'sync',

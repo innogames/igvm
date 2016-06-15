@@ -1,7 +1,10 @@
 import logging
 import time
 
-from igvm.exceptions import ConfigError
+from igvm.exceptions import (
+    ConfigError,
+    RemoteCommandError,
+)
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
 from igvm.utils.network import get_network_config
@@ -128,3 +131,49 @@ class VM(Host):
             time.sleep(1)
         else:
             return False
+
+    def memory_free(self):
+        output = self.run(
+            "cat /proc/meminfo | grep MemAvailable | awk '{ print $2 }'",
+            silent=True,
+        ).strip()
+        if not output.isdigit():
+            raise RemoteCommandError('Non-numeric output in memory_free')
+        return round(float(output) / 1024, 2)
+
+    def disk_free(self):
+        """Returns free disk space in GiB"""
+        output = self.run(
+            "df -k / | tail -n+2 | awk '{ print $4 }'",
+            silent=True,
+        ).strip()
+        if not output.isdigit():
+            raise RemoteCommandError('Non-numeric output in disk_free')
+        return round(float(output) / 1024**2, 2)
+
+    def info(self):
+        result = {
+            'hypervisor': self.hypervisor.hostname,
+            'intern_ip': self.admintool['intern_ip'],
+            'num_cpu': self.admintool['num_cpu'],
+            'memory': self.admintool['memory'],
+            'disk_size_gib': self.admintool['disk_size_gib'],
+        }
+
+        if self.hypervisor.vm_defined(self) and self.is_running():
+            result.update(self.hypervisor.vm_sync_from_hypervisor(self))
+            result.update({
+                'status': 'running',
+                'memory_free': self.memory_free(),
+                'disk_free_gib': self.disk_free(),
+                'load': self.run(
+                    "cat /proc/loadavg | cut -d ' ' -f1-3",
+                    silent=True,
+                ),
+            })
+            result.update(self.hypervisor.vm_info(self))
+        elif self.hypervisor.vm_defined(self):
+            result['status'] = 'stopped'
+        else:
+            result['status'] = 'new'
+        return result
