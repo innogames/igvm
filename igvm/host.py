@@ -33,9 +33,6 @@ def get_server(hostname, servertype=None):
             )
         )
 
-    if server.get('state') == 'retired':
-        raise ConfigError('Server "{0}" is retired.'.format(hostname))
-
     return server
 
 
