@@ -9,6 +9,7 @@ import logging
 
 from fabric.api import run, settings
 
+from igvm.exception import InvalidStateError
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.storage import lvresize, get_vm_volume
 from igvm.utils.units import parse_size
@@ -25,6 +26,14 @@ def with_fabric_settings(fn):
     return decorator
 
 
+def _check_defined(vm):
+    if not vm.hypervisor.vm_defined(vm):
+        raise InvalidStateError(
+            '{} is not built yet or is not actually running on {}'
+            .format(vm.hostname, vm.hypervisor.hostname)
+        )
+
+
 @with_fabric_settings
 def mem_set(vm_hostname, size):
     """Changes the memory size of a VM.
@@ -36,6 +45,7 @@ def mem_set(vm_hostname, size):
     error out.
     """
     vm = VM(vm_hostname)
+    _check_defined(vm)
 
     if size.startswith('+'):
         new_memory = vm.admintool['memory'] + parse_size(size[1:], 'm')
@@ -61,6 +71,7 @@ def disk_set(vm_hostname, size):
     error out.
     """
     vm = VM(vm_hostname)
+    _check_defined(vm)
 
     current_size_gib = vm.admintool['disk_size_gib']
     if size.startswith('+'):
@@ -92,6 +103,8 @@ def disk_set(vm_hostname, size):
 @with_fabric_settings
 def vm_start(vm_hostname):
     vm = VM(vm_hostname)
+    _check_defined(vm)
+
     if vm.is_running():
         log.info('{} is already running.'.format(vm.hostname))
         return
@@ -101,6 +114,11 @@ def vm_start(vm_hostname):
 @with_fabric_settings
 def vm_stop(vm_hostname, force):
     vm = VM(vm_hostname)
+    _check_defined(vm)
+
+    if not vm.is_running():
+        log.info('{} is already stopped.'.format(vm.hostname))
+        return
     if force:
         vm.hypervisor.stop_vm_force(vm)
     else:
@@ -111,8 +129,10 @@ def vm_stop(vm_hostname, force):
 @with_fabric_settings
 def vm_restart(vm_hostname, force):
     vm = VM(vm_hostname)
+    _check_defined(vm)
+
     if not vm.is_running():
-        raise Warning('{} is not running'.format(vm.hostname))
+        raise InvalidStateError('{} is not running'.format(vm.hostname))
 
     if force:
         vm.hypervisor.stop_vm_force(vm)
@@ -126,9 +146,10 @@ def vm_restart(vm_hostname, force):
 @with_fabric_settings
 def vm_delete(vm_hostname):
     vm = VM(vm_hostname)
+    _check_defined(vm)
 
     if vm.is_running():
-        raise Warning(
+        raise InvalidStateError(
             '{} is still running. Please stop it first.'.format(vm.hostname)
         )
     vm.hypervisor.undefine_vm(vm)

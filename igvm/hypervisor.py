@@ -13,6 +13,7 @@ from igvm.exceptions import (
     ConfigError,
     HypervisorError,
     InconsistentAttributeError,
+    InvalidStateError,
 )
 from igvm.host import Host, get_server
 from igvm.settings import HOST_RESERVED_MEMORY
@@ -51,6 +52,12 @@ class Hypervisor(Host):
         # complete.
         if not isinstance(hv_admintool, ServerObject):
             hv_admintool = get_server(hv_admintool)
+
+        if hv_admintool.get('state') == 'retired':
+            raise InvalidStateError(
+                'Hypervisor "{0}" is retired.'
+                .format(hv_admintool['hostname'])
+            )
 
         if hv_admintool['hypervisor'] == 'kvm':
             cls = KVMHypervisor
@@ -129,7 +136,7 @@ class Hypervisor(Host):
     def check_vm(self, vm):
         """Checks whether a VM can run on this hypervisor."""
         if self.admintool['state'] != 'online':
-            raise ConfigError(
+            raise InvalidStateError(
                 'Hypervisor {0} is not in online state ({1}).'
                 .format(self.hostname, self.admintool['state'])
             )
@@ -210,7 +217,7 @@ class Hypervisor(Host):
 
     def undefine_vm(self, vm):
         if self.vm_running(vm):
-            raise HypervisorError(
+            raise InvalidStateError(
                 'Refusing to undefine running VM {}'
                 .format(vm.hostname)
             )
@@ -231,7 +238,7 @@ class Hypervisor(Host):
         running = self.vm_running(vm)
 
         if running and memory < vm.admintool['memory']:
-            raise NotImplementedError(
+            raise InvalidStateError(
                 'Cannot shrink memory while VM is running'
             )
 
@@ -273,7 +280,7 @@ class Hypervisor(Host):
         assert vm not in self._mount_path, 'Filesystem is already mounted'
 
         if self.vm_defined(vm):
-            raise HypervisorError(
+            raise InvalidStateError(
                 'Refusing to format storage of defined VM {}'
                 .format(vm.hostname)
             )
@@ -287,7 +294,7 @@ class Hypervisor(Host):
             return self._mount_path[vm]
 
         if self.vm_defined(vm) and self.vm_running(vm):
-            raise HypervisorError(
+            raise InvalidStateError(
                 'Refusing to mount VM filesystem while VM is powered on'
             )
 
@@ -309,7 +316,7 @@ class Hypervisor(Host):
     def destroy_vm_storage(self, vm):
         """Delete logical volume of a VM."""
         if self.vm_defined(vm):
-            raise HypervisorError(
+            raise InvalidStateError(
                 'Refusing to delete storage of defined VM {}'
                 .format(vm.hostname)
             )

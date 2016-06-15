@@ -26,6 +26,11 @@ class StorageError(IGVMError):
     pass
 
 
+class InvalidStateError(IGVMError):
+    """Host state is invalid for the requested operation."""
+    pass
+
+
 class InconsistentAttributeError(IGVMError):
     """An attribute on the VM differs from the excepted value from
     Serveradmin."""
