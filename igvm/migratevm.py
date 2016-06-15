@@ -94,8 +94,7 @@ def _migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
         )
 
     # Require VM to be in sync with serveradmin
-    synced_attributes = {}
-    source_hv.vm_sync_from_hypervisor(vm, synced_attributes)
+    synced_attributes = source_hv.vm_sync_from_hypervisor(vm)
     for attr, value in synced_attributes.iteritems():
         if vm.admintool[attr] != value:
             raise InconsistentAttributeError(vm, attr, value)
