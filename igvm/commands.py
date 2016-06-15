@@ -9,7 +9,7 @@ import logging
 
 from fabric.api import run, settings
 
-from igvm.exception import InvalidStateError
+from igvm.exceptions import InvalidStateError
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.storage import lvresize, get_vm_volume
 from igvm.utils.units import parse_size
