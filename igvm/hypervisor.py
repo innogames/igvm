@@ -228,7 +228,7 @@ class Hypervisor(Host):
 
     def vm_set_memory(self, vm, memory):
         if vm.admintool.is_dirty():
-            raise ValueError(
+            raise ConfigError(
                 'VM object has uncommitted changes, commit them first!'
             )
 

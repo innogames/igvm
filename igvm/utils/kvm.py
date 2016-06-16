@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 
 import libvirt
 
+from igvm.exceptions import IGVMError
 from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
@@ -70,7 +71,7 @@ def attach_memory_dimms(hv, vm, domain, memory_mib):
 
     # https://medium.com/@juergen_thomann/memory-hotplug-with-qemu-kvm-and-libvirt-558f1c635972#.sytig6o9h
     if memory_mib % (128 * num_nodes):
-        raise ValueError(
+        raise IGVMError(
             'Added memory must be multiple of 128 MiB * <number of NUMA nodes>'
         )
 

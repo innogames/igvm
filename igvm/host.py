@@ -79,6 +79,17 @@ class Host(object):
         if self.hostname in fabric.state.connections:
             fabric.state.connections[self.hostname].get_transport().close()
 
+    def reload(self):
+        """Reloads the server object from serveradmin."""
+        if self.admintool.is_dirty():
+            raise ConfigError(
+                'Server object must be committed before reloadeing'
+            )
+        self.admintool = get_server(
+            self.hostname,
+            self.admintool['servertype'],
+        )
+
     @lazy_property  # Requires fabric call on HV, evaluate lazily.
     def network_config(self):
         """Returns networking attributes, such as IP address and segment."""

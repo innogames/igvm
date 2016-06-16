@@ -88,6 +88,9 @@ def _migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     if not offline and newip:
         raise IGVMError('Online migration cannot change IP address.')
 
+    if not offline and runpuppet:
+        raise IGVMError('Online migration cannot run Puppet.')
+
     if not runpuppet and newip:
         raise IGVMError(
             'Changing IP requires a Puppet run, pass --runpuppet.'
