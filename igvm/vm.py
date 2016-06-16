@@ -78,7 +78,21 @@ class VM(Host):
             waitmsg='Waiting for SSH server',
         )
         if not host_up:
-            raise VMError('VM is not reachable over SSH')
+            raise VMError('SSH server is not reachable via TCP')
+
+        # Wait until we can login
+        log.info('Trying SSH login')
+        for i in range(0, 7):
+            try:
+                self.run('ls', silent=True)
+                break
+            except Exception as e:
+                pass
+            sleep_time = 0.1 * 2**i
+            log.info('Failed, retrying in {:.2f}s'.format(sleep_time))
+            time.sleep(sleep_time)
+        else:
+            raise VMError('SSH server does not allow login: {}'.format(e))
 
     def shutdown(self):
         log.debug('Stopping {} on {}'.format(
