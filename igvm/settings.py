@@ -5,6 +5,8 @@ COMMON_FABRIC_SETTINGS = dict(
     forward_agent=True,
     user='root',
     shell='/bin/bash -c',
+    timeout=5,
+    connection_attempts=1,
 )
 
 DEFAULT_DNS_SERVERS = (

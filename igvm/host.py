@@ -2,6 +2,8 @@ import fabric.api
 
 from adminapi.dataset import query, ServerObject
 
+import fabric.state
+
 from igvm.exceptions import ConfigError, RemoteCommandError
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.network import get_network_config
@@ -71,6 +73,22 @@ class Host(object):
 
         with self.fabric_settings(*settings, warn_only=warn_only):
             return fabric.api.run(*args, **kwargs)
+
+    def disconnect(self):
+        """Disconnect active Fabric sessions."""
+        if self.hostname in fabric.state.connections:
+            fabric.state.connections[self.hostname].get_transport().close()
+
+    def reload(self):
+        """Reloads the server object from serveradmin."""
+        if self.admintool.is_dirty():
+            raise ConfigError(
+                'Server object must be committed before reloadeing'
+            )
+        self.admintool = get_server(
+            self.hostname,
+            self.admintool['servertype'],
+        )
 
     @lazy_property  # Requires fabric call on HV, evaluate lazily.
     def network_config(self):
