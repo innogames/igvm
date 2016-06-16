@@ -86,6 +86,7 @@ class VM(Host):
         self.hypervisor.stop_vm(self)
         if not self.wait_for_running(running=False):
             self.hypervisor.stop_vm_force(self)
+        self.disconnect()
 
     def is_running(self):
         return self.hypervisor.vm_running(self)

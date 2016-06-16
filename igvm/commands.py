@@ -136,6 +136,7 @@ def vm_restart(vm_hostname, force=False):
 
     if force:
         vm.hypervisor.stop_vm_force(vm)
+        vm.disconnect()
     else:
         vm.shutdown()
 
