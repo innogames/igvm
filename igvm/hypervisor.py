@@ -454,9 +454,17 @@ class KVMHypervisor(Hypervisor):
         return vm.hostname in [dom.name() for dom in domains]
 
     def vm_running(self, vm):
-        if self._domain(vm).info()[0] == libvirt.VIR_DOMAIN_SHUTOFF:
-            return False
-        return True
+        # _domain seems to fail on non-running VMs
+        domains = self.conn.listAllDomains()
+        for domain in domains:
+            if domain.name() != vm.hostname:
+                continue
+
+            return domain.info()[0] == libvirt.VIR_DOMAIN_RUNNING
+        raise HypervisorError(
+            '{} is not defined on {}'
+            .format(vm.hostname, self.hostname)
+        )
 
     def stop_vm(self, vm):
         super(KVMHypervisor, self).stop_vm(vm)
