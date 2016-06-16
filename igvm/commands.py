@@ -112,7 +112,7 @@ def vm_start(vm_hostname):
 
 
 @with_fabric_settings
-def vm_stop(vm_hostname, force):
+def vm_stop(vm_hostname, force=False):
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -127,7 +127,7 @@ def vm_stop(vm_hostname, force):
 
 
 @with_fabric_settings
-def vm_restart(vm_hostname, force):
+def vm_restart(vm_hostname, force=False):
     vm = VM(vm_hostname)
     _check_defined(vm)
 
