@@ -1,5 +1,6 @@
 from fabric.api import run, hide
 
+
 def get_meminfo():
     """Return a dictionary with the values of /proc/meminfo.
 
@@ -25,6 +26,7 @@ def get_meminfo():
             value = int(parts[1])
             info[key] = value
     return info
+
 
 def get_cpuinfo():
     """Return a list of dictionaries with info about the CPUs."""
@@ -53,13 +55,3 @@ def get_cpuinfo():
         cpu[key] = value
 
     return info
-
-def get_ssh_keytypes(os):
-    if os == 'squeeze':
-        return ['dsa', 'rsa']
-    elif os == 'wheezy':
-        return ['dsa', 'rsa', 'ecdsa']
-    elif os == 'jessie':
-        return ['dsa', 'rsa', 'ecdsa', 'ed25519']
-    else:
-        return ['dsa', 'rsa']

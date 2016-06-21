@@ -9,16 +9,20 @@ from igvm.settings import (
 )
 from igvm.utils.sshkeys import create_authorized_keys
 from igvm.utils.template import upload_template
-from igvm.utils.resources import get_ssh_keytypes
 from igvm.utils import cmd
 
 
-def _create_ssh_keys(ssh_keytypes):
-    for typ in ssh_keytypes:
-        run('rm -f etc/ssh/ssh_host_{0}_key'.format(typ))
+def _create_ssh_keys():
+
+    # If we wouldn't do remove those, ssh-keygen would ask us confirm
+    # overwrite.
+    run('rm -f etc/ssh/ssh_host_*_key*')
+
+    # This will also create the public key files.
+    for key_type in ('dsa', 'rsa', 'ecdsa', 'ed25519'):
         run(
             'ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'
-            .format(typ)
+            .format(key_type)
         )
 
 
@@ -56,9 +60,7 @@ def prepare_vm(hv, vm):
         run(cmd('echo {0} > etc/mailname', vm.fqdn))
 
         _create_interfaces(vm.network_config)
-
-        ssh_keytypes = get_ssh_keytypes(vm.admintool['os'])
-        _create_ssh_keys(ssh_keytypes)
+        _create_ssh_keys()
 
         upload_template('etc/fstab', 'etc/fstab', {
             'blk_dev': hv.vm_block_device_name(),
