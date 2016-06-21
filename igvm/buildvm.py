@@ -71,6 +71,12 @@ def _buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
 
     vm.hypervisor.umount_vm_storage(vm)
     hv.define_vm(vm)
+
+    # We are updating the information on the Serveradmin, before starting
+    # the VM, because the VM would still be on the hypervisor even if it
+    # fails to start.
+    vm.admintool.commit()
+
     vm.start()
 
     # Perform operations on Virtual Machine

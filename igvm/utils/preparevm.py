@@ -1,6 +1,7 @@
 import os
+from StringIO import StringIO
 
-from fabric.api import run, cd, put, settings
+from fabric.api import run, cd, get, put, settings
 
 from igvm.settings import (
     DEFAULT_DNS_SERVERS,
@@ -24,6 +25,15 @@ def _create_ssh_keys():
             'ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'
             .format(key_type)
         )
+
+
+def _get_ssh_public_key(key_type):
+    fd = StringIO()
+    get('etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)
+    key_split = fd.getvalue().split()
+
+    assert key_split[0] == 'ssh-' + key_type
+    return key_split[1]
 
 
 def _generate_swap(swap_path, size_MiB):
@@ -61,6 +71,7 @@ def prepare_vm(hv, vm):
 
         _create_interfaces(vm.network_config)
         _create_ssh_keys()
+        vm.admintool['ssh_pubkey'] = _get_ssh_public_key('rsa')
 
         upload_template('etc/fstab', 'etc/fstab', {
             'blk_dev': hv.vm_block_device_name(),
