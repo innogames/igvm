@@ -16,6 +16,7 @@ from igvm.commands import (
     vm_restart,
     vm_start,
     vm_stop,
+    vm_sync,
 )
 from igvm.exceptions import (
     IGVMError,
@@ -223,6 +224,32 @@ class CommandTest(IGVMTest):
         self.assertEqual(_get_mem_hv(), 2048)
         self.vm.start()
         self.assertEqual(_get_mem_vm() - vm_mem, -1024)
+
+    def test_sync(self):
+        buildvm(self.vm.hostname)
+
+        expected_disk_size = self.vm.admintool['disk_size_gib']
+        self.vm.admintool['disk_size_gib'] += 10
+
+        expected_memory = self.vm.admintool['memory']
+        self.vm.admintool['memory'] += 1024
+
+        self.vm.admintool.commit()
+        self.vm.reload()
+        self.assertEqual(self.vm.admintool['memory'], expected_memory + 1024)
+
+        vm_sync(self.vm.hostname)
+        self.vm.reload()
+
+        self.assertEqual(self.vm.admintool['memory'], expected_memory)
+        self.assertEqual(
+            self.vm.admintool['disk_size_gib'],
+            expected_disk_size,
+        )
+
+        # Shouldn't do anything, but also shouldn't fail
+        vm_sync(self.vm.hostname)
+        self.vm.reload()
 
 
 class MigrationTest(IGVMTest):
