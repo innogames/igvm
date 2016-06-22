@@ -120,6 +120,12 @@ subparser.add_argument(
     'size',
     help='New memory size with optional unit (default is MiB)',
 )
+subparser.add_argument(
+    '--offline',
+    action='store_true',
+    help='Shutdown VM, change memory, and restart VM',
+)
+
 
 subparser = subparsers.add_parser(
     'start',
