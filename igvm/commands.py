@@ -169,3 +169,35 @@ def vm_delete(vm_hostname):
     vm.admintool['state'] = 'retired'
     vm.admintool.commit()
     log.info('{} destroyed and set to "retired" state.'.format(vm.hostname))
+
+
+@with_fabric_settings
+def vm_sync(vm_hostname):
+    """Synchronize VM resource attributes to Serveradmin.
+
+    This command collects actual resource allocation of a VM from the
+    hypervisor and overwrites outdated attribute values in Serveradmin."""
+    vm = VM(vm_hostname)
+    _check_defined(vm)
+
+    attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
+    changed = []
+    for attrib, value in attributes.iteritems():
+        current = vm.admintool.get(attrib)
+        if current == value:
+            log.info('{}: {}'.format(attrib, current))
+            continue
+        log.info('{}: {} -> {}'.format(attrib, current, value))
+        vm.admintool[attrib] = value
+        changed.append(attrib)
+    if changed:
+        vm.admintool.commit()
+        log.info(
+            '{}: Synchronized {} attributes ({}).'
+            .format(vm.hostname, len(changed), ', '.join(changed))
+        )
+    else:
+        log.info(
+            '{}: Serveradmin is already synchronized.'
+            .format(vm.hostname)
+        )

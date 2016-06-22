@@ -24,6 +24,7 @@ from igvm.commands import (
     vm_stop,
     vm_restart,
     vm_delete,
+    vm_sync,
 )
 from igvm.utils.virtutils import close_virtconns
 
@@ -172,6 +173,17 @@ subparser = subparsers.add_parser(
     description=(__doc__ + ' - Delete VM'),
 )
 subparser.set_defaults(func=vm_delete)
+subparser.add_argument(
+    'vm_hostname',
+    help='Hostname of the guest system',
+)
+
+
+subparser = subparsers.add_parser(
+    'sync',
+    description=(__doc__ + ' - Synchronize Serveradmin attributes'),
+)
+subparser.set_defaults(func=vm_sync)
 subparser.add_argument(
     'vm_hostname',
     help='Hostname of the guest system',
