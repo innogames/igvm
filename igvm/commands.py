@@ -38,11 +38,10 @@ def _check_defined(vm):
 def mem_set(vm_hostname, size):
     """Changes the memory size of a VM.
 
-    Currently only increasing the disk is implemented.  Size argument is
-    allowed as text, but it must always be in MiBs without a decimal
-    place.  The plus (+) and minus (-) prefixes are allowed to specify
-    a relative difference in the size.  Of course, minus is going to
-    error out.
+    Size argument is a size unit, which defaults to MiB.
+    The plus (+) and minus (-) prefixes are allowed to specify a relative
+    difference in the size.  Reducing memory is only allowed while the VM is
+    powered off.
     """
     vm = VM(vm_hostname)
     _check_defined(vm)
