@@ -35,7 +35,7 @@ def _check_defined(vm):
 
 
 @with_fabric_settings
-def mem_set(vm_hostname, size):
+def mem_set(vm_hostname, size, offline=False):
     """Changes the memory size of a VM.
 
     Size argument is a size unit, which defaults to MiB.
@@ -56,7 +56,18 @@ def mem_set(vm_hostname, size):
     if new_memory == vm.admintool['memory']:
         raise Warning('Memory size is the same.')
 
+    if offline and not vm.is_running():
+        log.info(
+            '{} is already powered off, ignoring --offline.'
+            .format(vm.hostname)
+        )
+        offline = False
+
+    if offline:
+        vm.shutdown()
     vm.set_memory(new_memory)
+    if offline:
+        vm.start()
 
 
 @with_fabric_settings
