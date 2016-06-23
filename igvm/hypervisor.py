@@ -193,10 +193,13 @@ class Hypervisor(Host):
         """Returns MiB memory available (=unallocated) for VMs on the HV."""
         raise NotImplementedError(type(self).__name__)
 
-    def define_vm(self, vm):
+    def define_vm(self, vm, tx=None):
         """Creates a VM on the hypervisor."""
         log.info('Defining {} on {}'.format(vm.hostname, self.hostname))
-        # Implementation must be subclassed
+
+        self._define_vm(vm, tx)
+        if tx:
+            tx.on_rollback('undefine VM', self.undefine_vm, vm)
 
     def start_vm(self, vm):
         log.info('Starting {} on {}'.format(vm.hostname, self.hostname))
@@ -270,14 +273,16 @@ class Hypervisor(Host):
         vm.admintool['memory'] = memory
         vm.admintool.commit()
 
-    def create_vm_storage(self, vm):
+    def create_vm_storage(self, vm, tx=None):
         """Allocate storage for a VM. Returns the disk path."""
         assert vm not in self._disk_path, 'Disk already created?'
 
         self._disk_path[vm] = create_storage(self, vm)
+        if tx:
+            tx.on_rollback('destroy storage', self.destroy_vm_storage, vm)
         return self._disk_path[vm]
 
-    def format_vm_storage(self, vm):
+    def format_vm_storage(self, vm, tx=None):
         """Create new filesystem for VM and mount it. Returns mount path."""
         assert vm not in self._mount_path, 'Filesystem is already mounted'
 
@@ -288,9 +293,9 @@ class Hypervisor(Host):
             )
 
         format_storage(self, self.vm_disk_path(vm))
-        return self.mount_vm_storage(vm)
+        return self.mount_vm_storage(vm, tx)
 
-    def mount_vm_storage(self, vm):
+    def mount_vm_storage(self, vm, tx=None):
         """Mount VM filesystem on host and return mount point."""
         if vm in self._mount_path:
             return self._mount_path[vm]
@@ -305,6 +310,8 @@ class Hypervisor(Host):
             self.vm_disk_path(vm),
             suffix='-'+vm.hostname,
         )
+        if tx:
+            tx.on_rollback('unmount storage', self.umount_vm_storage, vm)
         return self._mount_path[vm]
 
     def umount_vm_storage(self, vm):
@@ -433,8 +440,7 @@ class KVMHypervisor(Hypervisor):
             .format(vm.hostname)
         )
 
-    def define_vm(self, vm):
-        super(KVMHypervisor, self).define_vm(vm)
+    def _define_vm(self, vm, tx):
         domain_xml = generate_domain_xml(self, vm)
         self.conn.defineXML(domain_xml)
 
@@ -521,7 +527,7 @@ class XenHypervisor(Hypervisor):
     def _sxp_path(self, vm):
         return os.path.join('/etc/xen/domains', vm.hostname + '.sxp')
 
-    def define_vm(self, vm):
+    def _define_vm(self, vm, tx):
         sxp_file = 'etc/xen/domains/hostname.sxp'
         upload_template(sxp_file, self._sxp_path(vm), {
             'disk_device': self.vm_disk_path(vm),

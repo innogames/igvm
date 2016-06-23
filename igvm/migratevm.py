@@ -10,6 +10,7 @@ from igvm.utils.storage import (
     netcat_to_device,
     device_to_netcat,
 )
+from igvm.utils.transaction import run_in_transaction
 from igvm.vm import VM
 
 log = logging.getLogger(__name__)
@@ -68,8 +69,11 @@ def migrate_virsh(source_hv, destination_hv, vm):
 
 
 @with_fabric_settings
+@run_in_transaction
 def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
-               nolbdowntime=False, offline=False):
+               nolbdowntime=False, offline=False, tx=None):
+    assert tx is not None, 'tx populated by run_in_transaction'
+
     vm = VM(vm_hostname)
     source_hv = vm.hypervisor
     destination_hv = Hypervisor.get(dsthv_hostname)
@@ -123,13 +127,15 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     destination_hv.check_vm(vm)
 
     # Setup destination Hypervisor
-    dst_device = destination_hv.create_vm_storage(vm)
+    dst_device = destination_hv.create_vm_storage(vm, tx)
     if offline:
-        nc_listener = netcat_to_device(destination_hv, dst_device)
+        nc_listener = netcat_to_device(destination_hv, dst_device, tx)
 
     # Commit previously changed IP address and segment.
     if newip:
+        # TODO: This commit is not rolled back.
         vm.admintool.commit()
+        tx.on_rollback('newip warning', log.info, '--newip is not rolled back')
 
     if not nolbdowntime and 'testtool_downtime' in vm.admintool:
         print "Downtiming testtool for network '{}'".format(downtime_network)
@@ -144,6 +150,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     if offline:
         if vm.is_running():
             vm.shutdown()
+            tx.on_rollback('start VM', vm.start)
 
         add_dsthv_to_ssh(source_hv, destination_hv)
         device_to_netcat(
@@ -151,16 +158,18 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
             source_hv.vm_disk_path(vm),
             vm.admintool['disk_size_gib'] * 1024**3,
             nc_listener,
+            tx,
         )
 
         if runpuppet:
-            destination_hv.mount_vm_storage(vm)
+            destination_hv.mount_vm_storage(vm, tx)
             run_puppet(destination_hv, vm, clear_cert=False)
             destination_hv.umount_vm_storage(vm)
 
-        destination_hv.define_vm(vm)
+        destination_hv.define_vm(vm, tx)
         vm.hypervisor = destination_hv
         vm.start()
+        tx.on_rollback('stop vm', vm.shutdown)
     else:
         migrate_virsh(source_hv, destination_hv, vm)
         vm.hypervisor = destination_hv
@@ -178,6 +187,10 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     # Update admintool information
     vm.admintool['xen_host'] = destination_hv.hostname
     vm.admintool.commit()
+
+    # If removing the existing VM fails we shouldn't risk undoing the newly
+    # migrated one.
+    tx.checkpoint()
 
     # Remove the existing VM
     source_hv.undefine_vm(vm)

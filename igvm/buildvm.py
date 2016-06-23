@@ -10,6 +10,7 @@ from igvm.utils.preparevm import (
     copy_postboot_script,
     run_puppet,
 )
+from igvm.utils.transaction import run_in_transaction
 from igvm.vm import VM
 
 
@@ -17,7 +18,11 @@ log = logging.getLogger(__name__)
 
 
 @with_fabric_settings
-def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
+@run_in_transaction
+def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None,
+            tx=None):
+    assert tx is not None, 'tx populated by run_in_transaction'
+
     vm = VM(vm_hostname)
     hv = vm.hypervisor
 
@@ -48,8 +53,8 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
             )
 
     # Perform operations on Hypervisor
-    vm.hypervisor.create_vm_storage(vm)
-    mount_path = vm.hypervisor.format_vm_storage(vm)
+    vm.hypervisor.create_vm_storage(vm, tx)
+    mount_path = vm.hypervisor.format_vm_storage(vm, tx)
 
     with hv.fabric_settings():
         if not localimage:
@@ -65,12 +70,16 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
         copy_postboot_script(hv, vm, postboot)
 
     vm.hypervisor.umount_vm_storage(vm)
-    hv.define_vm(vm)
+    hv.define_vm(vm, tx)
 
     # We are updating the information on the Serveradmin, before starting
     # the VM, because the VM would still be on the hypervisor even if it
     # fails to start.
     vm.admintool.commit()
+
+    # VM was successfully built, don't risk undoing all this just because start
+    # fails.
+    tx.checkpoint()
 
     vm.start()
 
