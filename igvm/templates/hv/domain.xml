@@ -47,6 +47,7 @@
     <controller type='virtio-serial' index='0'>
     </controller>
     <interface type='bridge'>
+      <mac address='{{ mac_address }}'/>
       <source bridge='br0'/>
 {% if vlan_tag %}
       <vlan>

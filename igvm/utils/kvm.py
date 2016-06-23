@@ -11,6 +11,7 @@ from igvm.exceptions import IGVMError
 from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
+    MAC_ADDRESS_PREFIX,
 )
 
 from jinja2 import Environment, PackageLoader
@@ -102,6 +103,14 @@ def attach_memory_dimms(hv, vm, domain, memory_mib):
     )
 
 
+def _generate_mac_address(ip):
+    assert ip.version == 4, 'intern_ip is IPv4 address'
+    ip_octets = tuple(int(c) for c in str(ip).split('.')[-3:])
+    mac_address = MAC_ADDRESS_PREFIX + ip_octets
+    assert len(mac_address) == 6
+    return ':'.join(format(d, '02x') for d in mac_address)
+
+
 def generate_domain_xml(hv, vm):
     """Generates the domain XML for a VM."""
     version = _get_qemu_version(hv)
@@ -115,6 +124,7 @@ def generate_domain_xml(hv, vm):
         'mem_hotplug': version >= (2, 3),
         'max_mem': hv.vm_max_memory(vm),
         'max_cpus': _get_max_cpus(hv, vm),
+        'mac_address': _generate_mac_address(vm.admintool['intern_ip']),
     }
 
     jenv = Environment(loader=PackageLoader('igvm', 'templates'))

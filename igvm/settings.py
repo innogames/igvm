@@ -41,3 +41,8 @@ PUPPET_CA_MASTERS = (
     # Puppet 4
     'ca.puppet.ig.local',
 )
+
+
+# Arbitrarily chosen MAC address prefix with U/L bit set
+# It will be padded with the last three octets of the internal IP address.
+MAC_ADDRESS_PREFIX = (0xCA, 0xFE, 0x00,)
