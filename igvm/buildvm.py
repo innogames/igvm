@@ -1,10 +1,9 @@
 import logging
 
-from fabric.api import settings
 from fabric.colors import yellow
 
+from igvm.commands import with_fabric_settings
 from igvm.exceptions import ConfigError
-from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.image import download_image, extract_image
 from igvm.utils.preparevm import (
     prepare_vm,
@@ -17,12 +16,8 @@ from igvm.vm import VM
 log = logging.getLogger(__name__)
 
 
-def buildvm(*args, **kwargs):
-    with settings(**COMMON_FABRIC_SETTINGS):
-        return _buildvm(*args, **kwargs)
-
-
-def _buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
+@with_fabric_settings
+def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     vm = VM(vm_hostname)
     hv = vm.hypervisor
 

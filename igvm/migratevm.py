@@ -1,12 +1,10 @@
 import logging
 
-from fabric.api import settings
-
 from adminapi import api
 
+from igvm.commands import with_fabric_settings
 from igvm.exceptions import IGVMError, InconsistentAttributeError
 from igvm.hypervisor import Hypervisor
-from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.preparevm import run_puppet
 from igvm.utils.storage import (
     netcat_to_device,
@@ -69,12 +67,8 @@ def migrate_virsh(source_hv, destination_hv, vm):
     ))
 
 
-def migratevm(*args, **kwargs):
-    with settings(**COMMON_FABRIC_SETTINGS):
-        _migratevm(*args, **kwargs)
-
-
-def _migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
+@with_fabric_settings
+def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
                nolbdowntime=False, offline=False):
     vm = VM(vm_hostname)
     source_hv = vm.hypervisor
