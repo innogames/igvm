@@ -8,14 +8,11 @@
 import logging
 import sys
 
-from adminapi.dataset import query, filters
-from adminapi.utils.parse import parse_query
-
-from fabric.api import run, settings, parallel, execute, env, hide
+from fabric.api import run, settings
+from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 
 from igvm.exceptions import InvalidStateError
-from igvm.hypervisor import Hypervisor
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.storage import lvresize, get_vm_volume
 from igvm.utils.units import parse_size
@@ -232,14 +229,16 @@ def vm_sync(vm_hostname):
         )
 
 
-def _bold(s):
+def _color(s, color, bold=False):
     if not sys.stdout.isatty():
         return s
-    return '\033[1m{}\033[0m'.format(s)
+    return color(s, bold=bold)
 
 
 @with_fabric_settings
 def host_info(vm_hostname):
+    """Extracts runtime information about a VM.
+    Library consumers should use VM.info() directly."""
     vm = VM(vm_hostname)
 
     info = vm.info()
@@ -262,27 +261,79 @@ def host_info(vm_hostname):
             'memory',
             'memory_free',
             'max_mem',
+            'disk',
             'disk_size_gib',
             'disk_free_gib',
         )),
+        # Anything else will appear in this section
+        ('Other', None),
     )
 
-    key_len = max(len(k) for k in info.keys())
+    def _progress_bar(free_key, capacity_key, result_key, unit):
+        """Helper to show nice progress bars."""
+        if free_key not in info or capacity_key not in info:
+            return
+        free = info[free_key]
+        del info[free_key]
+        capacity = info[capacity_key]
+        del info[capacity_key]
 
-    for (category, keys) in categories:
+        simple_stats = (
+            'Current: {} {unit}\n'
+            'Free:    {} {unit}\n'
+            'Max:     {} {unit}'
+            .format(capacity-free, free, capacity, unit=unit)
+        )
+
+        if free < 0 or free > capacity or capacity <= 0:
+            log.warning(
+                '{} ({}) and {} ({}) have weird ratio, skipping progress '
+                'calculation'
+                .format(free_key, free, capacity_key, capacity)
+            )
+            info[result_key] = _color(simple_stats, red)
+            return
+
+        assert free >= 0 and free <= capacity
+        ratio = 1 - float(free) / float(capacity)
+        if ratio >= 0.9:
+            color = red
+        elif ratio >= 0.8:
+            color = yellow
+        else:
+            color = green
+
+        max_bars = 20
+        num_bars = int(round(ratio * max_bars))
+        info[result_key] = (
+            '[{}{}] {}%\n{}'
+            .format(
+                _color('#'*num_bars, color), ' '*(max_bars-num_bars),
+                int(round(ratio*100)),
+                simple_stats,
+            )
+        )
+
+    _progress_bar('memory_free', 'memory', 'memory', 'MiB')
+    _progress_bar('disk_free_gib', 'disk_size_gib', 'disk', 'GiB')
+
+    max_key_len = max(len(k) for k in info.keys())
+    for category, keys in categories:
+        # Handle 'Other' section by defaulting to all keys
+        keys = keys or info.keys()
+
+        # Any info available for the category?
         if not any(k in info for k in keys):
             continue
-        print('')
-        print(_bold(category))
-        for k in keys:
-            if not k in info:
-                continue
-            print('{} : {}'.format(k.ljust(key_len), str(info[k])))
-            del info[k]
 
-    if info:
         print('')
-        print(_bold('Other'))
-        for k, v in sorted(info.items()):
-            print('{} : {}'.format(k.ljust(key_len), str(v)))
-    return info
+        print(_color(category, white, bold=True))
+        for k in keys:
+            if k not in info:
+                continue
+
+            # Properly re-indent multiline values
+            value = str(info[k])
+            value = ('\n'+' '*(max_key_len + 3)).join(value.split('\n'))
+            print('{} : {}'.format(k.ljust(max_key_len), value))
+            del info[k]
