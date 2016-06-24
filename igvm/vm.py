@@ -43,6 +43,10 @@ class VM(Host):
                     self.network_config['vlan'],
             ))
 
+    def set_num_cpu(self, num_cpu):
+        """Changes the number of CPUs."""
+        self.hypervisor.vm_set_num_cpu(self, num_cpu)
+
     def set_memory(self, memory):
         """Resizes the host memory."""
         self.hypervisor.vm_set_memory(self, memory)

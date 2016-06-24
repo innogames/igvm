@@ -21,6 +21,7 @@ from igvm.utils import cmd
 from igvm.utils.kvm import (
     generate_domain_xml,
     set_memory,
+    set_vcpus,
 )
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.storage import (
@@ -227,19 +228,60 @@ class Hypervisor(Host):
         log.info('Undefining {} on {}'.format(vm.hostname, self.hostname))
         # Implementation must be subclassed
 
-    def vm_set_memory(self, vm, memory):
+    def _check_committed(self, vm):
+        """Checks that the given VM has no uncommitted changes."""
         if vm.admintool.is_dirty():
             raise ConfigError(
                 'VM object has uncommitted changes, commit them first!'
             )
 
-        # Validate current value
-        current_memory = self.vm_sync_from_hypervisor(vm)['memory']
-        if current_memory != vm.admintool['memory']:
-            raise InconsistentAttributeError(vm, 'memory', current_memory)
+    def _check_attribute_synced(self, vm, attrib):
+        """Compares an attribute value in Serveradmin with the actual value on
+        the HV."""
+        synced_values = self.vm_sync_from_hypervisor(vm)
+        if attrib not in synced_values:
+            log.warning('Cannot validate attribute "{}"!'.format(attrib))
+            return
+        current_value = synced_values[attrib]
+        if current_value != vm.admintool[attrib]:
+            raise InconsistentAttributeError(vm, attrib, current_value)
+
+    def vm_set_num_cpu(self, vm, num_cpu):
+        """Changes the number of CPUs of a VM."""
+        self._check_committed(vm)
+        self._check_attribute_synced(vm, 'num_cpu')
+
+        if num_cpu < 1:
+            raise ConfigError('Invalid num_cpu value: {}'.format(num_cpu))
+
+        log.info('Changing #CPUs of {} on {}: {} -> {}'.format(
+            vm.hostname, self.hostname, vm.admintool['num_cpu'], num_cpu))
+
+        # If VM is offline, we can just rebuild the domain
+        if not self.vm_running(vm):
+            log.info('VM is offline, rebuilding domain with new settings')
+            vm.admintool['num_cpu'] = num_cpu
+            self.undefine_vm(vm)
+            self.define_vm(vm)
+        else:
+            self._vm_set_num_cpu(vm, num_cpu)
+
+        # Validate changes
+        current_num_cpu = self.vm_sync_from_hypervisor(vm)['num_cpu']
+        if current_num_cpu != num_cpu:
+            raise HypervisorError(
+                'New CPUs are not visible to hypervisor, '
+                'changes will not be committed.'
+            )
+
+        vm.admintool['num_cpu'] = num_cpu
+        vm.admintool.commit()
+
+    def vm_set_memory(self, vm, memory):
+        self._check_committed(vm)
+        self._check_attribute_synced(vm, 'memory')
 
         running = self.vm_running(vm)
-
         if running and memory < vm.admintool['memory']:
             raise InvalidStateError(
                 'Cannot shrink memory while VM is running'
@@ -408,6 +450,9 @@ class KVMHypervisor(Hypervisor):
             used_kib += dom.info()[2]
         free_mib = total_mib - used_kib/1024
         return free_mib
+
+    def _vm_set_num_cpu(self, vm, num_cpu):
+        set_vcpus(self, vm, self._domain(vm), num_cpu)
 
     def _vm_set_memory(self, vm, memory_mib):
         set_memory(self, vm, self._domain(vm), memory_mib)

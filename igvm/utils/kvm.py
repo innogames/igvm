@@ -120,6 +120,62 @@ class DomainProperties(object):
         return '<DomainProperties:{}>'.format(self.__dict__)
 
 
+def set_vcpus(hv, vm, domain, num_cpu):
+    """Changes the number of active VCPUs."""
+    props = DomainProperties.from_running(hv, vm, domain)
+    if num_cpu > props.max_cpus:
+        raise HypervisorError(
+            'VM can not receive more than {} VCPUs'
+            .format(props.max_cpus)
+        )
+
+    # Note: We could support the guest agent in here by first trying the
+    #       VIR_DOMAIN_VCPU_GUEST flag. This would allow live shrinking.
+    #       However, changes via the guest agent are not persisted in the
+    #       config (another run with VIR_DOMAIN_AFFECT_CONFIG doesn't help),
+    #       so the VM will be back to the old value after the next reboot.
+
+    try:
+        domain.setVcpusFlags(
+            num_cpu,
+            libvirt.VIR_DOMAIN_AFFECT_LIVE |
+            libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+        )
+    except libvirt.libvirtError as e:
+        raise HypervisorError('setVcpus failed: {}'.format(e))
+
+    # Properly pin all new VCPUs
+    _live_repin_cpus(domain, props, hv.num_cpus)
+
+    # Activate all CPUs in the guest
+    log.info('KVM: Activating new CPUs in guest')
+    vm.run(
+        'echo 1 | tee /sys/devices/system/cpu/cpu*/online'
+    )
+
+
+def _live_repin_cpus(domain, props, max_phys_cpus):
+    """Adjusts NUMA pinning of all VCPUs."""
+    if props.numa_mode != props.NUMA_SPREAD:
+        log.warning(
+            'Skipping CPU re-pin, VM is in NUMA mode "{}"'
+            .format(props.numa_mode)
+        )
+        return
+
+    num_nodes = props.num_nodes
+    for vcpu, mask in enumerate(domain.vcpuPinInfo()):
+        mask = list(mask)
+        # Set interleaving NUMA pinning for each VCPU up to the maximum
+        for pcpu in range(0, max_phys_cpus):
+            mask[pcpu] = (pcpu % num_nodes == vcpu % num_nodes)
+        # And disable all above the threshold
+        # (Useful when migrating to a host with less CPUs)
+        for pcpu in range(max_phys_cpus, len(mask)):
+            mask[pcpu] = False
+        domain.pinVcpu(vcpu, tuple(mask))
+
+
 def set_memory(hv, vm, domain, memory_mib):
     """Changes the amount of memory of a VM."""
     props = DomainProperties.from_running(hv, vm, domain)

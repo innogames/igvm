@@ -11,6 +11,7 @@ from fabric.api import env
 
 from igvm.buildvm import buildvm
 from igvm.commands import (
+    cpu_set,
     mem_set,
     vm_delete,
     vm_restart,
@@ -61,6 +62,7 @@ def _reset_vm():
         'disk_size_gib': 6,
         'memory': 2048,
         'puppet_environment': '',
+        'num_cpu': 2,
     })
     vm.admintool.commit()
     return vm
@@ -235,6 +237,53 @@ class CommandTest(IGVMTest):
         self.assertEqual(_get_mem_hv(), 2048)
         self.vm.start()
         self.assertEqual(_get_mem_vm() - vm_mem, -1024)
+
+    def test_cpu_set(self):
+        buildvm(self.vm.hostname)
+
+        def _get_hv():
+            return self.hv.vm_sync_from_hypervisor(self.vm)['num_cpu']
+
+        def _get_vm():
+            return int(self.vm.run(
+                "cat /proc/cpuinfo | grep vendor_id | wc -l"
+            ).strip())
+
+        # Online
+        self.assertEqual(_get_hv(), 2)
+        self.assertEqual(_get_vm(), 2)
+        self.assertEqual(self.vm.admintool['num_cpu'], 2)
+        cpu_set(self.vm.hostname, 3)
+        self.assertEqual(_get_hv(), 3)
+        self.assertEqual(_get_vm(), 3)
+
+        self.vm.reload()
+        self.assertEqual(self.vm.admintool['num_cpu'], 3)
+
+        with self.assertRaises(Warning):
+            cpu_set(self.vm.hostname, 3)
+
+        # Online reduce not implemented yet
+        with self.assertRaises(IGVMError):
+            cpu_set(self.vm.hostname, 2)
+
+        # Offline
+        cpu_set(self.vm.hostname, 2, offline=True)
+        self.assertEqual(_get_hv(), 2)
+        self.assertEqual(_get_vm(), 2)
+
+        # Impossible amount
+        with self.assertRaises(IGVMError):
+            cpu_set(self.vm.hostname, 9001)
+
+        with self.assertRaises(IGVMError):
+            cpu_set(self.vm.hostname, 0, offline=True)
+
+        with self.assertRaises(IGVMError):
+            cpu_set(self.vm.hostname, -5)
+
+        with self.assertRaises(IGVMError):
+            cpu_set(self.vm.hostname, -5, offline=True)
 
     def test_sync(self):
         buildvm(self.vm.hostname)
