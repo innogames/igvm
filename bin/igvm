@@ -18,9 +18,9 @@ import adminapi
 from igvm.buildvm import buildvm
 from igvm.migratevm import migratevm
 from igvm.commands import (
-    cpu_set,
     disk_set,
     mem_set,
+    vcpu_set,
     vm_start,
     vm_stop,
     vm_restart,
@@ -130,10 +130,10 @@ subparser.add_argument(
 
 
 subparser = subparsers.add_parser(
-    'cpu-set',
+    'vcpu-set',
     description=(__doc__ + ' - Set number of CPUs'),
 )
-subparser.set_defaults(func=cpu_set)
+subparser.set_defaults(func=vcpu_set)
 subparser.add_argument(
     'vm_hostname',
     help='Hostname of the guest system',

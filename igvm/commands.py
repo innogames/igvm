@@ -35,7 +35,7 @@ def _check_defined(vm):
 
 
 @with_fabric_settings
-def cpu_set(vm_hostname, count, offline=False):
+def vcpu_set(vm_hostname, count, offline=False):
     """Changes the number of CPUs in a VM."""
     vm = VM(vm_hostname)
     _check_defined(vm)
