@@ -137,6 +137,14 @@ class VM(Host):
             "cat /proc/meminfo | grep MemAvailable | awk '{ print $2 }'",
             silent=True,
         ).strip()
+
+        # MemAvailable might not be there
+        if not output:
+            output = self.run(
+                "cat /proc/meminfo | grep MemFree | awk '{ print $2 }'",
+                silent=True,
+            ).strip()
+
         if not output.isdigit():
             raise RemoteCommandError('Non-numeric output in memory_free')
         return round(float(output) / 1024, 2)

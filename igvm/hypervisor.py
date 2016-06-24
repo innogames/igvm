@@ -576,6 +576,9 @@ class XenHypervisor(Hypervisor):
             pieces = line.split()
             if len(pieces) >= 3 and pieces[2] == vm.hostname:
                 return True
+            # Newer xm version?
+            if pieces[0] == vm.hostname:
+                return True
         return False
 
     def stop_vm(self, vm):
@@ -590,16 +593,26 @@ class XenHypervisor(Hypervisor):
         super(XenHypervisor, self).undefine_vm(vm)
         self.run(cmd('rm {0}', self._sxp_path(vm)))
 
+    def _vm_set_memory(self, vm, memory_mib):
+        self.run(cmd('xm mem-max {} {}', vm.hostname, self.vm_max_memory(vm)))
+        self.run(cmd('xm mem-set {} {}', vm.hostname, memory_mib))
+
     def _vm_sync_from_hypervisor(self, vm, result):
-        result['num_cpu'] = int(run(
+        result['num_cpu'] = int(self.run(
             'xm list --long {0} '
             '| grep \'(online_vcpus \' '
             '| sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''
-            .format(vm.hostname)
+            .format(vm.hostname),
+            silent=True,
         ))
-        result['memory'] = int(run(
+        result['memory'] = int(self.run(
             'xm list --long {0} '
             '| grep \'(memory \' '
             '| sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''
-            .format(vm.hostname)
+            .format(vm.hostname),
+            silent=True,
         ))
+
+    def vm_info(self, vm):
+        # Any volunteers to still put effort into Xen? :-)
+        return {}
