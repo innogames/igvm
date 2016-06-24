@@ -7,12 +7,16 @@ import xml.etree.ElementTree as ET
 
 import libvirt
 
-from igvm.exceptions import IGVMError
+from igvm.exceptions import (
+    HypervisorError,
+    IGVMError,
+)
 from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
     MAC_ADDRESS_PREFIX,
 )
+from igvm.utils.units import parse_size
 
 from jinja2 import Environment, PackageLoader
 
@@ -45,39 +49,118 @@ def _find_or_create(parent, name):
     return ET.SubElement(parent, name)
 
 
-def memballoon_supported(domain):
-    """Returns whether the given domain supports memory ballooning."""
-    tree = ET.fromstring(domain.XMLDesc())
-    search = tree.findall('devices/memballoon')
-    if not search:
-        return False
-    return search[0].attrib.get('model') == 'virtio'
-
-
-def memory_hotplug_supported(domain):
-    """Returns whether memory DIMM hotplugging is supported."""
-    tree = ET.fromstring(domain.XMLDesc())
-    search = tree.findall('maxMemory')
-    return bool(search)
-
-
-def attach_memory_dimms(hv, vm, domain, memory_mib):
-    """Attaches memory DIMMs of the given size."""
-
+def _num_numa_nodes(host):
+    """Returns the number of NUMA nodes on a host."""
     # TODO: Is there an API way to query number of NUMA nodes via libvirt?
-    num_nodes = int(hv.run(
+    return int(host.run(
         'cat /sys/devices/system/node/node*/cpulist | wc -l',
         silent=True,
     ))
 
+
+class DomainProperties(object):
+    """Helper class to hold properties of a libvirt VM.
+    Several build attributes (NUMA placement, huge pages, ...) can be extracted
+    from the running configuration to determine how to perform operations."""
+    NUMA_SPREAD = 'spread'
+    NUMA_AUTO = 'auto'
+
+    def __init__(self, hv, vm):
+        self.hv = hv
+        self.vm = vm
+        self.domain = None
+        self.uuid = uuid.uuid1()
+        self.qemu_version = _get_qemu_version(hv)
+        self.hugepages = False
+        self.num_nodes = _num_numa_nodes(hv)
+        self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.admintool['num_cpu'])
+        self.max_cpus = min(self.max_cpus, hv.num_cpus)
+        self.max_mem = hv.vm_max_memory(vm)
+        self.numa_mode = self.NUMA_SPREAD
+        self.mem_hotplug = (self.qemu_version >= (2, 3))
+        self.mem_balloon = False
+        self.mac_address = _generate_mac_address(vm.admintool['intern_ip'])
+
+    @classmethod
+    def from_running(cls, hv, vm, domain):
+        xml = domain.XMLDesc()
+        tree = ET.fromstring(xml)
+
+        self = cls(hv, vm)
+        self.domain = domain
+        self.uuid = domain.UUIDString()
+        self.hugepages = tree.find('memoryBacking/hugepages') is not None
+        self.num_nodes = max(len(tree.findall('cpu/numa/cell')), 1)
+        self.max_cpus = domain.vcpusFlags(libvirt.VIR_DOMAIN_VCPU_MAXIMUM)
+        self.mem_hotplug = tree.find('maxMemory') is not None
+
+        memballoon = tree.find('devices/memballoon')
+        if memballoon is not None and \
+                memballoon.attrib.get('model') == 'virtio':
+            self.mem_balloon = True
+
+        # maxMemory() returns the current memory, even if a maxMemory node is
+        # present.
+        if not self.mem_hotplug:
+            self.max_mem = domain.maxMemory()
+        else:
+            self.max_mem = parse_size(
+                tree.find('maxMemory').text +
+                tree.find('memory').attrib.get('unit', 'KiB'),
+                'M'
+            )
+
+        self.mac_address = tree.find('devices/interface/mac').attrib['address']
+
+        if re.search(r'placement=.?auto', xml):
+            self.numa_mode = self.NUMA_AUTO
+        return self
+
+    def __repr__(self):
+        return '<DomainProperties:{}>'.format(self.__dict__)
+
+
+def set_memory(hv, vm, domain, memory_mib):
+    """Changes the amount of memory of a VM."""
+    props = DomainProperties.from_running(hv, vm, domain)
+
+    if props.mem_balloon:
+        log.info('Attempting to increase memory with ballooning')
+        try:
+            domain.setMemoryFlags(
+                memory_mib * 1024,
+                libvirt.VIR_DOMAIN_AFFECT_LIVE |
+                libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+            )
+            return
+        except libvirt.libvirtError:
+            log.info(
+                'virsh setmem failed, falling back to hotplug'
+            )
+
+    if props.mem_hotplug:
+        add_memory = memory_mib - vm.admintool['memory']
+        assert add_memory > 0
+        _attach_memory_dimms(vm, domain, props, add_memory)
+        return
+
+    raise HypervisorError(
+        '{} does not support any known memory extension strategy. '
+        'You will have to power off the machine and do it offline.'
+        .format(vm.hostname)
+    )
+
+
+def _attach_memory_dimms(vm, domain, props, memory_mib):
+    """Attaches memory DIMMs of the given size."""
     # https://medium.com/@juergen_thomann/memory-hotplug-with-qemu-kvm-and-libvirt-558f1c635972#.sytig6o9h
-    if memory_mib % (128 * num_nodes):
+    if memory_mib % (128 * props.num_nodes):
         raise IGVMError(
             'Added memory must be multiple of 128 MiB * <number of NUMA nodes>'
         )
 
-    dimm_size = int(memory_mib / num_nodes)
-    for i in range(0, num_nodes):
+    dimm_size = int(memory_mib / props.num_nodes)
+    for i in range(0, props.num_nodes):
         xml = (
             "<memory model='dimm'>"
             "<target><size unit='MiB'>{}</size><node>{}</node></target>"
@@ -92,7 +175,7 @@ def attach_memory_dimms(hv, vm, domain, memory_mib):
 
     log.info(
         'KVM: Added {} DIMMs with {} MiB each'
-        .format(num_nodes, dimm_size)
+        .format(props.num_nodes, dimm_size)
     )
 
     # Now activate all DIMMs in the guest
@@ -113,18 +196,16 @@ def _generate_mac_address(ip):
 
 def generate_domain_xml(hv, vm):
     """Generates the domain XML for a VM."""
-    version = _get_qemu_version(hv)
+    # Note: We make no attempts to import anything from a previously defined
+    #       VM, instead the VM is updated to the latest settings.
+    #       Every KVM setting should be configurable via Serveradmin anyway.
+    props = DomainProperties(hv, vm)
 
     config = {
         'disk_device': hv.vm_disk_path(vm),
         'serveradmin': vm.admintool,
-        'uuid': uuid.uuid1(),
+        'props': props,
         'vlan_tag': hv.vlan_for_vm(vm),
-        'version': version,
-        'mem_hotplug': version >= (2, 3),
-        'max_mem': hv.vm_max_memory(vm),
-        'max_cpus': _get_max_cpus(hv, vm),
-        'mac_address': _generate_mac_address(vm.admintool['intern_ip']),
     }
 
     jenv = Environment(loader=PackageLoader('igvm', 'templates'))
@@ -132,17 +213,17 @@ def generate_domain_xml(hv, vm):
 
     tree = ET.fromstring(domain_xml)
 
-    if version >= (2, 3):
+    if props.qemu_version >= (2, 3):
         _set_cpu_model(hv, vm, tree)
-        _place_numa(hv, vm, tree, config['max_cpus'])
+        _place_numa(hv, vm, tree, props)
 
     log.info('KVM: VCPUs current: {} max: {} available on host: {}'.format(
-        vm.admintool['num_cpu'], config['max_cpus'], hv.num_cpus,
+        vm.admintool['num_cpu'], props.max_cpus, hv.num_cpus,
     ))
-    if config['mem_hotplug']:
-        _set_memory_hotplug(vm, tree, config)
+    if props.mem_hotplug:
+        _set_memory_hotplug(vm, tree, props)
         log.info('KVM: Memory hotplug enabled, up to {} MiB'.format(
-            config['max_mem'],
+            props.max_mem,
         ))
     else:
         log.info('KVM: Memory hotplug disabled, requires qemu 2.3')
@@ -151,12 +232,6 @@ def generate_domain_xml(hv, vm):
     out = re.sub('>\s+<', '><', ET.tostring(tree))
     domain_xml = minidom.parseString(out).toprettyxml()
     return domain_xml
-
-
-def _get_max_cpus(hv, vm):
-    max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.admintool['num_cpu'])
-    max_cpus = min(max_cpus, hv.num_cpus)
-    return max_cpus
 
 
 def _get_qemu_version(hv):
@@ -193,14 +268,14 @@ def _set_cpu_model(hv, vm, tree):
             break
 
 
-def _set_memory_hotplug(vm, tree, config):
+def _set_memory_hotplug(vm, tree, props):
     tree.find('vcpu').attrib['placement'] = 'static'
     max_memory = _find_or_create(tree, 'maxMemory')
     max_memory.attrib.update({
         'slots': '16',
         'unit': 'MiB',
     })
-    max_memory.text = str(config['max_mem'])
+    max_memory.text = str(props.max_mem)
 
 
 def kvm_adjust_cpuset_pre(config, offline):
@@ -268,12 +343,11 @@ def kvm_adjust_cpuset_post(config, offline):
         dom.pinVcpu(i, tuple(mask))
 
 
-def _place_numa(hv, vm, tree, max_cpus):
+def _place_numa(hv, vm, tree, props):
     """
     Configures NUMA placement.
     """
-    num_vcpus = max_cpus
-    numa_mode = 'spread'
+    num_vcpus = props.max_cpus
 
     # Which physical CPU belongs to which physical node
     pcpu_sets = hv.run(
@@ -281,6 +355,7 @@ def _place_numa(hv, vm, tree, max_cpus):
         silent=True,
     ).splitlines()
     num_nodes = len(pcpu_sets)
+    assert num_nodes == len(pcpu_sets)
     nodeset = ','.join(str(i) for i in range(0, num_nodes))
 
     # Clean up stuff we're gonna overwrite anyway.
@@ -289,13 +364,7 @@ def _place_numa(hv, vm, tree, max_cpus):
     _del_if_exists(tree, 'cpu/topology')
     _del_if_exists(tree, 'cpu/numa')
 
-    memory_backing = tree.find('memoryBacking')
-    hugepages = (
-        memory_backing is not None and
-        memory_backing.find('hugepages') is not None
-    )
-
-    if numa_mode == 'spread':
+    if props.numa_mode == DomainProperties.NUMA_SPREAD:
         # We currently don't have any other hypervisors, so this script *might*
         # do something weird.
         # You may remove this check if it ever triggers and you've verified
@@ -354,7 +423,7 @@ def _place_numa(hv, vm, tree, max_cpus):
         # </cpu>
 
         # Hugepages appear to be incompatible with NUMA policies.
-        if not hugepages:
+        if not props.hugepages:
             # <numatune>
             # Map VCPUs to guest NUMA nodes.
             numatune = _find_or_create(tree, 'numatune')
@@ -372,5 +441,5 @@ def _place_numa(hv, vm, tree, max_cpus):
     else:
         raise NotImplementedError(
             'NUMA mode not supported: {0}'
-            .format(numa_mode)
+            .format(props.numa_mode)
         )
