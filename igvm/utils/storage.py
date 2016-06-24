@@ -109,31 +109,42 @@ def format_storage(hv, device):
     hv.run(cmd('mkfs.xfs -f {}', device))
 
 
-def check_netcat(port):
-    if run('pgrep -f "^/bin/nc.traditional -l -p {}"'.format(port)):
+def _check_netcat(host, port):
+    pid = host.run(
+        'pgrep -f "^/bin/nc.traditional -l -p {}"'
+        .format(port),
+        warn_only=True,
+        silent=True
+    )
+
+    if pid:
         raise StorageError(
             'Listening netcat already found on destination hypervisor.'
         )
 
 
-def kill_netcat(port):
-    run('pkill -f "^/bin/nc.traditional -l -p {}"'.format(port))
+def _kill_netcat(host, port):
+    host.run('pkill -f "^/bin/nc.traditional -l -p {}"'.format(port))
 
 
-def netcat_to_device(host, device):
+def netcat_to_device(host, device, tx=None):
     dev_minor = host.run(cmd('stat -L -c "%T" {}', device), silent=True)
     dev_minor = int(dev_minor, 16)
     port = 7000 + dev_minor
+
+    _check_netcat(host, port)
 
     # Using DD lowers load on device with big enough Block Size
     host.run(
         'nohup /bin/nc.traditional -l -p {0} | dd of={1} obs=1048576 &'
         .format(port, device)
     )
+    if tx:
+        tx.on_rollback('kill netcat', _kill_netcat, host, port)
     return (host.hostname, port)
 
 
-def device_to_netcat(host, device, size, listener):
+def device_to_netcat(host, device, size, listener, tx=None):
     # Using DD lowers load on device with big enough Block Size
     (dst_host, dst_port) = listener
     host.run(

@@ -60,6 +60,7 @@ def _reset_vm():
         'state': 'online',
         'disk_size_gib': 6,
         'memory': 2048,
+        'puppet_environment': '',
     })
     vm.admintool.commit()
     return vm
@@ -142,6 +143,16 @@ class BuildTest(IGVMTest):
         self.vm.shutdown()
         vm_delete(self.vm.hostname)
 
+        self._check_absent(self.hv, self.vm)
+
+    def test_rollback(self):
+        self.vm.admintool['puppet_environment'] = 'doesnotexist'
+        self.vm.admintool.commit()
+
+        with self.assertRaises(IGVMError):
+            buildvm(self.vm.hostname)
+
+        # Have we cleaned up?
         self._check_absent(self.hv, self.vm)
 
 
@@ -353,3 +364,15 @@ class MigrationTest(IGVMTest):
     def test_reject_online_with_puppet(self):
         with self.assertRaises(IGVMError):
             migratevm(self.vm.hostname, HV2, runpuppet=True)
+
+    def test_rollback(self):
+        self.vm.admintool['puppet_environment'] = 'doesnotexist'
+        self.vm.admintool.commit()
+
+        with self.assertRaises(IGVMError):
+            migratevm(self.vm.hostname, HV2, offline=True, runpuppet=True)
+
+        # Have we cleaned up?
+        self.vm.reload()
+        self._check_vm(self.hv1, self.vm)
+        self._check_absent(self.hv2, self.vm)

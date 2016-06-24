@@ -1,28 +1,28 @@
 import logging
 
-from fabric.api import settings
 from fabric.colors import yellow
 
+from igvm.commands import with_fabric_settings
 from igvm.exceptions import ConfigError
-from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.image import download_image, extract_image
 from igvm.utils.preparevm import (
     prepare_vm,
     copy_postboot_script,
     run_puppet,
 )
+from igvm.utils.transaction import run_in_transaction
 from igvm.vm import VM
 
 
 log = logging.getLogger(__name__)
 
 
-def buildvm(*args, **kwargs):
-    with settings(**COMMON_FABRIC_SETTINGS):
-        return _buildvm(*args, **kwargs)
+@with_fabric_settings
+@run_in_transaction
+def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None,
+            tx=None):
+    assert tx is not None, 'tx populated by run_in_transaction'
 
-
-def _buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
     vm = VM(vm_hostname)
     hv = vm.hypervisor
 
@@ -53,8 +53,8 @@ def _buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
             )
 
     # Perform operations on Hypervisor
-    vm.hypervisor.create_vm_storage(vm)
-    mount_path = vm.hypervisor.format_vm_storage(vm)
+    vm.hypervisor.create_vm_storage(vm, tx)
+    mount_path = vm.hypervisor.format_vm_storage(vm, tx)
 
     with hv.fabric_settings():
         if not localimage:
@@ -70,12 +70,16 @@ def _buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None):
         copy_postboot_script(hv, vm, postboot)
 
     vm.hypervisor.umount_vm_storage(vm)
-    hv.define_vm(vm)
+    hv.define_vm(vm, tx)
 
     # We are updating the information on the Serveradmin, before starting
     # the VM, because the VM would still be on the hypervisor even if it
     # fails to start.
     vm.admintool.commit()
+
+    # VM was successfully built, don't risk undoing all this just because start
+    # fails.
+    tx.checkpoint()
 
     vm.start()
 
