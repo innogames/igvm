@@ -35,6 +35,29 @@ def _check_defined(vm):
 
 
 @with_fabric_settings
+def vcpu_set(vm_hostname, count, offline=False):
+    """Changes the number of CPUs in a VM."""
+    vm = VM(vm_hostname)
+    _check_defined(vm)
+
+    if offline and not vm.is_running():
+        log.info(
+            '{} is already powered off, ignoring --offline.'
+            .format(vm.hostname)
+        )
+        offline = False
+
+    if count == vm.admintool['num_cpu']:
+        raise Warning('CPU count is the same.')
+
+    if offline:
+        vm.shutdown()
+    vm.set_num_cpu(count)
+    if offline:
+        vm.start()
+
+
+@with_fabric_settings
 def mem_set(vm_hostname, size, offline=False):
     """Changes the memory size of a VM.
 

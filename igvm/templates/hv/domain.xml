@@ -1,14 +1,14 @@
 <domain type='kvm'>
   <name>{{ serveradmin.hostname }}</name>
-  <uuid>{{ uuid }}</uuid>
-{% if mem_hotplug %}
-  <maxMemory slots='16' unit='MiB'>{{ max_mem }}</maxMemory>
+  <uuid>{{ props.uuid }}</uuid>
+{% if props.mem_hotplug %}
+  <maxMemory slots='16' unit='MiB'>{{ props.max_mem }}</maxMemory>
 {% endif %}
   <memory unit='MiB'>{{ serveradmin.memory }}</memory>
   <currentMemory unit='MiB'>{{ serveradmin.memory }}</currentMemory>
   
   <!-- Don't put placement attribute unless NUMA settings are set! -->
-  <vcpu current='{{ serveradmin.num_cpu }}'>{{ max_cpus }}</vcpu>
+  <vcpu current='{{ serveradmin.num_cpu }}'>{{ props.max_cpus }}</vcpu>
 
   <!-- These are filled by KVM hooks in managevm/utils/kvm.py. -->
   <!-- Disabled for now, without hooks this will break.
@@ -47,7 +47,7 @@
     <controller type='virtio-serial' index='0'>
     </controller>
     <interface type='bridge'>
-      <mac address='{{ mac_address }}'/>
+      <mac address='{{ props.mac_address }}'/>
       <source bridge='br0'/>
 {% if vlan_tag %}
       <vlan>

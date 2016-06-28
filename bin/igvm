@@ -20,6 +20,7 @@ from igvm.migratevm import migratevm
 from igvm.commands import (
     disk_set,
     mem_set,
+    vcpu_set,
     vm_start,
     vm_stop,
     vm_restart,
@@ -125,6 +126,27 @@ subparser.add_argument(
     '--offline',
     action='store_true',
     help='Shutdown VM, change memory, and restart VM',
+)
+
+
+subparser = subparsers.add_parser(
+    'vcpu-set',
+    description=(__doc__ + ' - Set number of CPUs'),
+)
+subparser.set_defaults(func=vcpu_set)
+subparser.add_argument(
+    'vm_hostname',
+    help='Hostname of the guest system',
+)
+subparser.add_argument(
+    'count',
+    type=int,
+    help='New number of CPUs',
+)
+subparser.add_argument(
+    '--offline',
+    action='store_true',
+    help='Shutdown VM, change CPUs, and restart VM',
 )
 
 
