@@ -64,11 +64,13 @@ class DomainProperties(object):
     from the running configuration to determine how to perform operations."""
     NUMA_SPREAD = 'spread'
     NUMA_AUTO = 'auto'
+    NUMA_UNBOUND = 'unbound'
+    NUMA_UNKNOWN = 'unknown'
 
     def __init__(self, hv, vm):
-        self.hv = hv
-        self.vm = vm
-        self.domain = None
+        self._hv = hv
+        self._vm = vm
+        self._domain = None
         self.uuid = uuid.uuid1()
         self.qemu_version = _get_qemu_version(hv)
         self.hugepages = False
@@ -81,13 +83,21 @@ class DomainProperties(object):
         self.mem_balloon = False
         self.mac_address = _generate_mac_address(vm.admintool['intern_ip'])
 
+    def info(self):
+        """Returns a dictionary with user-exposable information."""
+        return {
+            k: v
+            for k, v in vars(self).iteritems()
+            if not k.startswith('_')
+        }
+
     @classmethod
     def from_running(cls, hv, vm, domain):
         xml = domain.XMLDesc()
         tree = ET.fromstring(xml)
 
         self = cls(hv, vm)
-        self.domain = domain
+        self._domain = domain
         self.uuid = domain.UUIDString()
         self.hugepages = tree.find('memoryBacking/hugepages') is not None
         self.num_nodes = max(len(tree.findall('cpu/numa/cell')), 1)
@@ -112,8 +122,16 @@ class DomainProperties(object):
 
         self.mac_address = tree.find('devices/interface/mac').attrib['address']
 
-        if re.search(r'placement=.?auto', xml):
+        if self.num_nodes > 1:
+            self.numa_mode = self.NUMA_SPREAD
+        elif re.search(r'placement=.?auto', xml):
             self.numa_mode = self.NUMA_AUTO
+        # Domain is unbound if it is allowed to run on all available cores.
+        elif all(all(p for p in pcpus) for pcpus in domain.vcpuPinInfo()):
+            self.numa_mode = self.NUMA_UNBOUND
+        else:
+            log.warning('KVM: Cannot determine NUMA of {}'.format(vm.hostname))
+            self.numa_node = self.NUMA_UNKNOWN
         return self
 
     def __repr__(self):
