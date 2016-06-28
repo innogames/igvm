@@ -64,6 +64,8 @@ class DomainProperties(object):
     from the running configuration to determine how to perform operations."""
     NUMA_SPREAD = 'spread'
     NUMA_AUTO = 'auto'
+    NUMA_UNBOUND = 'unbound'
+    NUMA_UNKNOWN = 'unknown'
 
     def __init__(self, hv, vm):
         self._hv = hv
@@ -120,8 +122,16 @@ class DomainProperties(object):
 
         self.mac_address = tree.find('devices/interface/mac').attrib['address']
 
-        if re.search(r'placement=.?auto', xml):
+        if self.num_nodes > 1:
+            self.numa_mode = self.NUMA_SPREAD
+        elif re.search(r'placement=.?auto', xml):
             self.numa_mode = self.NUMA_AUTO
+        # Domain is unbound if it is allowed to run on all available cores.
+        elif all(all(p for p in pcpus) for pcpus in domain.vcpuPinInfo()):
+            self.numa_mode = self.NUMA_UNBOUND
+        else:
+            log.warning('KVM: Cannot determine NUMA of {}'.format(vm.hostname))
+            self.numa_node = self.NUMA_UNKNOWN
         return self
 
     def __repr__(self):
