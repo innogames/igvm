@@ -11,6 +11,7 @@ from fabric.api import env
 
 from igvm.buildvm import buildvm
 from igvm.commands import (
+    host_info,
     mem_set,
     vcpu_set,
     vm_delete,
@@ -310,6 +311,16 @@ class CommandTest(IGVMTest):
         # Shouldn't do anything, but also shouldn't fail
         vm_sync(self.vm.hostname)
         self.vm.reload()
+
+    def test_info(self):
+        # Not built
+        host_info(self.vm.hostname)
+
+        buildvm(self.vm.hostname)
+        host_info(self.vm.hostname)
+
+        self.vm.shutdown()
+        host_info(self.vm.hostname)
 
 
 class MigrationTest(IGVMTest):
