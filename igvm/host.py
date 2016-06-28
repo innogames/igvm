@@ -1,7 +1,8 @@
-import fabric.api
+from StringIO import StringIO
 
 from adminapi.dataset import query, ServerObject
 
+import fabric.api
 import fabric.state
 
 from igvm.exceptions import ConfigError, RemoteCommandError
@@ -73,6 +74,15 @@ class Host(object):
 
         with self.fabric_settings(*settings, warn_only=warn_only):
             return fabric.api.run(*args, **kwargs)
+
+    def read_file(self, path):
+        """Reads a file from the remote host and returns contents."""
+        if '*' in path:
+            raise ValueError('No globbing supported')
+        with self.fabric_settings(fabric.api.hide('commands')):
+            fd = StringIO()
+            fabric.api.get(path, fd)
+            return fd.getvalue()
 
     def disconnect(self):
         """Disconnect active Fabric sessions."""

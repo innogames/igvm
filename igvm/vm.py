@@ -9,6 +9,7 @@ from igvm.host import Host
 from igvm.hypervisor import Hypervisor
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
+from igvm.utils.units import parse_size
 
 log = logging.getLogger(__name__)
 
@@ -132,22 +133,30 @@ class VM(Host):
         else:
             return False
 
+    def _meminfo(self):
+        """Returns a dictionary of /proc/meminfo entries."""
+        contents = self.read_file('/proc/meminfo')
+        result = {}
+        for line in contents.splitlines():
+            try:
+                (key, value) = [tok.strip() for tok in line.split(':')]
+            except IndexError:
+                continue
+            result[key] = value
+        return result
+
     def memory_free(self):
-        output = self.run(
-            "cat /proc/meminfo | grep MemAvailable | awk '{ print $2 }'",
-            silent=True,
-        ).strip()
+        meminfo = self._meminfo()
 
-        # MemAvailable might not be there
-        if not output:
-            output = self.run(
-                "cat /proc/meminfo | grep MemFree | awk '{ print $2 }'",
-                silent=True,
-            ).strip()
+        if 'MemAvailable' in meminfo:
+            kib_free = parse_size(meminfo['MemAvailable'], 'K')
+        # MemAvailable might not be present on old systems
+        elif 'MemFree' in meminfo:
+            kib_free = parse_size(meminfo['MemFree'], 'K')
+        else:
+            raise VMError('/proc/meminfo contains no parsable entries')
 
-        if not output.isdigit():
-            raise RemoteCommandError('Non-numeric output in memory_free')
-        return round(float(output) / 1024, 2)
+        return round(float(kib_free) / 1024, 2)
 
     def disk_free(self):
         """Returns free disk space in GiB"""
@@ -174,10 +183,7 @@ class VM(Host):
                 'status': 'running',
                 'memory_free': self.memory_free(),
                 'disk_free_gib': self.disk_free(),
-                'load': self.run(
-                    "cat /proc/loadavg | cut -d ' ' -f1-3",
-                    silent=True,
-                ),
+                'load': self.read_file('/proc/loadavg').split()[:3],
             })
             result.update(self.hypervisor.vm_info(self))
         elif self.hypervisor.vm_defined(self):

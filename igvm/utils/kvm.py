@@ -85,7 +85,7 @@ class DomainProperties(object):
         """Returns a dictionary with user-exposable information."""
         return {
             k: v
-            for (k, v) in vars(self).iteritems()
+            for k, v in vars(self).iteritems()
             if not k.startswith('_')
         }
 

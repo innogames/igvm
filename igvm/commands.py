@@ -282,10 +282,10 @@ def host_info(vm_hostname):
             'Current: {} {unit}\n'
             'Free:    {} {unit}\n'
             'Max:     {} {unit}'
-            .format(capacity-free, free, capacity, unit=unit)
+            .format(capacity - free, free, capacity, unit=unit)
         )
 
-        if free < 0 or free > capacity or capacity <= 0:
+        if not 0 <= free <= capacity > 0:
             log.warning(
                 '{} ({}) and {} ({}) have weird ratio, skipping progress '
                 'calculation'
@@ -308,8 +308,8 @@ def host_info(vm_hostname):
         info[result_key] = (
             '[{}{}] {}%\n{}'
             .format(
-                _color('#'*num_bars, color), ' '*(max_bars-num_bars),
-                int(round(ratio*100)),
+                _color('#' * num_bars, color), ' ' * (max_bars - num_bars),
+                int(round(ratio * 100)),
                 simple_stats,
             )
         )
@@ -333,7 +333,6 @@ def host_info(vm_hostname):
                 continue
 
             # Properly re-indent multiline values
-            value = str(info[k])
-            value = ('\n'+' '*(max_key_len + 3)).join(value.split('\n'))
+            value = str(info.pop(k))
+            value = ('\n'+' '*(max_key_len + 3)).join(value.splitlines())
             print('{} : {}'.format(k.ljust(max_key_len), value))
-            del info[k]
