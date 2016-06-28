@@ -11,8 +11,8 @@ from fabric.api import env
 
 from igvm.buildvm import buildvm
 from igvm.commands import (
-    cpu_set,
     mem_set,
+    vcpu_set,
     vm_delete,
     vm_restart,
     vm_start,
@@ -238,7 +238,7 @@ class CommandTest(IGVMTest):
         self.vm.start()
         self.assertEqual(_get_mem_vm() - vm_mem, -1024)
 
-    def test_cpu_set(self):
+    def test_vcpu_set(self):
         buildvm(self.vm.hostname)
 
         def _get_hv():
@@ -253,7 +253,7 @@ class CommandTest(IGVMTest):
         self.assertEqual(_get_hv(), 2)
         self.assertEqual(_get_vm(), 2)
         self.assertEqual(self.vm.admintool['num_cpu'], 2)
-        cpu_set(self.vm.hostname, 3)
+        vcpu_set(self.vm.hostname, 3)
         self.assertEqual(_get_hv(), 3)
         self.assertEqual(_get_vm(), 3)
 
@@ -261,29 +261,29 @@ class CommandTest(IGVMTest):
         self.assertEqual(self.vm.admintool['num_cpu'], 3)
 
         with self.assertRaises(Warning):
-            cpu_set(self.vm.hostname, 3)
+            vcpu_set(self.vm.hostname, 3)
 
         # Online reduce not implemented yet
         with self.assertRaises(IGVMError):
-            cpu_set(self.vm.hostname, 2)
+            vcpu_set(self.vm.hostname, 2)
 
         # Offline
-        cpu_set(self.vm.hostname, 2, offline=True)
+        vcpu_set(self.vm.hostname, 2, offline=True)
         self.assertEqual(_get_hv(), 2)
         self.assertEqual(_get_vm(), 2)
 
         # Impossible amount
         with self.assertRaises(IGVMError):
-            cpu_set(self.vm.hostname, 9001)
+            vcpu_set(self.vm.hostname, 9001)
 
         with self.assertRaises(IGVMError):
-            cpu_set(self.vm.hostname, 0, offline=True)
+            vcpu_set(self.vm.hostname, 0, offline=True)
 
         with self.assertRaises(IGVMError):
-            cpu_set(self.vm.hostname, -5)
+            vcpu_set(self.vm.hostname, -5)
 
         with self.assertRaises(IGVMError):
-            cpu_set(self.vm.hostname, -5, offline=True)
+            vcpu_set(self.vm.hostname, -5, offline=True)
 
     def test_sync(self):
         buildvm(self.vm.hostname)
