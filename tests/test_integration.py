@@ -37,12 +37,13 @@ logging.basicConfig(level=logging.DEBUG)
 env.update(COMMON_FABRIC_SETTINGS)
 
 # Configuration of staging environment
-IP1 = '10.20.6.98'
-IP2 = '10.20.6.253'
+IP1 = '10.20.6.98'   # aw21.igvm
+IP2 = '10.20.6.253'  # aw21.igvm
+IP3 = '10.9.70.3'    # af10.igvm
 VM1 = 'igvm-integration.test'
 HV1 = 'aw-hv-055'  # 48 cores
 HV2 = 'aw-hv-057'  # 48 cores
-HV3 = 'ah-hv-082'  # 16 cores
+HV3 = 'af10w005'   # Xen
 
 
 def _ensure_ip_unused(ip):
@@ -54,9 +55,10 @@ def _ensure_ip_unused(ip):
 def _check_environment():
     _ensure_ip_unused(IP1)
     _ensure_ip_unused(IP2)
+    _ensure_ip_unused(IP3)
 
 
-def _reset_vm():
+def _reset_vm(**kwargs):
     vm = VM(VM1)
     vm.admintool.update({
         'xen_host': HV1,
@@ -67,14 +69,34 @@ def _reset_vm():
         'puppet_environment': '',
         'num_cpu': 2,
     })
+    vm.admintool.update(kwargs)
     vm.admintool.commit()
+    # Might have changed!
+    vm.hypervisor = Hypervisor.get(vm.admintool['xen_host'])
     return vm
 
 
 def _clean_vm(hv, hostname):
+    if hv.admintool['hypervisor'] == 'kvm':
+        hv.run(
+            'virsh destroy {vm}; '
+            'virsh undefine {vm}'
+            .format(vm=hostname),
+            warn_only=True,
+        )
+    elif hv.admintool['hypervisor'] == 'xen':
+        hv.run(
+            'xm destroy {vm}; '
+            'rm -f /etc/xen/domains/{vm}.sxp'
+            .format(vm=hostname),
+            warn_only=True,
+        )
+    else:
+        raise NotImplementedError(
+            'Not sure how to clean {} HV'
+            .format(hv.admintool['hypervisor'])
+        )
     hv.run(
-        'virsh destroy {vm}; '
-        'virsh undefine {vm}; '
         'umount /dev/xen-data/{vm}; '
         'lvremove -f /dev/xen-data/{vm}'
         .format(vm=hostname),
@@ -100,13 +122,10 @@ class IGVMTest(unittest.TestCase):
         hv.run('test ! -b /dev/xen-data/{}'.format(vm.hostname))
 
 
-class BuildTest(IGVMTest):
+class BuildTest(object):
     def setUp(self):
         adminapi.auth()
         _check_environment()
-        self.hv = Hypervisor.get(HV1)
-        self.vm = _reset_vm()
-        _clean_vm(self.hv, self.vm.hostname)
 
     def tearDown(self):
         _clean_vm(self.hv, self.vm.hostname)
@@ -114,13 +133,13 @@ class BuildTest(IGVMTest):
     def test_simple(self):
         buildvm(self.vm.hostname)
 
-        self.assertEqual(self.vm.hypervisor.hostname, HV1)
+        self.assertEqual(self.vm.hypervisor.hostname, self.hv.hostname)
         self._check_vm(self.hv, self.vm)
 
     def test_local_image(self):
         buildvm(self.vm.hostname, localimage='/root/jessie-localimage.tar.gz')
 
-        self.assertEqual(self.vm.hypervisor.hostname, HV1)
+        self.assertEqual(self.vm.hypervisor.hostname, self.hv.hostname)
         self._check_vm(self.hv, self.vm)
 
         output = self.vm.run('md5sum /root/local_image_canary')
@@ -132,7 +151,7 @@ class BuildTest(IGVMTest):
             f.flush()
 
             buildvm(self.vm.hostname, postboot=f.name)
-            self.assertEqual(self.vm.hypervisor.hostname, HV1)
+            self.assertEqual(self.vm.hypervisor.hostname, self.hv.hostname)
             self._check_vm(self.hv, self.vm)
 
             output = self.vm.run('cat /root/postboot_result')
@@ -161,13 +180,29 @@ class BuildTest(IGVMTest):
         self._check_absent(self.hv, self.vm)
 
 
-class CommandTest(IGVMTest):
+class KVMBuildTest(IGVMTest, BuildTest):
     def setUp(self):
-        adminapi.auth()
-        _check_environment()
+        BuildTest.setUp(self)
         self.hv = Hypervisor.get(HV1)
         self.vm = _reset_vm()
         _clean_vm(self.hv, self.vm.hostname)
+
+
+class XenBuildTest(IGVMTest, BuildTest):
+    def setUp(self):
+        BuildTest.setUp(self)
+        self.hv = Hypervisor.get(HV3)
+        self.vm = _reset_vm(
+            xen_host=HV3,
+            intern_ip=IP3,
+        )
+        _clean_vm(self.hv, self.vm.hostname)
+
+
+class CommandTest(object):
+    def setUp(self):
+        adminapi.auth()
+        _check_environment()
 
     def tearDown(self):
         _clean_vm(self.hv, self.vm.hostname)
@@ -236,7 +271,9 @@ class CommandTest(IGVMTest):
         buildvm(self.vm.hostname)
 
         def _get_mem_hv():
-            return self.hv.vm_sync_from_hypervisor(self.vm)['memory']
+            # Xen does not provide values when VM is powered off
+            data = self.hv.vm_sync_from_hypervisor(self.vm)
+            return data.get('memory', self.vm.admintool['memory'])
 
         def _get_mem_vm():
             return int(float(self.vm.run(
@@ -282,7 +319,9 @@ class CommandTest(IGVMTest):
         buildvm(self.vm.hostname)
 
         def _get_hv():
-            return self.hv.vm_sync_from_hypervisor(self.vm)['num_cpu']
+            # Xen does not provide values when VM is powered off
+            data = self.hv.vm_sync_from_hypervisor(self.vm)
+            return data.get('num_cpu', self.vm.admintool['num_cpu'])
 
         def _get_vm():
             return int(self.vm.run(
@@ -303,9 +342,10 @@ class CommandTest(IGVMTest):
         with self.assertRaises(Warning):
             vcpu_set(self.vm.hostname, 3)
 
-        # Online reduce not implemented yet
-        with self.assertRaises(IGVMError):
-            vcpu_set(self.vm.hostname, 2)
+        # Online reduce not implemented yet on KVM
+        if self.hv.admintool['hypervisor'] == 'kvm':
+            with self.assertRaises(IGVMError):
+                vcpu_set(self.vm.hostname, 2)
 
         # Offline
         vcpu_set(self.vm.hostname, 2, offline=True)
@@ -360,6 +400,25 @@ class CommandTest(IGVMTest):
 
         self.vm.shutdown()
         host_info(self.vm.hostname)
+
+
+class KVMCommandTest(IGVMTest, CommandTest):
+    def setUp(self):
+        CommandTest.setUp(self)
+        self.hv = Hypervisor.get(HV1)
+        self.vm = _reset_vm()
+        _clean_vm(self.hv, self.vm.hostname)
+
+
+class XenCommandTest(IGVMTest, CommandTest):
+    def setUp(self):
+        CommandTest.setUp(self)
+        self.hv = Hypervisor.get(HV3)
+        self.vm = _reset_vm(
+            xen_host=HV3,
+            intern_ip=IP3,
+        )
+        _clean_vm(self.hv, self.vm.hostname)
 
 
 class MigrationTest(IGVMTest):
