@@ -125,9 +125,10 @@ def disk_set(vm_hostname, size):
         lvresize(vm_volume, new_size_gib)
 
         # TODO This should go to utils/hypervisor.py.
-        run('virsh blockresize --path {0} --size {1}GiB {2}'.format(
-            vm_volume, new_size_gib, vm.hostname
-        ))
+        if vm.hypervisor.admintool['hypervisor'] == 'kvm':
+            run('virsh blockresize --path {0} --size {1}GiB {2}'.format(
+                vm_volume, new_size_gib, vm.hostname
+            ))
 
     # TODO This should go to utils/vm.py.
     vm.run('xfs_growfs /')

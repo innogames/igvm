@@ -11,6 +11,7 @@ from fabric.api import env
 
 from igvm.buildvm import buildvm
 from igvm.commands import (
+    disk_set,
     host_info,
     mem_set,
     vcpu_set,
@@ -29,6 +30,7 @@ from igvm.hypervisor import Hypervisor
 from igvm.migratevm import migratevm
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils import cmd
+from igvm.utils.units import parse_size
 from igvm.vm import VM
 
 logging.basicConfig(level=logging.DEBUG)
@@ -192,6 +194,43 @@ class CommandTest(IGVMTest):
 
         vm_restart(self.vm.hostname, force=True)
         self._check_vm(self.hv, self.vm)
+
+    def test_disk_set(self):
+        buildvm(self.vm.hostname)
+
+        def _get_hv():
+            return self.hv.vm_sync_from_hypervisor(self.vm)['disk_size_gib']
+
+        def _get_vm():
+            return parse_size(self.vm.run(
+                "df -h / | tail -n+2 | awk '{ print $2 }'"
+            ).strip(), 'G')
+
+        self.assertEqual(_get_hv(), 6)
+        self.assertEqual(_get_vm(), 6)
+
+        disk_set(self.vm.hostname, '+1')
+        self.vm.reload()
+
+        self.assertEqual(self.vm.admintool['disk_size_gib'], 7)
+        self.assertEqual(_get_hv(), 7)
+        self.assertEqual(_get_vm(), 7)
+
+        disk_set(self.vm.hostname, '8GB')
+        self.vm.reload()
+
+        self.assertEqual(self.vm.admintool['disk_size_gib'], 8)
+        self.assertEqual(_get_hv(), 8)
+        self.assertEqual(_get_vm(), 8)
+
+        with self.assertRaises(Warning):
+            disk_set(self.vm.hostname, '8GB')
+
+        with self.assertRaises(NotImplementedError):
+            disk_set(self.vm.hostname, '7GB')
+
+        with self.assertRaises(NotImplementedError):
+            disk_set(self.vm.hostname, '-1')
 
     def test_mem_set(self):
         buildvm(self.vm.hostname)

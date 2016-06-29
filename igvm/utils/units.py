@@ -1,6 +1,5 @@
 from __future__ import division
 
-import re
 
 _SIZE_FACTORS = {
     'T': 1024**4,
@@ -16,6 +15,7 @@ def parse_size(text, unit):
     We are dealing with the units case in-sensitively.
     """
 
+    text = text.strip()
     text = text.upper()
     unit = unit.upper()
 
@@ -34,17 +34,17 @@ def parse_size(text, unit):
     else:
         factor = _SIZE_FACTORS[unit]
 
-    text = text.strip()
-
-    if not unicode(text).isnumeric():
+    try:
+        value = float(text) * factor
+    except ValueError:
         raise ValueError(
-            'Size has to be in {}iB without decimal place.'.format(unit)
+            'Cannot parse "{}" as {}iB value.'.format(text, unit)
         )
 
-    value = int(text) * factor
     if value % _SIZE_FACTORS[unit]:
         raise ValueError('Value must be multiple of 1 {}iB'.format(unit))
     return int(value / _SIZE_FACTORS[unit])
 
+
 def convert_size(size, from_name, to_name):
-    return size / _size_factors[from_name.upper()] * _size_factors[to_name.upper()]
+    return size / _SIZE_FACTORS[from_name.upper()] * _SIZE_FACTORS[to_name.upper()]
