@@ -554,12 +554,13 @@ class XenHypervisor(Hypervisor):
         return os.path.join('/etc/xen/domains', vm.hostname + '.sxp')
 
     def _define_vm(self, vm, tx):
-        sxp_file = 'etc/xen/domains/hostname.sxp'
-        upload_template(sxp_file, self._sxp_path(vm), {
-            'disk_device': self.vm_disk_path(vm),
-            'serveradmin': vm.admintool,
-            'max_mem': self.vm_max_memory(vm),
-        })
+        sxp_file = 'hv/domain.sxp'
+        with self.fabric_settings():
+            upload_template(sxp_file, self._sxp_path(vm), {
+                'disk_device': self.vm_disk_path(vm),
+                'serveradmin': vm.admintool,
+                'max_mem': self.vm_max_memory(vm),
+            })
 
     def start_vm(self, vm):
         super(XenHypervisor, self).start_vm(vm)
