@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import time
 
 import libvirt
 
@@ -30,6 +31,7 @@ from igvm.utils.storage import (
     format_storage,
     get_logical_volumes,
     get_vm_volume,
+    lvresize,
     mount_temp,
     remove_logical_volume,
     remove_temp,
@@ -316,6 +318,15 @@ class Hypervisor(Host):
         vm.admintool['memory'] = memory
         vm.admintool.commit()
 
+    def vm_set_disk_size_gib(self, vm, new_size_gib):
+        """Changes disk size of a VM."""
+        if new_size_gib < vm.admintool['disk_size_gib']:
+            raise NotImplementedError('Cannot shrink the disk.')
+        with self.fabric_settings():
+            lvresize(self.vm_disk_path(vm), new_size_gib)
+
+        self._vm_set_disk_size_gib(vm, new_size_gib)
+
     def create_vm_storage(self, vm, tx=None):
         """Allocate storage for a VM. Returns the disk path."""
         assert vm not in self._disk_path, 'Disk already created?'
@@ -464,6 +475,13 @@ class KVMHypervisor(Hypervisor):
     def _vm_set_memory(self, vm, memory_mib):
         set_memory(self, vm, self._domain(vm), memory_mib)
 
+    def _vm_set_disk_size_gib(self, vm, disk_size_gib):
+        self.run(
+            'virsh blockresize --path {0} --size {1}GiB {2}'
+            .format(self.vm_disk_path(vm), disk_size_gib, vm.hostname)
+        )
+        vm.run('xfs_growfs /')
+
     def _define_vm(self, vm, tx):
         domain_xml = generate_domain_xml(self, vm)
         self.conn.defineXML(domain_xml)
@@ -609,6 +627,30 @@ class XenHypervisor(Hypervisor):
     def _vm_set_memory(self, vm, memory_mib):
         self.run(cmd('xm mem-max {} {}', vm.hostname, self.vm_max_memory(vm)))
         self.run(cmd('xm mem-set {} {}', vm.hostname, memory_mib))
+
+    def _vm_set_disk_size_gib(self, vm, disk_size_gib):
+        # Xen seems to take a while before disk changes propagate...
+        for i in range(0, 7):
+            vm.run('mknod /dev/root b 202 1', warn_only=True, silent=True)
+            output = vm.run('xfs_growfs /')
+            if 'changed' in output:
+                break
+            # Otherwise assume the last line is something like:
+            # "realtime =none              extsz=4096   blocks=0, rtextents=0"
+            if output.strip().splitlines()[-1].count('=') < 3:
+                raise HypervisorError(
+                    'xfs_growfs yielded unexpected output:\n{}'
+                    .format(output)
+                )
+            # Exponential backoff timeout up until (arbitrary ~6 seconds).
+            sleep_time = 0.1 * 2**i
+            log.info(
+                'New disk size is not yet visible in VM, retrying in {0:.2f}s'
+                .format(sleep_time)
+            )
+            time.sleep(sleep_time)
+        else:
+            raise HypervisorError('xfs_growfs never detected a disk change')
 
     def _vm_sync_from_hypervisor(self, vm, result):
         result['num_cpu'] = int(self.run(

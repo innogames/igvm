@@ -14,7 +14,6 @@ from fabric.network import disconnect_all
 
 from igvm.exceptions import InvalidStateError
 from igvm.settings import COMMON_FABRIC_SETTINGS
-from igvm.utils.storage import lvresize, get_vm_volume
 from igvm.utils.units import parse_size
 from igvm.vm import VM
 
@@ -112,26 +111,15 @@ def disk_set(vm_hostname, size):
     current_size_gib = vm.admintool['disk_size_gib']
     if size.startswith('+'):
         new_size_gib = current_size_gib + parse_size(size[1:], 'g')
-    elif not size.startswith('-'):
+    elif size.startswith('-'):
+        new_size_gib = current_size_gib - parse_size(size[1:], 'g')
+    else:
         new_size_gib = parse_size(size, 'g')
 
-    if size.startswith('-') or new_size_gib < current_size_gib:
-        raise NotImplementedError('Cannot shrink the disk.')
     if new_size_gib == vm.admintool['disk_size_gib']:
         raise Warning('Disk size is the same.')
 
-    with vm.hypervisor.fabric_settings():
-        vm_volume = get_vm_volume(vm.hypervisor, vm)
-        lvresize(vm_volume, new_size_gib)
-
-        # TODO This should go to utils/hypervisor.py.
-        if vm.hypervisor.admintool['hypervisor'] == 'kvm':
-            run('virsh blockresize --path {0} --size {1}GiB {2}'.format(
-                vm_volume, new_size_gib, vm.hostname
-            ))
-
-    # TODO This should go to utils/vm.py.
-    vm.run('xfs_growfs /')
+    vm.hypervisor.vm_set_disk_size_gib(vm, new_size_gib)
 
     vm.admintool['disk_size_gib'] = new_size_gib
     vm.admintool.commit()
