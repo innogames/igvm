@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 def get_logical_volumes(host):
     lvolumes = []
     lvs = host.run(
-        'lvs --noheadings -o name,vg_name,lv_size --unit m --nosuffix'
+        'lvs --noheadings -o name,vg_name,lv_size --unit b --nosuffix'
         ' 2>/dev/null',
         silent=True
     )
@@ -24,7 +24,7 @@ def get_logical_volumes(host):
             'path': '/dev/{}/{}'.format(vg_name, lv_name),
             'name': lv_name,
             'vg_name': vg_name,
-            'size_MiB': math.ceil(float(lv_size)),
+            'size_MiB': math.ceil(float(lv_size) / 1024**2),
         })
     return lvolumes
 
