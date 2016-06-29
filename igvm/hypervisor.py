@@ -268,7 +268,9 @@ class Hypervisor(Host):
             self._vm_set_num_cpu(vm, num_cpu)
 
         # Validate changes
-        current_num_cpu = self.vm_sync_from_hypervisor(vm)['num_cpu']
+        # We can't rely on the HV to provide data on VMs all the time.
+        updated_admintool = self.vm_sync_from_hypervisor(vm)
+        current_num_cpu = updated_admintool.get('num_cpu', num_cpu)
         if current_num_cpu != num_cpu:
             raise HypervisorError(
                 'New CPUs are not visible to hypervisor, '
@@ -593,6 +595,16 @@ class XenHypervisor(Hypervisor):
     def undefine_vm(self, vm):
         super(XenHypervisor, self).undefine_vm(vm)
         self.run(cmd('rm {0}', self._sxp_path(vm)))
+
+    def _vm_set_num_cpu(self, vm, num_cpu):
+        self.run(cmd('xm vcpu-set {} {}', vm.hostname, num_cpu))
+
+        # Activate all CPUs in the guest
+        vm.run(
+            'echo 1 | tee /sys/devices/system/cpu/cpu*/online',
+            # Xen often throws "invalid argument", but it works anyway
+            warn_only=True,
+        )
 
     def _vm_set_memory(self, vm, memory_mib):
         self.run(cmd('xm mem-max {} {}', vm.hostname, self.vm_max_memory(vm)))
