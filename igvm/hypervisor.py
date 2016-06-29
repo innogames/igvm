@@ -19,6 +19,7 @@ from igvm.exceptions import (
 from igvm.host import Host, get_server
 from igvm.settings import HOST_RESERVED_MEMORY
 from igvm.utils import cmd
+from igvm.utils.backoff import retry_wait_backoff
 from igvm.utils.kvm import (
     DomainProperties,
     generate_domain_xml,
@@ -287,10 +288,6 @@ class Hypervisor(Host):
         self._check_attribute_synced(vm, 'memory')
 
         running = self.vm_running(vm)
-        if running and memory < vm.admintool['memory']:
-            raise InvalidStateError(
-                'Cannot shrink memory while VM is running'
-            )
 
         if self.free_vm_memory() < memory - vm.admintool['memory']:
             raise HypervisorError('Not enough free memory on hypervisor.')
@@ -305,10 +302,17 @@ class Hypervisor(Host):
             self.undefine_vm(vm)
             self.define_vm(vm)
         else:
+            old_total = vm.meminfo()['MemTotal']
             self._vm_set_memory(vm, memory)
+            # HV might take some time to propagate memory changes,
+            # wait until MemTotal changes.
+            retry_wait_backoff(
+                lambda: vm.meminfo()['MemTotal'] != old_total,
+                'New memory is not yet visible',
+            )
 
-        # Validate changes
-        current_memory = self.vm_sync_from_hypervisor(vm)['memory']
+        # Validate changes, if possible.
+        current_memory = self.vm_sync_from_hypervisor(vm).get('memory', memory)
         if current_memory != memory:
             raise HypervisorError(
                 'New memory is not visible to hypervisor, '
@@ -473,6 +477,10 @@ class KVMHypervisor(Hypervisor):
         set_vcpus(self, vm, self._domain(vm), num_cpu)
 
     def _vm_set_memory(self, vm, memory_mib):
+        if self.vm_running(vm) and memory_mib < vm.admintool['memory']:
+            raise InvalidStateError(
+                'Cannot shrink memory while VM is running'
+            )
         set_memory(self, vm, self._domain(vm), memory_mib)
 
     def _vm_set_disk_size_gib(self, vm, disk_size_gib):
@@ -560,11 +568,8 @@ class XenHypervisor(Hypervisor):
             )
 
     def total_vm_memory(self):
-        mem = int(self.run(
-            "cat /proc/meminfo | grep MemTotal | awk '{ print $2 }'",
-            silent=True,
-        )) / 1024
-        return mem - HOST_RESERVED_MEMORY
+        # We can't trust the dom0, so let's assume Serveradmin is right.
+        return self.admintool['memory'] - HOST_RESERVED_MEMORY
 
     def free_vm_memory(self):
         # FIXME: We don't seem to know, so let's assume it's fine.
@@ -625,8 +630,23 @@ class XenHypervisor(Hypervisor):
         )
 
     def _vm_set_memory(self, vm, memory_mib):
-        self.run(cmd('xm mem-max {} {}', vm.hostname, self.vm_max_memory(vm)))
+        max_mem = self.vm_max_memory(vm)
+        if max_mem < memory_mib:
+            raise HypervisorError(
+                '{} can only receive up to {} MiB'.format(max_mem)
+                .format(vm.hostname)
+            )
+        self.run(cmd('xm mem-max {} {}', vm.hostname, max_mem))
         self.run(cmd('xm mem-set {} {}', vm.hostname, memory_mib))
+        # Xen takes time...
+        log.info('Waiting 5 seconds for Xen to tell the VM about new memory')
+        time.sleep(5)
+        # Activate DIMMs
+        vm.run(
+            'echo online | tee /sys/devices/system/memory/memory*/state',
+            silent=True,
+            warn_only=True,
+        )
 
     def _vm_set_disk_size_gib(self, vm, disk_size_gib):
         # Xen seems to take a while before disk changes propagate...

@@ -31,6 +31,11 @@ class InvalidStateError(IGVMError):
     pass
 
 
+class TimeoutError(IGVMError):
+    """An operation timed out."""
+    pass
+
+
 class InconsistentAttributeError(IGVMError):
     """An attribute on the VM differs from the excepted value from
     Serveradmin."""

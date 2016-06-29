@@ -133,7 +133,7 @@ class VM(Host):
         else:
             return False
 
-    def _meminfo(self):
+    def meminfo(self):
         """Returns a dictionary of /proc/meminfo entries."""
         contents = self.read_file('/proc/meminfo')
         result = {}
@@ -146,7 +146,7 @@ class VM(Host):
         return result
 
     def memory_free(self):
-        meminfo = self._meminfo()
+        meminfo = self.meminfo()
 
         if 'MemAvailable' in meminfo:
             kib_free = parse_size(meminfo['MemAvailable'], 'K')
