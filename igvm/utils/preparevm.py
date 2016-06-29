@@ -22,7 +22,8 @@ def _create_ssh_keys():
     # This will also create the public key files.
     for key_type in ('dsa', 'rsa', 'ecdsa', 'ed25519'):
         run(
-            'ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'
+            # Use ssh-keygen from chroot in case HV OS is too old
+            'chroot . ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'
             .format(key_type)
         )
 
