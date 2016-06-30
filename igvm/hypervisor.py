@@ -650,11 +650,11 @@ class XenHypervisor(Hypervisor):
 
     def _vm_set_disk_size_gib(self, vm, disk_size_gib):
         # Xen seems to take a while before disk changes propagate...
-        for i in range(0, 7):
+        def _try_grow():
             vm.run('mknod /dev/root b 202 1', warn_only=True, silent=True)
             output = vm.run('xfs_growfs /')
             if 'changed' in output:
-                break
+                return True
             # Otherwise assume the last line is something like:
             # "realtime =none              extsz=4096   blocks=0, rtextents=0"
             if output.strip().splitlines()[-1].count('=') < 3:
@@ -662,15 +662,11 @@ class XenHypervisor(Hypervisor):
                     'xfs_growfs yielded unexpected output:\n{}'
                     .format(output)
                 )
-            # Exponential backoff timeout up until (arbitrary ~6 seconds).
-            sleep_time = 0.1 * 2**i
-            log.info(
-                'New disk size is not yet visible in VM, retrying in {0:.2f}s'
-                .format(sleep_time)
-            )
-            time.sleep(sleep_time)
-        else:
-            raise HypervisorError('xfs_growfs never detected a disk change')
+            return False
+        retry_wait_backoff(
+            _try_grow,
+            'New disk size is not yet visible in VM',
+        )
 
     def _vm_sync_from_hypervisor(self, vm, result):
         result['num_cpu'] = int(self.run(

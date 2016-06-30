@@ -7,6 +7,7 @@ from igvm.exceptions import (
 )
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
+from igvm.utils.backoff import retry_wait_backoff
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
 from igvm.utils.units import parse_size
@@ -90,17 +91,19 @@ class VM(Host):
 
         # Wait until we can login
         log.info('Trying SSH login')
-        for i in range(0, 7):
+
+        def _try_login():
             try:
                 self.run('ls', silent=True)
-                break
-            except Exception as e:
+                return True
+            except Exception:
                 pass
-            sleep_time = 0.1 * 2**i
-            log.info('Failed, retrying in {:.2f}s'.format(sleep_time))
-            time.sleep(sleep_time)
-        else:
-            raise VMError('SSH server does not allow login: {}'.format(e))
+            return False
+
+        retry_wait_backoff(
+            _try_login,
+            'SSH login failed',
+        )
 
     def shutdown(self):
         log.debug('Stopping {} on {}'.format(
