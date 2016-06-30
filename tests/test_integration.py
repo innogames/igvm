@@ -284,22 +284,26 @@ class CommandTest(object):
         self.assertEqual(_get_mem_hv(), 2048)
         vm_mem = _get_mem_vm()
         mem_set(self.vm.hostname, '+1G')
+        self.vm.reload()
         self.assertEqual(_get_mem_hv(), 3072)
         self.assertEqual(_get_mem_vm() - vm_mem, 1024)
 
         with self.assertRaises(Warning):
             mem_set(self.vm.hostname, '3G')
 
-        with self.assertRaises(InvalidStateError):
-            mem_set(self.vm.hostname, '2G')
+        if self.hv.admintool['hypervisor'] == 'kvm':
+            with self.assertRaises(InvalidStateError):
+                mem_set(self.vm.hostname, '2G')
 
         with self.assertRaises(IGVMError):
             mem_set(self.vm.hostname, '200G')
 
-        # Not dividable
-        with self.assertRaises(IGVMError):
-            mem_set(self.vm.hostname, '4097M')
+        if self.hv.admintool['hypervisor'] == 'kvm':
+            # Not dividable
+            with self.assertRaises(IGVMError):
+                mem_set(self.vm.hostname, '4097M')
 
+        self.vm.reload()
         self.assertEqual(_get_mem_hv(), 3072)
         vm_mem = _get_mem_vm()
         self.vm.shutdown()
@@ -308,9 +312,11 @@ class CommandTest(object):
             mem_set(self.vm.hostname, '200G')
 
         mem_set(self.vm.hostname, '1024M')
+        self.vm.reload()
         self.assertEqual(_get_mem_hv(), 1024)
 
         mem_set(self.vm.hostname, '2G')
+        self.vm.reload()
         self.assertEqual(_get_mem_hv(), 2048)
         self.vm.start()
         self.assertEqual(_get_mem_vm() - vm_mem, -1024)

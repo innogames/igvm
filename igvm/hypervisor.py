@@ -669,6 +669,10 @@ class XenHypervisor(Hypervisor):
         )
 
     def _vm_sync_from_hypervisor(self, vm, result):
+        # xm only works if the VM is running.
+        if not self.vm_running(vm):
+            return
+
         result['num_cpu'] = int(self.run(
             'xm list --long {0} '
             '| grep \'(online_vcpus \' '
