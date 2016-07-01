@@ -124,7 +124,7 @@ def _clear_cert_controller(hostname, puppet_master, token):
         raise IGVMError(e)
 
 
-def run_puppet(hv, vm, clear_cert):
+def run_puppet(hv, vm, clear_cert, tx):
     """Runs Puppet in chroot on the hypervisor."""
     target_dir = hv.vm_mount_path(vm)
     block_autostart(hv, vm)
@@ -162,6 +162,13 @@ def run_puppet(hv, vm, clear_cert):
                 ), warn_only=True)
 
     with cd(target_dir):
+        if tx:
+            tx.on_rollback(
+                'Kill puppet',
+                hv.run,
+                'pkill -9 -f "/usr/bin/puppet agent -v --fqdn={}.ig.local"'
+                .format(vm.hostname)
+            )
         hv.run(
             'chroot . /usr/bin/puppet agent -v --fqdn={}.ig.local'
             ' --waitforcert 60 --onetime --no-daemonize'

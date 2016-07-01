@@ -163,7 +163,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
 
         if runpuppet:
             destination_hv.mount_vm_storage(vm, tx)
-            run_puppet(destination_hv, vm, clear_cert=False)
+            run_puppet(destination_hv, vm, clear_cert=False, tx=tx)
             destination_hv.umount_vm_storage(vm)
 
         destination_hv.define_vm(vm, tx)
