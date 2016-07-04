@@ -37,8 +37,8 @@ logging.basicConfig(level=logging.DEBUG)
 env.update(COMMON_FABRIC_SETTINGS)
 
 # Configuration of staging environment
-IP1 = '10.20.6.98'   # aw21.igvm
-IP2 = '10.20.6.253'  # aw21.igvm
+IP1 = '10.20.9.5'    # aw21.igvm
+IP2 = '10.20.9.6'    # aw21.igvm
 IP3 = '10.9.70.3'    # af10.igvm
 VM1 = 'igvm-integration.test'
 HV1 = 'aw-hv-055'  # 48 cores
