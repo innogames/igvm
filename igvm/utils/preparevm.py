@@ -3,6 +3,7 @@ import logging
 import os
 from StringIO import StringIO
 import socket
+import urllib
 import urllib2
 
 from fabric.api import run, cd, get, put, settings
