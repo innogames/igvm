@@ -23,7 +23,9 @@ def validate_image_checksum(image):
     try:
         remote_hash = urllib2.urlopen(url, timeout=2).read().split()[0]
     except urllib2.URLError as e:
-        log.warning('Failed to fetch image checksum at {}: {}'.format(url, e))
+        log.warning(
+            'Failed to fetch image checksum at {0}: {1}'.format(url, e)
+        )
         return False
 
     return local_hash == remote_hash
