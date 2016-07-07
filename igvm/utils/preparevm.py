@@ -3,7 +3,7 @@ import logging
 import os
 from StringIO import StringIO
 import socket
-import urllib
+import urllib2
 
 from fabric.api import run, cd, get, put, settings
 
@@ -107,20 +107,18 @@ def copy_postboot_script(hv, vm, script):
 
 def _clear_cert_controller(hostname, puppet_master, token):
     try:
-        conn = httplib.HTTPConnection('{}:9000'.format(puppet_master))
-        headers = {
-            "Content-type": "application/x-www-form-urlencoded",
-            "Accept": "text/plain",
-        }
-        conn.request("POST", "/", urllib.urlencode({
-            'token': token,
-            'hostname': hostname,
-            'command': 'clear',
-        }), headers)
-        response = conn.getresponse()
-        if response.status != 200:
+        response = urllib2.urlopen(
+            'https://{}:9000/'.format(puppet_master),
+            urllib.urlencode({
+                'token': token,
+                'hostname': hostname,
+                'command': 'clear',
+            }),
+        )
+
+        if response.getcode() != 200:
             raise IGVMError(response.read().strip())
-    except (socket.error, httplib.HTTPException) as e:
+    except (socket.error, urllib2.URLError) as e:
         raise IGVMError(e)
 
 
@@ -131,7 +129,7 @@ def run_puppet(hv, vm, clear_cert, tx):
 
     if clear_cert:
         # Use puppet-controller, if possible.
-        puppet_masters = set(PUPPET_CA_MASTERS[:])
+        puppet_masters = set(PUPPET_CA_MASTERS)
         controller_token = os.environ.get('PUPPET_CONTROLLER_TOKEN')
         if controller_token:
             for puppet_master in PUPPET_CA_MASTERS:
