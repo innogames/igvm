@@ -516,7 +516,10 @@ class KVMHypervisor(Hypervisor):
             if domain.name() != vm.hostname:
                 continue
 
-            return domain.info()[0] == libvirt.VIR_DOMAIN_RUNNING
+            return domain.info()[0] in (
+                libvirt.VIR_DOMAIN_RUNNING,
+                libvirt.VIR_DOMAIN_SHUTDOWN,
+            )
         raise HypervisorError(
             '{} is not defined on {}'
             .format(vm.hostname, self.hostname)
