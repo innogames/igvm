@@ -1,53 +1,43 @@
+import logging
 import urllib2
-import grp
-import pwd
-import re
-import os
 
-from fabric.api import run, cd, settings
+from fabric.api import run
 from fabric.contrib import files
 
+from igvm.settings import (
+    FOREMAN_IMAGE_URL,
+    FOREMAN_IMAGE_MD5_URL,
+)
 from igvm.utils import cmd
 
-BASE_URL = 'http://aw-foreman.ig.local:8080/'
-PACKET_SERVER = 'aw-foreman.ig.local'
-PACKET_DIR = '/srv/domu_images/images'
+
+log = logging.getLogger(__name__)
 
 
-def get_images():
+def validate_image_checksum(image):
+    """Compares the local image checksum against the checksum returned by
+    foreman."""
+    local_hash = run(cmd('md5sum {0}', image)).split()[0]
+
+    url = FOREMAN_IMAGE_MD5_URL.format(image=image)
     try:
-        image_html = urllib2.urlopen(BASE_URL, timeout=2).read()
-    except urllib2.URLError:
-        return None
+        remote_hash = urllib2.urlopen(url, timeout=2).read().split()[0]
+    except urllib2.URLError as e:
+        log.warning(
+            'Failed to fetch image checksum at {0}: {1}'.format(url, e)
+        )
+        return False
 
-    return re.findall(r'<a\s+href="(.+?\.tar\.gz)"', image_html)
+    return local_hash == remote_hash
 
 
 def download_image(image):
-    url = BASE_URL + image
+    if files.exists(image) and not validate_image_checksum(image):
+        log.warning('Image validation failed, downloading latest version')
+        run(cmd('rm -f {0}', image))
 
-    try:
-        group = grp.getgrnam('sysadmins').gr_mem
-    except:
-        group = []
-
-    user = pwd.getpwuid(os.geteuid()).pw_name
-
-    if user in group:
-        sysadmin = True
-    else:
-        sysadmin = False
-
-    if files.exists(image):
-        local_hash = run(cmd('md5sum {0}', image)).split()[0]
-        if sysadmin and False:
-            with settings(host_string=PACKET_SERVER):
-                with cd(PACKET_DIR):
-                    remote_hash = run(cmd('md5sum {0}', image)).split()[0]
-            if local_hash != remote_hash:
-                run(cmd('rm -f {0}', image))
-                run(cmd('wget -nv {0}', url))
-    else:
+    if not files.exists(image):
+        url = FOREMAN_IMAGE_URL.format(image=image)
         run(cmd('wget -nv {0}', url))
 
 
