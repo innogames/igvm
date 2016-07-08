@@ -152,7 +152,7 @@ def vm_stop(vm_hostname, force=False):
 
 
 @with_fabric_settings
-def vm_restart(vm_hostname, force=False):
+def vm_restart(vm_hostname, force=False, noredefine=False):
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -164,6 +164,10 @@ def vm_restart(vm_hostname, force=False):
         vm.disconnect()
     else:
         vm.shutdown()
+
+    if not noredefine:
+        vm.hypervisor.undefine_vm(vm)
+        vm.hypervisor.define_vm(vm)
 
     vm.start()
     log.info('{} restarted.'.format(vm.hostname))

@@ -191,6 +191,11 @@ subparser.add_argument(
     action='store_true',
     help='Do not wait for guest to shutdown gracefully',
 )
+subparser.add_argument(
+    '--noredefine',
+    action='store_true',
+    help='Do not redefine the domain to use latest hypervisor settings',
+)
 
 subparser = subparsers.add_parser(
     'delete',
