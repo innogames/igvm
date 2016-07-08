@@ -24,6 +24,7 @@ from igvm.commands import (
     vcpu_set,
     vm_start,
     vm_stop,
+    vm_redefine,
     vm_restart,
     vm_delete,
     vm_sync,
@@ -216,6 +217,17 @@ subparser = subparsers.add_parser(
     description=(__doc__ + ' - Synchronize Serveradmin attributes'),
 )
 subparser.set_defaults(func=vm_sync)
+subparser.add_argument(
+    'vm_hostname',
+    help='Hostname of the guest system',
+)
+
+
+subparser = subparsers.add_parser(
+    'redefine',
+    description=(__doc__ + ' - Upgrade hypervisor settings without losing data'),
+)
+subparser.set_defaults(func=vm_redefine)
 subparser.add_argument(
     'vm_hostname',
     help='Hostname of the guest system',
