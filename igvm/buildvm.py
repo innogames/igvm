@@ -64,7 +64,7 @@ def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None,
     prepare_vm(hv, vm)
 
     if not nopuppet:
-        run_puppet(hv, vm, clear_cert=True)
+        run_puppet(hv, vm, clear_cert=True, tx=tx)
 
     if postboot is not None:
         copy_postboot_script(hv, vm, postboot)

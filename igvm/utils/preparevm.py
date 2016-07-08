@@ -1,8 +1,14 @@
+import httplib
+import logging
 import os
 from StringIO import StringIO
+import socket
+import urllib
+import urllib2
 
 from fabric.api import run, cd, get, put, settings
 
+from igvm.exceptions import IGVMError
 from igvm.settings import (
     DEFAULT_DNS_SERVERS,
     DEFAULT_SWAP_SIZE,
@@ -11,6 +17,9 @@ from igvm.settings import (
 from igvm.utils.sshkeys import create_authorized_keys
 from igvm.utils.template import upload_template
 from igvm.utils import cmd
+
+
+log = logging.getLogger(__name__)
 
 
 def _create_ssh_keys():
@@ -97,13 +106,53 @@ def copy_postboot_script(hv, vm, script):
         put(script, 'buildvm-postboot', mode=755)
 
 
-def run_puppet(hv, vm, clear_cert):
+def _clear_cert_controller(hostname, puppet_master, token):
+    try:
+        response = urllib2.urlopen(
+            'https://{}:9000/'.format(puppet_master),
+            urllib.urlencode({
+                'token': token,
+                'hostname': hostname,
+                'command': 'clear',
+            }),
+        )
+
+        if response.getcode() != 200:
+            raise IGVMError(response.read().strip())
+    except (socket.error, urllib2.URLError) as e:
+        raise IGVMError(e)
+
+
+def run_puppet(hv, vm, clear_cert, tx):
     """Runs Puppet in chroot on the hypervisor."""
     target_dir = hv.vm_mount_path(vm)
     block_autostart(hv, vm)
 
     if clear_cert:
-        for puppet_master in PUPPET_CA_MASTERS:
+        # Use puppet-controller, if possible.
+        puppet_masters = set(PUPPET_CA_MASTERS)
+        controller_token = os.environ.get('PUPPET_CONTROLLER_TOKEN')
+        if controller_token:
+            for puppet_master in PUPPET_CA_MASTERS:
+                try:
+                    _clear_cert_controller(
+                        vm.hostname,
+                        puppet_master,
+                        controller_token,
+                    )
+                    puppet_masters.remove(puppet_master)
+                    log.info(
+                        'Cleared Puppet cert of {} on {}'
+                        .format(vm.hostname, puppet_master)
+                    )
+                except IGVMError as e:
+                    log.info(
+                        'Failed to clear Puppet cert of {} on {}: {}'
+                        .format(vm.hostname, puppet_master, e)
+                    )
+
+        # Use SSH for all remaining servers
+        for puppet_master in puppet_masters:
             with settings(host_string=puppet_master, warn_only=True):
                 run(cmd(
                     '/usr/bin/puppet cert clean {0}.ig.local'
@@ -112,6 +161,13 @@ def run_puppet(hv, vm, clear_cert):
                 ), warn_only=True)
 
     with cd(target_dir):
+        if tx:
+            tx.on_rollback(
+                'Kill puppet',
+                hv.run,
+                'pkill -9 -f "/usr/bin/puppet agent -v --fqdn={}.ig.local"'
+                .format(vm.hostname)
+            )
         hv.run(
             'chroot . /usr/bin/puppet agent -v --fqdn={}.ig.local'
             ' --waitforcert 60 --onetime --no-daemonize'
