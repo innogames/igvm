@@ -251,10 +251,16 @@ logging.basicConfig((2 + args.pop('silent') - args.pop('verbose')) * 10)
 # queries.
 adminapi.auth()
 
-args.pop('func')(**args)
+try:
+    args.pop('func')(**args)
+finally:
 
-# Disconnect all Fabric sessions to avoid errors during shutdown.
-disconnect_all()
-close_virtconns()
+    # Fabric requires the disconnect function to be called after every
+    # use.  We are also taking our chance to disconnect from the hypervisors.
+    disconnect_all()
+    close_virtconns()
 
-time.sleep(0.1)  # For Paramiko's race condition.
+    # The underlying library of Fabric, Paramiko, raises an error, on
+    # destruction right after the disconnect function is called.  We are
+    # sleeping for a little while to avoid this.
+    time.sleep(0.1)
