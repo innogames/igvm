@@ -200,6 +200,11 @@ subparser.add_argument(
     'vm_hostname',
     help='Hostname of the guest system',
 )
+subparser.add_argument(
+    '--force',
+    action='store_true',
+    help='shutdown VM if running and delete serveradmin object',
+)
 
 subparser = subparsers.add_parser(
     'info',

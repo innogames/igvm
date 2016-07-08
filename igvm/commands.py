@@ -170,9 +170,12 @@ def vm_restart(vm_hostname, force=False):
 
 
 @with_fabric_settings
-def vm_delete(vm_hostname):
+def vm_delete(vm_hostname, force=False):
     vm = VM(vm_hostname)
     _check_defined(vm)
+
+    if force and vm.is_running():
+        vm.shutdown()
 
     if vm.is_running():
         raise InvalidStateError(
@@ -181,9 +184,18 @@ def vm_delete(vm_hostname):
     vm.hypervisor.undefine_vm(vm)
     vm.hypervisor.destroy_vm_storage(vm)
 
-    vm.admintool['state'] = 'retired'
+    if force:
+        vm.admintool.delete()
+    else:
+        vm.admintool['state'] = 'retired'
+
     vm.admintool.commit()
-    log.info('{} destroyed and set to "retired" state.'.format(vm.hostname))
+    if force:
+        log.info('{} destroyed and deleted from serveradmin'.format(
+            vm.hostanme))
+    else:
+        log.info('{} destroyed and set to "retired" state.'.format(
+            vm.hostname))
 
 
 @with_fabric_settings
