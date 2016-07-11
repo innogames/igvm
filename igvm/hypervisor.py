@@ -188,6 +188,10 @@ class Hypervisor(Host):
                 'is not supported.'
             )
 
+    def vm_migrate_online(self, vm, dst_hv):
+        """Online-migrates a VM to the given destination HV."""
+        self.check_migration(vm, dst_hv, offline=False)
+
     def total_vm_memory(self):
         """Returns amount of memory in MiB available to Hypervisor."""
         raise NotImplementedError(type(self).__name__)
@@ -452,6 +456,10 @@ class KVMHypervisor(Hypervisor):
                 'Online migration is not possible with the current network '
                 'configuration (different VLAN).'
             )
+
+    def vm_migrate_online(self, vm, dst_hv):
+        super(KVMHypervisor, self).vm_migrate_online(vm, dst_hv)
+        migrate_live(self, dst_hv, vm, self._domain(vm))
 
     def total_vm_memory(self):
         # Start with what OS sees as total memory (not installed memory)

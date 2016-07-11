@@ -194,6 +194,49 @@ def _live_repin_cpus(domain, props, max_phys_cpus):
         domain.pinVcpu(vcpu, tuple(mask))
 
 
+def migrate_live(source_hv, destination_hv, vm, domain):
+    """Live-migrates a VM via libvirt."""
+    # Unfortunately, virsh provides a global timeout, but what we need it to
+    # timeout if it is catching up the dirtied memory.  To be in this stage,
+    # it should have coped the initial disk and memory and changes on them.
+    timeout = sum((
+        # We assume the disk can be copied at 50 MB/s;
+        vm.admintool['disk_size_gib'] * 1024 / 50,
+        # the memory at 100 MB/s;
+        vm.admintool['memory'] / 100,
+        # and 5 minutes more for other operations.
+        5 * 60,
+    ))
+
+    migrate_cmd = (
+        'virsh migrate'
+        # Do it live!
+        ' --live'
+        ' --copy-storage-all'
+        # Define the VM on the new host
+        ' --persistent'
+        # Don't let the VM configuration to be changed
+        ' --change-protection'
+        # Force convergence, # otherwise migrations never end
+        ' --auto-converge'
+        ' --domain {vm_hostname}'
+        # Don't tolerate soft errors
+        ' --abort-on-error'
+        # We need SSH agent forwarding
+        ' --desturi qemu+ssh://{dsthv_hostname}/system'
+        # Force guest to suspend, if noting else helped
+        ' --timeout {timeout}'
+        ' --verbose'
+    )
+
+    source_hv.accept_ssh_hostkey(destination_hv)
+    source_hv.run(migrate_cmd.format(
+        vm_hostname=vm.hostname,
+        dsthv_hostname=destination_hv.hostname,
+        timeout=timeout,
+    ))
+
+
 def set_memory(hv, vm, domain, memory_mib):
     """Changes the amount of memory of a VM."""
     props = DomainProperties.from_running(hv, vm, domain)

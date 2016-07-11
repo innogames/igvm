@@ -16,58 +16,6 @@ from igvm.vm import VM
 log = logging.getLogger(__name__)
 
 
-def add_dsthv_to_ssh(host, dst_host):
-    host.run('touch .ssh/known_hosts'.format(dst_host.hostname))
-    host.run('ssh-keygen -R {0}'.format(dst_host.hostname))
-    host.run(
-        'ssh-keyscan -t rsa {0} >> .ssh/known_hosts'
-        .format(dst_host.hostname)
-    )
-
-
-def migrate_virsh(source_hv, destination_hv, vm):
-
-    # Unfortunately, virsh provides a global timeout, but what we need it to
-    # timeout if it is catching up the dirtied memory.  To be in this stage,
-    # it should have coped the initial disk and memory and changes on them.
-    timeout = sum((
-        # We assume the disk can be copied at 50 MB/s;
-        vm.admintool['disk_size_gib'] * 1024 / 50,
-        # the memory at 100 MB/s;
-        vm.admintool['memory'] / 100,
-        # and 5 minutes more for other operations.
-        5 * 60,
-    ))
-
-    migrate_cmd = (
-        'virsh migrate'
-        # Do it live!
-        ' --live'
-        ' --copy-storage-all'
-        # Define the VM on the new host
-        ' --persistent'
-        # Don't let the VM configuration to be changed
-        ' --change-protection'
-        # Force convergence, # otherwise migrations never end
-        ' --auto-converge'
-        ' --domain {vm_hostname}'
-        # Don't tolerate soft errors
-        ' --abort-on-error'
-        # We need SSH agent forwarding
-        ' --desturi qemu+ssh://{dsthv_hostname}/system'
-        # Force guest to suspend, if noting else helped
-        ' --timeout {timeout}'
-        ' --verbose'
-    )
-
-    add_dsthv_to_ssh(source_hv, destination_hv)
-    source_hv.run(migrate_cmd.format(
-        vm_hostname=vm.hostname,
-        dsthv_hostname=destination_hv.hostname,
-        timeout=timeout,
-    ))
-
-
 @with_fabric_settings
 @run_in_transaction
 def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
@@ -153,7 +101,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
             vm.shutdown()
             tx.on_rollback('start VM', vm.start)
 
-        add_dsthv_to_ssh(source_hv, destination_hv)
+        source_hv.accept_ssh_hostkey(destination_hv)
         device_to_netcat(
             source_hv,
             source_hv.vm_disk_path(vm),
@@ -172,7 +120,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
         vm.start()
         tx.on_rollback('stop vm', vm.shutdown)
     else:
-        migrate_virsh(source_hv, destination_hv, vm)
+        source_hv.vm_migrate_online(vm, destination_hv)
         vm.hypervisor = destination_hv
 
     # TODO: Use state
