@@ -152,7 +152,7 @@ def vm_stop(vm_hostname, force=False):
 
 
 @with_fabric_settings
-def vm_restart(vm_hostname, force=False):
+def vm_restart(vm_hostname, force=False, noredefine=False):
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -164,6 +164,10 @@ def vm_restart(vm_hostname, force=False):
         vm.disconnect()
     else:
         vm.shutdown()
+
+    if not noredefine:
+        vm.hypervisor.undefine_vm(vm)
+        vm.hypervisor.define_vm(vm)
 
     vm.start()
     log.info('{} restarted.'.format(vm.hostname))
@@ -216,6 +220,25 @@ def vm_sync(vm_hostname):
             '{}: Serveradmin is already synchronized.'
             .format(vm.hostname)
         )
+
+
+@with_fabric_settings
+def vm_redefine(vm_hostname):
+    """Redefines a VM on the hypervisor, in order to use the latest domain
+    configuration. No data will be lost."""
+
+    vm = VM(vm_hostname)
+    _check_defined(vm)
+
+    was_running = vm.is_running()
+    if was_running:
+        vm.shutdown()
+
+    vm.hypervisor.undefine_vm(vm)
+    vm.hypervisor.define_vm(vm)
+
+    if was_running:
+        vm.start()
 
 
 def _color(s, color, bold=False):
