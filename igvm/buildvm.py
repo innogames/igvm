@@ -2,8 +2,8 @@ import logging
 
 from fabric.colors import yellow
 
-from igvm.commands import with_fabric_settings
 from igvm.exceptions import ConfigError
+from igvm.host import with_fabric_settings
 from igvm.utils.image import download_image, extract_image
 from igvm.utils.preparevm import (
     prepare_vm,

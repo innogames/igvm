@@ -2,8 +2,8 @@ import logging
 
 from adminapi import api
 
-from igvm.commands import with_fabric_settings
 from igvm.exceptions import IGVMError, InconsistentAttributeError
+from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.utils.preparevm import run_puppet
 from igvm.utils.storage import (

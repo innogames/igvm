@@ -7,26 +7,16 @@
 """IGVM command routines"""
 import logging
 
-from fabric.api import settings
+from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 
 from igvm.exceptions import InvalidStateError
-from igvm.settings import COMMON_FABRIC_SETTINGS
+from igvm.host import with_fabric_settings
 from igvm.utils.units import parse_size
 from igvm.utils.cli import green, red, white, yellow
 from igvm.vm import VM
 
 log = logging.getLogger(__name__)
-
-
-def with_fabric_settings(fn):
-    """Decorator to run a function with COMMON_FABRIC_SETTINGS."""
-    def decorator(*args, **kwargs):
-        with settings(**COMMON_FABRIC_SETTINGS):
-            return fn(*args, **kwargs)
-    decorator.__name__ = '{}_with_fabric'.format(fn.__name__)
-    decorator.__doc__ = fn.__doc__
-    return decorator
 
 
 def _check_defined(vm):
