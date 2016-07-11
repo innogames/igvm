@@ -32,8 +32,8 @@ from igvm.commands import (
 from igvm.utils.virtutils import close_virtconns
 
 top_parser = ArgumentParser(__doc__)
-top_parser.add_argument('--silent', '-s', action='count')
-top_parser.add_argument('--verbose', '-v', action='count')
+top_parser.add_argument('--silent', '-s', action='count', default=0)
+top_parser.add_argument('--verbose', '-v', action='count', default=0)
 subparsers = top_parser.add_subparsers(
     help='Actions',
 )
@@ -250,7 +250,7 @@ args = vars(top_parser.parse_args())
 # See Python logging library documentation [1] for the levels.
 #
 # [1] https://docs.python.org/library/logging.html#logging-levels
-logging.basicConfig((2 + args.pop('silent') - args.pop('verbose')) * 10)
+logging.basicConfig(level=(2 + args.pop('silent') - args.pop('verbose')) * 10)
 
 # We have to explicitly authenticate to adminapi, before making any
 # queries.
