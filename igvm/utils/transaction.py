@@ -55,6 +55,7 @@ def wrap_in_transaction(fn):
             kwargs['tx'] = tx
             return fn(*args, **kwargs)
     wrapped.__name__ = '{}_transaction'.format(fn.__name__)
+    wrapped.__doc__ = fn.__doc__
     return wrapped
 
 

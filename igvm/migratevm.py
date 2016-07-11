@@ -72,6 +72,7 @@ def migrate_virsh(source_hv, destination_hv, vm):
 @run_in_transaction
 def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
                nolbdowntime=False, offline=False, tx=None):
+    """Migrate a VM to a new hypervisor."""
     assert tx is not None, 'tx populated by run_in_transaction'
 
     vm = VM(vm_hostname)

@@ -6,15 +6,14 @@
 
 """IGVM command routines"""
 import logging
-import sys
 
-from fabric.api import run, settings
-from fabric.colors import green, red, white, yellow
+from fabric.api import settings
 from fabric.network import disconnect_all
 
 from igvm.exceptions import InvalidStateError
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.units import parse_size
+from igvm.utils.cli import green, red, white, yellow
 from igvm.vm import VM
 
 log = logging.getLogger(__name__)
@@ -25,6 +24,8 @@ def with_fabric_settings(fn):
     def decorator(*args, **kwargs):
         with settings(**COMMON_FABRIC_SETTINGS):
             return fn(*args, **kwargs)
+    decorator.__name__ = '{}_with_fabric'.format(fn.__name__)
+    decorator.__doc__ = fn.__doc__
     return decorator
 
 
@@ -38,7 +39,7 @@ def _check_defined(vm):
 
 @with_fabric_settings
 def vcpu_set(vm_hostname, count, offline=False):
-    """Changes the number of CPUs in a VM."""
+    """Change the number of CPUs in a VM."""
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -61,7 +62,7 @@ def vcpu_set(vm_hostname, count, offline=False):
 
 @with_fabric_settings
 def mem_set(vm_hostname, size, offline=False):
-    """Changes the memory size of a VM.
+    """Change the memory size of a VM.
 
     Size argument is a size unit, which defaults to MiB.
     The plus (+) and minus (-) prefixes are allowed to specify a relative
@@ -127,6 +128,7 @@ def disk_set(vm_hostname, size):
 
 @with_fabric_settings
 def vm_start(vm_hostname):
+    """Start a VM."""
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -138,6 +140,7 @@ def vm_start(vm_hostname):
 
 @with_fabric_settings
 def vm_stop(vm_hostname, force=False):
+    """Gracefully stop a VM."""
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -153,6 +156,7 @@ def vm_stop(vm_hostname, force=False):
 
 @with_fabric_settings
 def vm_restart(vm_hostname, force=False, noredefine=False):
+    """Restart a VM."""
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -175,6 +179,13 @@ def vm_restart(vm_hostname, force=False, noredefine=False):
 
 @with_fabric_settings
 def vm_delete(vm_hostname, force=False):
+    """Delete a VM.
+
+    The VM is undefined on the hypervisor, destroys the disk volume, and sets
+    the VM to "retired" state. The serveradmin object is not deleted.
+
+    If force is set, the VM is shutdown automatically and deleted from
+    Serveradmin."""
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -236,8 +247,11 @@ def vm_sync(vm_hostname):
 
 @with_fabric_settings
 def vm_redefine(vm_hostname):
-    """Redefines a VM on the hypervisor, in order to use the latest domain
-    configuration. No data will be lost."""
+    """Redefine a VM on the hypervisor to use latest domain configuration.
+
+    The VM is shut down and recreated, using the existing disk. This can be
+    useful to discard temporary changes or adapt new hypervisor optimizations.
+    No data will be lost."""
 
     vm = VM(vm_hostname)
     _check_defined(vm)
@@ -251,12 +265,6 @@ def vm_redefine(vm_hostname):
 
     if was_running:
         vm.start()
-
-
-def _color(s, color, bold=False):
-    if not sys.stdout.isatty():
-        return s
-    return color(s, bold=bold)
 
 
 @with_fabric_settings
@@ -315,7 +323,7 @@ def host_info(vm_hostname):
                 'calculation'
                 .format(free_key, free, capacity_key, capacity)
             )
-            info[result_key] = _color(simple_stats, red)
+            info[result_key] = red(simple_stats)
             return
 
         assert free >= 0 and free <= capacity
@@ -332,7 +340,7 @@ def host_info(vm_hostname):
         info[result_key] = (
             '[{}{}] {}%\n{}'
             .format(
-                _color('#' * num_bars, color), ' ' * (max_bars - num_bars),
+                color('#' * num_bars), ' ' * (max_bars - num_bars),
                 int(round(ratio * 100)),
                 simple_stats,
             )
@@ -351,7 +359,7 @@ def host_info(vm_hostname):
             continue
 
         print('')
-        print(_color(category, white, bold=True))
+        print(white(category, bold=True))
         for k in keys:
             if k not in info:
                 continue

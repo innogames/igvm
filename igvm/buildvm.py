@@ -21,6 +21,10 @@ log = logging.getLogger(__name__)
 @run_in_transaction
 def buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None,
             tx=None):
+    """Create a VM and start it.
+
+    Puppet is run once to configure baseline networking.
+    """
     assert tx is not None, 'tx populated by run_in_transaction'
 
     vm = VM(vm_hostname)
