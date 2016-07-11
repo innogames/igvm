@@ -220,14 +220,15 @@ class VM(Host):
         self._set_ip(self.admintool['intern_ip'])
 
         # Can VM run on given hypervisor?
-        self.hypervisor.check_vm(vm)
+        self.hypervisor.check_vm(self)
 
         if not self.admintool['puppet_classes']:
             if not runpuppet or self.admintool['puppet_disabled']:
                 log.warn(yellow(
                     'VM has no puppet_classes and will not receive network '
                     'configuration.\n'
-                    'You have chosen to disable Puppet. Expect things to go south.'
+                    'You have chosen to disable Puppet. '
+                    'Expect things to go south.'
                 ))
             else:
                 raise ConfigError(
@@ -236,32 +237,32 @@ class VM(Host):
                 )
 
         # Perform operations on Hypervisor
-        self.hypervisor.create_vm_storage(vm, tx)
-        mount_path = self.hypervisor.format_vm_storage(vm, tx)
+        self.hypervisor.create_vm_storage(self, tx)
+        mount_path = self.hypervisor.format_vm_storage(self, tx)
 
         with hv.fabric_settings():
             if not localimage:
                 download_image(image)
             extract_image(image, mount_path, hv.admintool['os'])
 
-        prepare_vm(hv, vm)
+        prepare_vm(hv, self)
 
         if runpuppet:
-            run_puppet(hv, vm, clear_cert=True, tx=tx)
+            run_puppet(hv, self, clear_cert=True, tx=tx)
 
         if postboot is not None:
-            copy_postboot_script(hv, vm, postboot)
+            copy_postboot_script(hv, self, postboot)
 
-        self.hypervisor.umount_vm_storage(vm)
-        hv.define_vm(vm, tx)
+        self.hypervisor.umount_vm_storage(self)
+        hv.define_vm(self, tx)
 
         # We are updating the information on the Serveradmin, before starting
         # the VM, because the VM would still be on the hypervisor even if it
         # fails to start.
         self.admintool.commit()
 
-        # VM was successfully built, don't risk undoing all this just because start
-        # fails.
+        # VM was successfully built, don't risk undoing all this just because
+        # start fails.
         tx.checkpoint()
 
         self.start()
@@ -271,4 +272,4 @@ class VM(Host):
             self.run('/buildvm-postboot')
             self.run('rm -f /buildvm-postboot')
 
-        log.info('{} successfully built.'.format(vm_hostname))
+        log.info('{} successfully built.'.format(self.hostname))

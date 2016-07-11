@@ -131,6 +131,27 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None):
 
 
 @with_fabric_settings
+def vm_rebuild(vm_hostname, force=False):
+    """Destroy and reinstall a VM."""
+    vm = VM(vm_hostname)
+    _check_defined(vm)
+
+    if vm.is_running():
+        if force:
+            vm.shutdown()
+        else:
+            raise InvalidStateError(
+                '{} is still running. Please stop it first or pass --force.'
+                .format(vm.hostname)
+            )
+
+    vm.hypervisor.undefine_vm(vm)
+    vm.hypervisor.destroy_vm_storage(vm)
+
+    vm.build()
+
+
+@with_fabric_settings
 def vm_start(vm_hostname):
     """Start a VM."""
     vm = VM(vm_hostname)
