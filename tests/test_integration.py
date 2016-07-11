@@ -434,7 +434,7 @@ class CommandTest(object):
         self._check_vm(self.hv, self.vm)
 
         # Stopped
-        self.vm.stop()
+        vm_stop(self.vm.hostname)
         vm_redefine(self.vm.hostname)
 
         self.assertEqual(self.vm.is_running(), False)
