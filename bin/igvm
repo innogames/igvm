@@ -32,6 +32,8 @@ from igvm.commands import (
 from igvm.utils.virtutils import close_virtconns
 
 top_parser = ArgumentParser(__doc__)
+top_parser.add_argument('--silent', '-s', action='count')
+top_parser.add_argument('--verbose', '-v', action='count')
 subparsers = top_parser.add_subparsers(
     help='Actions',
 )
@@ -130,7 +132,6 @@ subparser.add_argument(
     help='Shutdown VM, change memory, and restart VM',
 )
 
-
 subparser = subparsers.add_parser(
     'vcpu-set',
     description=(__doc__ + ' - Set number of CPUs'),
@@ -150,7 +151,6 @@ subparser.add_argument(
     action='store_true',
     help='Shutdown VM, change CPUs, and restart VM',
 )
-
 
 subparser = subparsers.add_parser(
     'start',
@@ -243,16 +243,29 @@ subparser.add_argument(
     help='Hostname of the guest system',
 )
 
+args = vars(top_parser.parse_args())
 
-# TODO: Add argument to enable debug logging
-logging.basicConfig(level=logging.INFO)
+# We are summing up the silent and verbose arguments.  It is not much
+# meaningful to use them both, but giving an error is not an improvement.
+# See Python logging library documentation [1] for the levels.
+#
+# [1] https://docs.python.org/library/logging.html#logging-levels
+logging.basicConfig((2 + args.pop('silent') - args.pop('verbose')) * 10)
+
+# We have to explicitly authenticate to adminapi, before making any
+# queries.
 adminapi.auth()
 
-args = vars(top_parser.parse_args())
-args.pop('func')(**args)
+try:
+    args.pop('func')(**args)
+finally:
 
-# Disconnect all Fabric sessions to avoid errors during shutdown.
-disconnect_all()
-close_virtconns()
+    # Fabric requires the disconnect function to be called after every
+    # use.  We are also taking our chance to disconnect from the hypervisors.
+    disconnect_all()
+    close_virtconns()
 
-time.sleep(0.1)  # For Paramiko's race condition.
+    # The underlying library of Fabric, Paramiko, raises an error, on
+    # destruction right after the disconnect function is called.  We are
+    # sleeping for a little while to avoid this.
+    time.sleep(0.1)
