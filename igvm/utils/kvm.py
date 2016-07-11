@@ -229,12 +229,25 @@ def migrate_live(source_hv, destination_hv, vm, domain):
         ' --verbose'
     )
 
+    # Reduce CPU pinning to minimum number of available cores on both HVs to
+    # avoid "invalid cpuset" errors.
+    props = DomainProperties.from_running(source_hv, vm, domain)
+    _live_repin_cpus(
+        domain,
+        props,
+        min(source_hv.num_cpus, destination_hv.num_cpus),
+    )
+
     source_hv.accept_ssh_hostkey(destination_hv)
     source_hv.run(migrate_cmd.format(
         vm_hostname=vm.hostname,
         dsthv_hostname=destination_hv.hostname,
         timeout=timeout,
     ))
+
+    # And pin again, in case we migrated to a host with more physical cores
+    domain = destination_hv._domain(vm)
+    _live_repin_cpus(domain, props, destination_hv.num_cpus)
 
 
 def set_memory(hv, vm, domain, memory_mib):

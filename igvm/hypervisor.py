@@ -23,6 +23,7 @@ from igvm.utils.backoff import retry_wait_backoff
 from igvm.utils.kvm import (
     DomainProperties,
     generate_domain_xml,
+    migrate_live,
     set_memory,
     set_vcpus,
 )
