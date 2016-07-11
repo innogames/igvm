@@ -117,6 +117,20 @@ def disk_set(vm_hostname, size):
 
 
 @with_fabric_settings
+def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None):
+    """Create a VM and start it.
+
+    Puppet in run once to configure baseline networking.
+    """
+    vm = VM(vm_hostname)
+    vm.build(
+        localimage=localimage,
+        runpuppet=not nopuppet,
+        postboot=postboot,
+    )
+
+
+@with_fabric_settings
 def vm_start(vm_hostname):
     """Start a VM."""
     vm = VM(vm_hostname)

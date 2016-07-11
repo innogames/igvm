@@ -8,8 +8,16 @@ from igvm.exceptions import (
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
 from igvm.utils.backoff import retry_wait_backoff
+from igvm.utils.cli import yellow
+from igvm.utils.image import download_image, extract_image
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
+from igvm.utils.preparevm import (
+    prepare_vm,
+    copy_postboot_script,
+    run_puppet,
+)
+from igvm.utils.transaction import run_in_transaction
 from igvm.utils.units import parse_size
 
 log = logging.getLogger(__name__)
@@ -194,3 +202,73 @@ class VM(Host):
         else:
             result['status'] = 'new'
         return result
+
+    @run_in_transaction
+    def build(self, localimage=None, runpuppet=True, postboot=None, tx=None):
+        """Builds a VM."""
+        assert tx is not None, 'tx populated by run_in_transaction'
+
+        hv = self.hypervisor
+        self.check_serveradmin_config()
+
+        if localimage is not None:
+            image = localimage
+        else:
+            image = self.admintool['os'] + '-base.tar.gz'
+
+        # Populate initial networking attributes, such as segment.
+        self._set_ip(self.admintool['intern_ip'])
+
+        # Can VM run on given hypervisor?
+        self.hypervisor.check_vm(vm)
+
+        if not self.admintool['puppet_classes']:
+            if not runpuppet or self.admintool['puppet_disabled']:
+                log.warn(yellow(
+                    'VM has no puppet_classes and will not receive network '
+                    'configuration.\n'
+                    'You have chosen to disable Puppet. Expect things to go south.'
+                ))
+            else:
+                raise ConfigError(
+                    'VM has no puppet_classes and will not get any network '
+                    'configuration.'
+                )
+
+        # Perform operations on Hypervisor
+        self.hypervisor.create_vm_storage(vm, tx)
+        mount_path = self.hypervisor.format_vm_storage(vm, tx)
+
+        with hv.fabric_settings():
+            if not localimage:
+                download_image(image)
+            extract_image(image, mount_path, hv.admintool['os'])
+
+        prepare_vm(hv, vm)
+
+        if runpuppet:
+            run_puppet(hv, vm, clear_cert=True, tx=tx)
+
+        if postboot is not None:
+            copy_postboot_script(hv, vm, postboot)
+
+        self.hypervisor.umount_vm_storage(vm)
+        hv.define_vm(vm, tx)
+
+        # We are updating the information on the Serveradmin, before starting
+        # the VM, because the VM would still be on the hypervisor even if it
+        # fails to start.
+        self.admintool.commit()
+
+        # VM was successfully built, don't risk undoing all this just because start
+        # fails.
+        tx.checkpoint()
+
+        self.start()
+
+        # Perform operations on Virtual Machine
+        if postboot is not None:
+            self.run('/buildvm-postboot')
+            self.run('rm -f /buildvm-postboot')
+
+        log.info('{} successfully built.'.format(vm_hostname))
