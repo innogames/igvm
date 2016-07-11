@@ -51,6 +51,9 @@ class Transaction(object):
 
 def wrap_in_transaction(fn):
     def wrapped(*args, **kwargs):
+        if kwargs.get('tx'):
+            return fn(*args, **kwargs)
+
         with Transaction() as tx:
             kwargs['tx'] = tx
             return fn(*args, **kwargs)

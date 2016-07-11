@@ -83,10 +83,11 @@ class VM(Host):
             if not check(value):
                 raise ConfigError(err)
 
-    def start(self):
+    def start(self, hv=None, tx=None):
+        hv = hv or self.hypervisor
         log.debug('Starting {} on {}'.format(
-            self.hostname, self.hypervisor.hostname))
-        self.hypervisor.start_vm(self)
+            self.hostname, hv.hostname))
+        hv.start_vm(self)
         if not self.wait_for_running(running=True):
             raise VMError('VM did not come online in time')
 
@@ -113,13 +114,20 @@ class VM(Host):
             'SSH login failed',
         )
 
-    def shutdown(self):
+        if tx:
+            tx.on_rollback('stop VM', self.shutdown, hv)
+
+    def shutdown(self, hv=None, tx=None):
+        hv = hv or self.hypervisor
         log.debug('Stopping {} on {}'.format(
-            self.hostname, self.hypervisor.hostname))
-        self.hypervisor.stop_vm(self)
+            self.hostname, hv.hostname))
+        hv.stop_vm(self)
         if not self.wait_for_running(running=False):
-            self.hypervisor.stop_vm_force(self)
+            hv.stop_vm_force(self)
         self.disconnect()
+
+        if tx:
+            tx.on_rollback('start VM', self.start, self.hypervisor)
 
     def is_running(self):
         return self.hypervisor.vm_running(self)

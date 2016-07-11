@@ -98,8 +98,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     # Finally migrate the VM
     if offline:
         if vm.is_running():
-            vm.shutdown()
-            tx.on_rollback('start VM', vm.start)
+            vm.shutdown(tx=tx)
 
         source_hv.accept_ssh_hostkey(destination_hv)
         device_to_netcat(
@@ -117,8 +116,12 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
 
         destination_hv.define_vm(vm, tx)
         vm.hypervisor = destination_hv
-        vm.start()
-        tx.on_rollback('stop vm', vm.shutdown)
+
+        def _reset_hypervisor():
+            vm.hypervisor = source_hv
+        tx.on_rollback('reset hypervisor', _reset_hypervisor)
+
+        vm.start(tx=tx)
     else:
         source_hv.vm_migrate_online(vm, destination_hv)
         vm.hypervisor = destination_hv
