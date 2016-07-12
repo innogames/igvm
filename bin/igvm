@@ -7,8 +7,10 @@
 
 """InnoGames VM Management Tool"""
 
-from argparse import ArgumentParser
+from __future__ import print_function
+from argparse import ArgumentParser, _SubParsersAction, SUPPRESS
 import logging
+import sys
 import time
 
 from fabric.network import disconnect_all
@@ -29,18 +31,63 @@ from igvm.commands import (
     vm_delete,
     vm_sync,
 )
+from igvm.utils.cli import white, red
 from igvm.utils.virtutils import close_virtconns
 
-top_parser = ArgumentParser(__doc__)
+
+class IGVMArgumentParser(ArgumentParser):
+    def error(self, message):
+        print(red('error: {}'.format(message)), file=sys.stderr)
+        print(self.format_help(), file=sys.stderr)
+        sys.exit(2)
+
+    def format_help(self):
+        if not any(isinstance(a, _SubParsersAction) for a in self._actions):
+            return super(IGVMArgumentParser, self).format_help()
+
+        out = []
+        out.append(white(__doc__, bold=True))
+        out.append('')
+        out.append('Available commands:')
+        out.append('')
+
+        subparsers_actions = [
+            action for action in self._actions
+            if isinstance(action, _SubParsersAction)]
+        # there will probably only be one subparser_action,
+        # but better save than sorry
+        for subparsers_action in subparsers_actions:
+            # get all subparsers and print help
+            for choice, subparser in subparsers_action.choices.items():
+                out.append(
+                    '{}'
+                    .format(white(choice, bold=True), subparser.description),
+                )
+                if subparser.get_default('func').__doc__:
+                    out.append(
+                         '\n'.join([
+                             l.strip()
+                             for l in
+                             subparser.get_default('func').__doc__.splitlines()
+                         ]),
+                    )
+                out.append('')
+                out.append(subparser.format_usage())
+        return '\n'.join(out)
+
+
+top_parser = IGVMArgumentParser('igvm')
 top_parser.add_argument('--silent', '-s', action='count', default=0)
 top_parser.add_argument('--verbose', '-v', action='count', default=0)
+
+
 subparsers = top_parser.add_subparsers(
     help='Actions',
 )
 
 subparser = subparsers.add_parser(
     'build',
-    description=(__doc__ + ' - Build VM'),
+    description=buildvm.__doc__,
 )
 subparser.set_defaults(func=buildvm)
 subparser.add_argument(
@@ -64,7 +111,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'migrate',
-    description=(__doc__ + ' - Migrate VM'),
+    description=migratevm.__doc__,
 )
 subparser.set_defaults(func=migratevm)
 subparser.add_argument(
@@ -98,7 +145,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'disk-set',
-    description=(__doc__ + ' - Set VM Disk Size'),
+    description=disk_set.__doc__,
 )
 subparser.set_defaults(func=disk_set)
 subparser.add_argument(
@@ -115,7 +162,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'mem-set',
-    description=(__doc__ + ' - Set VM Memory Size'),
+    description=mem_set.__doc__,
 )
 subparser.set_defaults(func=mem_set)
 subparser.add_argument(
@@ -134,7 +181,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'vcpu-set',
-    description=(__doc__ + ' - Set number of CPUs'),
+    description=vcpu_set.__doc__,
 )
 subparser.set_defaults(func=vcpu_set)
 subparser.add_argument(
@@ -154,7 +201,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'start',
-    description=(__doc__ + ' - Start VM'),
+    description=vm_start.__doc__,
 )
 subparser.set_defaults(func=vm_start)
 subparser.add_argument(
@@ -164,7 +211,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'stop',
-    description=(__doc__ + ' - Stop VM'),
+    description=vm_stop.__doc__,
 )
 subparser.set_defaults(func=vm_stop)
 subparser.add_argument(
@@ -179,7 +226,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'restart',
-    description=(__doc__ + ' - Restart VM'),
+    description=vm_restart.__doc__,
 )
 subparser.set_defaults(func=vm_restart)
 subparser.add_argument(
@@ -199,7 +246,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'delete',
-    description=(__doc__ + ' - Delete VM'),
+    description=vm_delete.__doc__,
 )
 subparser.set_defaults(func=vm_delete)
 subparser.add_argument(
@@ -214,7 +261,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'info',
-    description=(__doc__ + ' - VM information'),
+    description=host_info.__doc__,
 )
 subparser.set_defaults(func=host_info)
 subparser.add_argument(
@@ -224,7 +271,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'sync',
-    description=(__doc__ + ' - Synchronize Serveradmin attributes'),
+    description=vm_sync.__doc__,
 )
 subparser.set_defaults(func=vm_sync)
 subparser.add_argument(
@@ -235,7 +282,7 @@ subparser.add_argument(
 
 subparser = subparsers.add_parser(
     'redefine',
-    description=(__doc__ + ' - Upgrade hypervisor settings without losing data'),
+    description=vm_redefine.__doc__,
 )
 subparser.set_defaults(func=vm_redefine)
 subparser.add_argument(
