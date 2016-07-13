@@ -112,3 +112,13 @@ class Host(object):
             'grep vendor_id < /proc/cpuinfo | wc -l',
             silent=True,
         ))
+
+    def accept_ssh_hostkey(self, dst_host):
+        """Scans and accepts the SSH remote host key of a given host.
+        NO VERIFICATION IS PERFORMED, THIS IS INSECURE!"""
+        self.run('touch .ssh/known_hosts'.format(dst_host.hostname))
+        self.run('ssh-keygen -R {0}'.format(dst_host.hostname))
+        self.run(
+            'ssh-keyscan -t rsa {0} >> .ssh/known_hosts'
+            .format(dst_host.hostname)
+        )

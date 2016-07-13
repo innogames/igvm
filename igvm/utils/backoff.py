@@ -26,4 +26,4 @@ def retry_wait_backoff(fn_check, fail_msg, max_wait=20):
         time.sleep(sleep_time)
         sleep_time = min(sleep_time*2, 5, max_wait-total_waited)
     else:
-        raise TimeoutError('{0} after {1:.2f}s'.format(fail_msg, sleep_time))
+        raise TimeoutError('{0} after {1:.2f}s'.format(fail_msg, max_wait))
