@@ -42,8 +42,8 @@ IP1 = '10.20.9.5'    # aw21.igvm
 IP2 = '10.20.9.6'    # aw21.igvm
 IP3 = '10.9.70.3'    # af10.igvm
 VM1 = 'igvm-integration.test'
-HV1 = 'aw-hv-055'  # 48 cores
-HV2 = 'aw-hv-057'  # 48 cores
+HV1 = 'aw-hv-053'  # KVM
+HV2 = 'aw-hv-082'  # KVM
 HV3 = 'af10w005'   # Xen
 
 
@@ -69,6 +69,7 @@ def _reset_vm(**kwargs):
         'memory': 2048,
         'puppet_environment': '',
         'num_cpu': 2,
+        'ssh_users': {'root:control-test'},
     })
     vm.admintool.update(kwargs)
     vm.admintool.commit()
