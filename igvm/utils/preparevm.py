@@ -22,14 +22,19 @@ from igvm.utils import cmd
 log = logging.getLogger(__name__)
 
 
-def _create_ssh_keys():
+def _create_ssh_keys(os):
 
     # If we wouldn't do remove those, ssh-keygen would ask us confirm
     # overwrite.
     run('rm -f etc/ssh/ssh_host_*_key*')
 
+    if os == 'wheezy':
+        key_types = ('dsa', 'rsa', 'ecdsa')
+    else:
+        key_types = ('dsa', 'rsa', 'ecdsa', 'ed25519')
+
     # This will also create the public key files.
-    for key_type in ('dsa', 'rsa', 'ecdsa', 'ed25519'):
+    for key_type in key_types:
         run(
             # Use ssh-keygen from chroot in case HV OS is too old
             'chroot . ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'
@@ -80,7 +85,7 @@ def prepare_vm(hv, vm):
         run(cmd('echo {0} > etc/mailname', vm.fqdn))
 
         _create_interfaces(vm.network_config)
-        _create_ssh_keys()
+        _create_ssh_keys(vm.admintool['os'])
         vm.admintool['ssh_pubkey'] = _get_ssh_public_key('rsa')
 
         upload_template('etc/fstab', 'etc/fstab', {
