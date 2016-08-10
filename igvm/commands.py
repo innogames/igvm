@@ -207,7 +207,7 @@ def vm_delete(vm_hostname, force=False):
     vm.admintool.commit()
     if force:
         log.info('{} destroyed and deleted from serveradmin'.format(
-            vm.hostanme))
+            vm.hostname))
     else:
         log.info('{} destroyed and set to "retired" state.'.format(
             vm.hostname))
