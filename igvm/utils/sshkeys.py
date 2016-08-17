@@ -12,7 +12,7 @@ def find_keys():
 
     keys = []
     for user, home_dir in home_dirs:
-        for keyfile in ['authorized_keys', 'authorized_keys2']:
+        for keyfile in ['authorized_keys', 'authorized_keys2', 'id_rsa.pub']:
             authkeys_path = os.path.join(home_dir, '.ssh', keyfile)
             if os.path.isfile(authkeys_path):
                 with open(authkeys_path) as f:
