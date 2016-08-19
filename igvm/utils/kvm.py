@@ -200,8 +200,8 @@ def migrate_live(source_hv, destination_hv, vm, domain):
     # timeout if it is catching up the dirtied memory.  To be in this stage,
     # it should have coped the initial disk and memory and changes on them.
     timeout = sum((
-        # We assume the disk can be copied at 50 MB/s;
-        vm.admintool['disk_size_gib'] * 1024 / 50,
+        # We assume the disk can be copied at 33 MB/s;
+        vm.admintool['disk_size_gib'] * 1024 / 33,
         # the memory at 100 MB/s;
         vm.admintool['memory'] / 100,
         # and 5 minutes more for other operations.
