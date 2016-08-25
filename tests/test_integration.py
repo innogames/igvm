@@ -16,6 +16,7 @@ from igvm.commands import (
     mem_set,
     vcpu_set,
     vm_delete,
+    vm_rebuild,
     vm_redefine,
     vm_restart,
     vm_start,
@@ -194,6 +195,30 @@ class BuildTest(object):
         self.hv.run(cmd('rm -f {}', image))
 
         buildvm(self.vm.hostname)
+
+    def test_rebuild(self):
+        # Not yet built.
+        with self.assertRaises(IGVMError):
+            vm_rebuild(self.vm.hostname)
+
+        self.vm.build()
+
+        self.vm.run('touch /root/initial_canary')
+        self.vm.run('test -f /root/initial_canary')
+
+        # Fails while online
+        with self.assertRaises(IGVMError):
+            vm_rebuild(self.vm.hostname)
+
+        self.vm.shutdown()
+
+        vm_rebuild(self.vm.hostname)
+        self.vm.reload()
+        self._check_vm(self.hv, self.vm)
+
+        # Old contents are gone.
+        with self.assertRaises(IGVMError):
+            self.vm.run('test -f /root/initial_canary')
 
 
 class KVMBuildTest(IGVMTest, BuildTest):

@@ -7,26 +7,16 @@
 """IGVM command routines"""
 import logging
 
-from fabric.api import settings
+from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 
 from igvm.exceptions import InvalidStateError
-from igvm.settings import COMMON_FABRIC_SETTINGS
+from igvm.host import with_fabric_settings
 from igvm.utils.units import parse_size
 from igvm.utils.cli import green, red, white, yellow
 from igvm.vm import VM
 
 log = logging.getLogger(__name__)
-
-
-def with_fabric_settings(fn):
-    """Decorator to run a function with COMMON_FABRIC_SETTINGS."""
-    def decorator(*args, **kwargs):
-        with settings(**COMMON_FABRIC_SETTINGS):
-            return fn(*args, **kwargs)
-    decorator.__name__ = '{}_with_fabric'.format(fn.__name__)
-    decorator.__doc__ = fn.__doc__
-    return decorator
 
 
 def _check_defined(vm):
@@ -124,6 +114,41 @@ def disk_set(vm_hostname, size):
 
     vm.admintool['disk_size_gib'] = new_size_gib
     vm.admintool.commit()
+
+
+@with_fabric_settings
+def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None):
+    """Create a VM and start it.
+
+    Puppet in run once to configure baseline networking.
+    """
+    vm = VM(vm_hostname)
+    vm.build(
+        localimage=localimage,
+        runpuppet=not nopuppet,
+        postboot=postboot,
+    )
+
+
+@with_fabric_settings
+def vm_rebuild(vm_hostname, force=False):
+    """Destroy and reinstall a VM."""
+    vm = VM(vm_hostname)
+    _check_defined(vm)
+
+    if vm.is_running():
+        if force:
+            vm.shutdown()
+        else:
+            raise InvalidStateError(
+                '{} is still running. Please stop it first or pass --force.'
+                .format(vm.hostname)
+            )
+
+    vm.hypervisor.undefine_vm(vm)
+    vm.hypervisor.destroy_vm_storage(vm)
+
+    vm.build()
 
 
 @with_fabric_settings

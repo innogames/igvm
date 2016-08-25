@@ -6,6 +6,7 @@ import fabric.api
 import fabric.state
 
 from igvm.exceptions import ConfigError, RemoteCommandError
+from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.network import get_network_config
 
@@ -39,6 +40,16 @@ def get_server(hostname, servertype=None):
     return server
 
 
+def with_fabric_settings(fn):
+    """Decorator to run a function with COMMON_FABRIC_SETTINGS."""
+    def decorator(*args, **kwargs):
+        with fabric.api.settings(**COMMON_FABRIC_SETTINGS):
+            return fn(*args, **kwargs)
+    decorator.__name__ = '{}_with_fabric'.format(fn.__name__)
+    decorator.__doc__ = fn.__doc__
+    return decorator
+
+
 class Host(object):
     """A remote host on which commands can be executed."""
     def __init__(self, server_object, servertype=None):
@@ -52,10 +63,13 @@ class Host(object):
 
     def fabric_settings(self, *args, **kwargs):
         """Builds a fabric context manager to run commands on this host."""
-        if 'abort_exception' not in kwargs:
-            kwargs['abort_exception'] = RemoteCommandError
-        kwargs['host_string'] = self.hostname
-        return fabric.api.settings(*args, **kwargs)
+        settings = COMMON_FABRIC_SETTINGS.copy()
+        settings.update({
+            'abort_exception': RemoteCommandError,
+            'host_string': self.hostname,
+        })
+        settings.update(kwargs)
+        return fabric.api.settings(*args, **settings)
 
     def run(self, *args, **kwargs):
         """Runs a command on the remote host.

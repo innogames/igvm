@@ -26,6 +26,7 @@ from igvm.commands import (
     vcpu_set,
     vm_start,
     vm_stop,
+    vm_rebuild,
     vm_redefine,
     vm_restart,
     vm_delete,
@@ -289,6 +290,23 @@ subparser.add_argument(
     'vm_hostname',
     help='Hostname of the guest system',
 )
+
+
+subparser = subparsers.add_parser(
+    'rebuild',
+    description=vm_rebuild.__doc__,
+)
+subparser.set_defaults(func=vm_rebuild)
+subparser.add_argument(
+    'vm_hostname',
+    help='Hostname of the guest system',
+)
+subparser.add_argument(
+    '--force',
+    action='store_true',
+    help='Shutdown VM, if running',
+)
+
 
 args = vars(top_parser.parse_args())
 
