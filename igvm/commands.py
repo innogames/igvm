@@ -392,3 +392,22 @@ def host_info(vm_hostname):
             value = str(info.pop(k))
             value = ('\n'+' '*(max_key_len + 3)).join(value.splitlines())
             print('{} : {}'.format(k.ljust(max_key_len), value))
+
+
+@with_fabric_settings
+def vm_rename(vm_hostname, new_hostname, force=False):
+    """Redefine the VM on the same hypervisor with a different name
+
+    We can only do this operation offline.  If the VM is online, it needs
+    to be shut down.  No data will be lost.
+    """
+
+    vm = VM(vm_hostname)
+    _check_defined(vm)
+
+    if not vm.is_running() or not force:
+        raise NotImplementedError(
+            'Rename command only works with --force at the moment.'
+        )
+
+    vm.rename(new_hostname)

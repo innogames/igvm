@@ -281,3 +281,36 @@ class VM(Host):
             self.run('rm -f /buildvm-postboot')
 
         log.info('{} successfully built.'.format(self.hostname))
+
+    @run_in_transaction
+    def rename(self, new_hostname, tx=None):
+        """Rename the VM"""
+        assert tx is not None, 'tx populated by run_in_transaction'
+
+        tx.on_rollback('revert', self.rename, self.hostname)
+
+        self.admintool['hostname'] = new_hostname
+        self.admintool.commit()
+
+        new_fqdn = (
+            new_hostname
+            if new_hostname.endswith('.ig.local')
+            else new_hostname + '.ig.local'
+        )
+
+        self.run('echo {0} > /etc/hostname'.format(new_hostname))
+        self.run('echo {0} > /etc/mailname'.format(new_fqdn))
+
+        hosts_file = [
+            line
+            for line in self.run('cat /etc/hosts').splitlines()
+            if not line.startswith(str(self.admintool['intern_ip']))
+        ]
+        hosts_file.append('{0}\t{1}\t{2}'.format(
+            self.admintool['intern_ip'], new_fqdn, new_hostname
+        ))
+        self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
+
+        # TODO Make the rest
+        if new_hostname != self.hostname:
+            raise NotImplementedError('The rest is not implemented.')

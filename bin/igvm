@@ -31,6 +31,7 @@ from igvm.commands import (
     vm_restart,
     vm_delete,
     vm_sync,
+    vm_rename,
 )
 from igvm.utils.cli import white, red
 from igvm.utils.virtutils import close_virtconns
@@ -300,6 +301,25 @@ subparser.set_defaults(func=vm_rebuild)
 subparser.add_argument(
     'vm_hostname',
     help='Hostname of the guest system',
+)
+subparser.add_argument(
+    '--force',
+    action='store_true',
+    help='Shutdown VM, if running',
+)
+
+subparser = subparsers.add_parser(
+    'rename',
+    description=vm_rename.__doc__,
+)
+subparser.set_defaults(func=vm_rename)
+subparser.add_argument(
+    'vm_hostname',
+    help='Hostname of the guest system',
+)
+subparser.add_argument(
+    'new_hostname',
+    help='New hostname',
 )
 subparser.add_argument(
     '--force',
