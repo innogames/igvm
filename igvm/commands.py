@@ -13,7 +13,6 @@ from fabric.network import disconnect_all
 from igvm.exceptions import InvalidStateError
 from igvm.host import with_fabric_settings
 from igvm.utils.units import parse_size
-from igvm.utils.cli import green, red, white, yellow
 from igvm.vm import VM
 
 log = logging.getLogger(__name__)
