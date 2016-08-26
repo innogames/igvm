@@ -230,19 +230,11 @@ class VM(Host):
         # Can VM run on given hypervisor?
         self.hypervisor.check_vm(self)
 
-        if not self.admintool['puppet_classes']:
-            if not runpuppet or self.admintool['puppet_disabled']:
-                log.warn(yellow(
-                    'VM has no puppet_classes and will not receive network '
-                    'configuration.\n'
-                    'You have chosen to disable Puppet. '
-                    'Expect things to go south.'
-                ))
-            else:
-                raise ConfigError(
-                    'VM has no puppet_classes and will not get any network '
-                    'configuration.'
-                )
+        if not runpuppet or self.admintool['puppet_disabled']:
+            log.warn(yellow(
+                'Puppet is disabled on the VM.  It will not receive network '
+                'configuration.  Expect things to go south.'
+            ))
 
         # Perform operations on Hypervisor
         self.hypervisor.create_vm_storage(self, tx)
