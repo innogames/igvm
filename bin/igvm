@@ -8,7 +8,7 @@
 """InnoGames VM Management Tool"""
 
 from __future__ import print_function
-from argparse import ArgumentParser, _SubParsersAction, SUPPRESS
+from argparse import ArgumentParser, _SubParsersAction
 import logging
 import sys
 import time
