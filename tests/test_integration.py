@@ -68,10 +68,11 @@ def _reset_vm(**kwargs):
         'state': 'online',
         'disk_size_gib': 6,
         'memory': 2048,
-        'puppet_environment': '',
         'num_cpu': 2,
         'ssh_users': {'root:control-test'},
     })
+    if 'puppet_environment' in vm.admintool:
+        del vm.admintool['puppet_environment']
     vm.admintool.update(kwargs)
     vm.admintool.commit()
     # Might have changed!
