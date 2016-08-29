@@ -36,8 +36,6 @@ KVM_HWMODEL_TO_CPUMODEL = {
 
 
 PUPPET_CA_MASTERS = (
-    # Puppet 3
-    'master.puppet.ig.local',
     # Puppet 4
     'ca.puppet.ig.local',
 )
