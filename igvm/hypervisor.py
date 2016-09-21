@@ -5,7 +5,7 @@ import time
 
 import libvirt
 
-from adminapi.dataset import ServerObject, query, filters
+from adminapi.dataset import query, filters, ServerObject
 
 from fabric.api import run
 from fabric.contrib.files import exists
@@ -109,28 +109,36 @@ class Hypervisor(Host):
         """Returns the VLAN number a VM should use on this hypervisor.
         None for untagged."""
         hv_vlans = []
-        vlan_networks = self.admintool.get('vlan_networks', [])
-        for vlan_network in vlan_networks:
-            vlan_network = query(
-                hostname=vlan_network,
-                state=filters.Not('maintenance'),
-            ).restrict('vlan_tag').get()
-            if vlan_network.get('vlan_tag'):
-                hv_vlans.append(vlan_network.get('vlan_tag'))
+        if self.admintool.get('vlan_networks'):
+            for vlan_network in query(
+                    hostname=filters.Any(*self.admintool['vlan_networks']),
+                    vlan_tag=filters.Not(filters.Empty()),
+                ).restrict(
+                    'vlan_tag',
+                ):
+                hv_vlans.append(vlan_network['vlan_tag'])
         vm_vlan = vm.network_config['vlan_tag']
         if not hv_vlans:
             if self.network_config['vlan_tag'] != vm_vlan:
                 raise HypervisorError(
-                    'Destination Hypervisor is not on same VLAN {0} as VM {1}.'
-                    .format(self.network_config['vlan_tag'], vm_vlan)
+                    'Hypervisor {} is not on same VLAN {} as VM {}.'
+                    .format(
+                        self.hostname,
+                        self.network_config['vlan_tag'],
+                        vm_vlan,
+                    )
                 )
             # For untagged Hypervisors VM must be untagged, too.
             return None
 
-        if vm_vlan not in hv_vlans:
+        # On source hypervisor it is unncessary to perform this check.
+        # The VLAN is obviously there, even if not in Admintool.
+        # This can happen if vlan is remved in Admintool so that nobody creates
+        # new VMs on given HV, but the existing ones must be moved out.
+        if vm.admintool['xen_host'] != self.hostname and vm_vlan not in hv_vlans:
             raise HypervisorError(
-                'Destination Hypervisor does not support VLAN {0} ({1}).'
-                .format(vm.network_config['vlan_name'], vm_vlan)
+                'Hypervisor {} does not support VLAN {}.'
+                .format(self.hostname, vm_vlan)
             )
         return vm_vlan
 
