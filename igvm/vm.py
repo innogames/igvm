@@ -56,6 +56,23 @@ class VM(Host):
                     self.network_config['vlan'],
             ))
 
+    def set_state(self, new_state, tx=None):
+        """Changes state of VM for LB and Nagios downtimes"""
+        self.previous_state = self.admintool['state']
+        if new_state == self.previous_state:
+            return
+        log.debug('Setting VM to state {}'.format(new_state))
+        self.admintool['state'] = new_state
+        self.admintool.commit()
+        if tx:
+            tx.on_rollback('reset_state', self.reset_state)
+
+    def reset_state(self):
+        """Change state of VM to the original one"""
+        # Transaction is not necessary here, because reverting it
+        # would set the value to the original one anyway.
+        self.set_state(self.previous_state)
+
     def set_num_cpu(self, num_cpu):
         """Changes the number of CPUs."""
         self.hypervisor.vm_set_num_cpu(self, num_cpu)

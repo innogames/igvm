@@ -13,7 +13,7 @@ from managevm.migratevm import migratevm
 The functions are to be called like this:
 
 ```python
-migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=False, offline=False)
+migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, maintenance=False, offline=False)
 ```
 
 * Mandatory:
@@ -22,8 +22,8 @@ migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, nolbdowntime=
 * Optional:
  * newip - string, new IP address if you migrate to different segment
  * nopuppet - boolean, disable running chrooted puppet after VM image is extracted
- * nolbdowntime - boolean, don't downtime LB Pool for time of migration
- * offline - boolean, allow offline migration, default is to attempt online migration and fail if it is impossible due to hypervisor of network configuration
+ * maintenance - boolean, set VM to maintenance state, thus downtiming it in Testtool and Nagios
+ * offline - boolean, allow offline migration, default is to attempt online migration and fail if it is impossible due to hypervisor of network configuration, also implies --maintenance
 
 ```python
 buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None)

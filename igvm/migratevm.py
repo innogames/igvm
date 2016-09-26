@@ -1,7 +1,5 @@
 import logging
 
-from adminapi import api
-
 from igvm.exceptions import IGVMError, InconsistentAttributeError
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
@@ -19,7 +17,7 @@ log = logging.getLogger(__name__)
 @with_fabric_settings
 @run_in_transaction
 def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
-               nolbdowntime=False, offline=False, tx=None):
+               maintenance=False, offline=False, tx=None):
     """Migrate a VM to a new hypervisor."""
     assert tx is not None, 'tx populated by run_in_transaction'
 
@@ -52,23 +50,6 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     vm.check_serveradmin_config()
     source_hv.check_migration(vm, destination_hv, offline)
 
-    lb_api = api.get('lbadmin')
-    downtime_network = None
-
-    # TODO: Use state
-    if not nolbdowntime and 'testtool_downtime' in vm.admintool:
-        if vm.admintool['segment'] in ['af', 'aw', 'vn', 'none']:
-            network_api = api.get('ip')
-            for iprange in network_api.get_matching_ranges(vm.admintool['intern_ip']):
-                if iprange['belongs_to'] == None and iprange['type'] == 'private':
-                    if downtime_network:
-                        raise IGVMError('Unable to determine network for testtool downtime. Multiple networks found.')
-                    downtime_network = iprange['range_id']
-        else:
-            downtime_network = vm.admintool['segment']
-        if not downtime_network:
-            raise IGVMError('Unable to determine network for testtool downtime. No network found.')
-
     if newip:
         vm._set_ip(newip)
 
@@ -78,6 +59,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     # Setup destination Hypervisor
     dst_device = destination_hv.create_vm_storage(vm, tx)
     if offline:
+        maintenance = True
         nc_listener = netcat_to_device(destination_hv, dst_device, tx)
 
     # Commit previously changed IP address and segment.
@@ -86,14 +68,8 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
         vm.admintool.commit()
         tx.on_rollback('newip warning', log.info, '--newip is not rolled back')
 
-    if not nolbdowntime and 'testtool_downtime' in vm.admintool:
-        print "Downtiming testtool for network '{}'".format(downtime_network)
-        vm.admintool['testtool_downtime'] = True
-        vm.admintool.commit()
-        try:
-            lb_api.push_downtimes([downtime_network])
-        except:
-            pass
+    if maintenance:
+        vm.set_state('maintenance', tx=tx)
 
     # Finally migrate the VM
     if offline:
@@ -126,15 +102,9 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
         source_hv.vm_migrate_online(vm, destination_hv)
         vm.hypervisor = destination_hv
 
-    # TODO: Use state
-    if not nolbdowntime and 'testtool_downtime' in vm.admintool:
-        log.info("Removing testtool downtime")
-        vm.admintool['testtool_downtime'] = False
-        vm.admintool.commit()
-        try:
-            lb_api.push_downtimes([downtime_network])
-        except:
-            pass
+    # Transaction is not necessary here, because reverting it
+    # would set the value to the original one anyway.
+    vm.set_state(vm.previous_state)
 
     # Update admintool information
     vm.admintool['xen_host'] = destination_hv.hostname
