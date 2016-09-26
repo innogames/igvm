@@ -135,14 +135,14 @@ subparser.add_argument(
     help='Run puppet in chroot before powering up',
 )
 subparser.add_argument(
-    '--nolbdowntime',
+    '--maintenance',
     action='store_true',
-    help="Don't use testtool's downtime feature during migration",
+    help="Set state to maintenance, thus causing downtime in Testtool and Nagios",
 )
 subparser.add_argument(
     '--offline',
     action='store_true',
-    help='Force offline migration',
+    help='Force offline migration, also imples --maintenance',
 )
 
 subparser = subparsers.add_parser(
