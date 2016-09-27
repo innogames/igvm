@@ -71,7 +71,8 @@ class VM(Host):
         """Change state of VM to the original one"""
         # Transaction is not necessary here, because reverting it
         # would set the value to the original one anyway.
-        self.set_state(self.previous_state)
+        if hasattr(self, 'previous_state'):
+            self.set_state(self.previous_state)
 
     def set_num_cpu(self, num_cpu):
         """Changes the number of CPUs."""

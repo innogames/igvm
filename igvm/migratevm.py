@@ -102,9 +102,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
         source_hv.vm_migrate_online(vm, destination_hv)
         vm.hypervisor = destination_hv
 
-    # Transaction is not necessary here, because reverting it
-    # would set the value to the original one anyway.
-    vm.set_state(vm.previous_state)
+    vm.reset_state()
 
     # Update admintool information
     vm.admintool['xen_host'] = destination_hv.hostname
