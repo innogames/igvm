@@ -45,7 +45,6 @@ IP3 = '10.9.70.3'    # af10.igvm
 VM1 = 'igvm-integration.test'
 HV1 = 'aw-hv-053'  # KVM
 HV2 = 'aw-hv-082'  # KVM
-HV3 = 'af10w005'   # Xen
 
 
 def _ensure_ip_unused(ip):
@@ -227,17 +226,6 @@ class KVMBuildTest(IGVMTest, BuildTest):
         BuildTest.setUp(self)
         self.hv = Hypervisor.get(HV1)
         self.vm = _reset_vm()
-        _clean_vm(self.hv, self.vm.hostname)
-
-
-class XenBuildTest(IGVMTest, BuildTest):
-    def setUp(self):
-        BuildTest.setUp(self)
-        self.hv = Hypervisor.get(HV3)
-        self.vm = _reset_vm(
-            xen_host=HV3,
-            intern_ip=IP3,
-        )
         _clean_vm(self.hv, self.vm.hostname)
 
 
@@ -472,17 +460,6 @@ class KVMCommandTest(IGVMTest, CommandTest):
         CommandTest.setUp(self)
         self.hv = Hypervisor.get(HV1)
         self.vm = _reset_vm()
-        _clean_vm(self.hv, self.vm.hostname)
-
-
-class XenCommandTest(IGVMTest, CommandTest):
-    def setUp(self):
-        CommandTest.setUp(self)
-        self.hv = Hypervisor.get(HV3)
-        self.vm = _reset_vm(
-            xen_host=HV3,
-            intern_ip=IP3,
-        )
         _clean_vm(self.hv, self.vm.hostname)
 
 
