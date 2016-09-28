@@ -4,9 +4,9 @@ iface lo inet loopback
 auto eth0
 
 iface eth0 inet static
-    address {{ network_config.address4 }}
-    netmask {{ network_config.netmask4 }}
-    {% if network_config.gateway4 %}
-    gateway {{ network_config.gateway4 }}
+    address {{ network_config.ipv4_address }}
+    netmask {{ network_config.ipv4_netmask }}
+    {% if network_config.ipv4_default_gw %}
+    gateway {{ network_config.ipv4_default_gw }}
     {% endif %}
 

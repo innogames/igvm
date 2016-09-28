@@ -116,7 +116,7 @@ class Host(object):
 
     @lazy_property  # Requires fabric call on HV, evaluate lazily.
     def network_config(self):
-        """Returns networking attributes, such as IP address and segment."""
+        """Returns networking attributes, such as IP address and VLAN."""
         return get_network_config(self.admintool)
 
     @lazy_property

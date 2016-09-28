@@ -117,20 +117,20 @@ class Hypervisor(Host):
             ).restrict('vlan_tag').get()
             if vlan_network.get('vlan_tag'):
                 hv_vlans.append(vlan_network.get('vlan_tag'))
-        vm_vlan = vm.network_config['vlan']
+        vm_vlan = vm.network_config['vlan_tag']
         if not hv_vlans:
-            if self.network_config['vlan'] != vm_vlan:
+            if self.network_config['vlan_tag'] != vm_vlan:
                 raise HypervisorError(
                     'Destination Hypervisor is not on same VLAN {0} as VM {1}.'
-                    .format(self.network_config['vlan'], vm_vlan)
+                    .format(self.network_config['vlan_tag'], vm_vlan)
                 )
             # For untagged Hypervisors VM must be untagged, too.
             return None
 
         if vm_vlan not in hv_vlans:
             raise HypervisorError(
-                'Destination Hypervisor does not support VLAN {0}.'
-                .format(vm_vlan)
+                'Destination Hypervisor does not support VLAN {0} ({1}).'
+                .format(vm.network_config['vlan_name'], vm_vlan)
             )
         return vm_vlan
 
