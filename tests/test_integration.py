@@ -39,9 +39,8 @@ logging.basicConfig(level=logging.DEBUG)
 env.update(COMMON_FABRIC_SETTINGS)
 
 # Configuration of staging environment
-IP1 = '10.20.9.5'    # aw21.igvm
-IP2 = '10.20.9.6'    # aw21.igvm
-IP3 = '10.9.70.3'    # af10.igvm
+IP1 = '10.20.10.42'    # aw21.igvm
+IP2 = '10.20.10.43'    # aw21.igvm
 VM1 = 'igvm-integration.test'
 HV1 = 'aw-hv-053'  # KVM
 HV2 = 'aw-hv-082'  # KVM
@@ -56,7 +55,6 @@ def _ensure_ip_unused(ip):
 def _check_environment():
     _ensure_ip_unused(IP1)
     _ensure_ip_unused(IP2)
-    _ensure_ip_unused(IP3)
 
 
 def _reset_vm(**kwargs):
