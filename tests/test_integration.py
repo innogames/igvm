@@ -35,7 +35,7 @@ from igvm.utils import cmd
 from igvm.utils.units import parse_size
 from igvm.vm import VM
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 env.update(COMMON_FABRIC_SETTINGS)
 
 # Configuration of staging environment
