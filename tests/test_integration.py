@@ -143,8 +143,9 @@ class BuildTest(object):
         self.assertEqual(self.vm.hypervisor.hostname, self.hv.hostname)
         self._check_vm(self.hv, self.vm)
 
+        # The file is to be created by `echo 42 > /root/local_image_canary`
         output = self.vm.run('md5sum /root/local_image_canary')
-        self.assertIn('df60e346faccb1afa04b50eea3c1a87c', output)
+        self.assertIn('50a2fabfdd276f573ff97ace8b11c5f4', output)
 
     def test_postboot(self):
         with tempfile.NamedTemporaryFile() as f:
