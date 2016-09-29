@@ -127,7 +127,7 @@ subparser.add_argument(
 subparser.add_argument(
     '--newip',
     metavar='IP address',
-    help='IP address to move VM to, in case you migrate between segments',
+    help='IP address to move VM to, in case you migrate between VLANs',
 )
 subparser.add_argument(
     '--runpuppet',

@@ -35,17 +35,15 @@ from igvm.utils import cmd
 from igvm.utils.units import parse_size
 from igvm.vm import VM
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 env.update(COMMON_FABRIC_SETTINGS)
 
 # Configuration of staging environment
-IP1 = '10.20.9.5'    # aw21.igvm
-IP2 = '10.20.9.6'    # aw21.igvm
-IP3 = '10.9.70.3'    # af10.igvm
+IP1 = '10.20.10.42'    # aw21.igvm
+IP2 = '10.20.10.43'    # aw21.igvm
 VM1 = 'igvm-integration.test'
 HV1 = 'aw-hv-053'  # KVM
 HV2 = 'aw-hv-082'  # KVM
-HV3 = 'af10w005'   # Xen
 
 
 def _ensure_ip_unused(ip):
@@ -57,7 +55,6 @@ def _ensure_ip_unused(ip):
 def _check_environment():
     _ensure_ip_unused(IP1)
     _ensure_ip_unused(IP2)
-    _ensure_ip_unused(IP3)
 
 
 def _reset_vm(**kwargs):
@@ -146,8 +143,9 @@ class BuildTest(object):
         self.assertEqual(self.vm.hypervisor.hostname, self.hv.hostname)
         self._check_vm(self.hv, self.vm)
 
+        # The file is to be created by `echo 42 > /root/local_image_canary`
         output = self.vm.run('md5sum /root/local_image_canary')
-        self.assertIn('df60e346faccb1afa04b50eea3c1a87c', output)
+        self.assertIn('50a2fabfdd276f573ff97ace8b11c5f4', output)
 
     def test_postboot(self):
         with tempfile.NamedTemporaryFile() as f:
@@ -227,17 +225,6 @@ class KVMBuildTest(IGVMTest, BuildTest):
         BuildTest.setUp(self)
         self.hv = Hypervisor.get(HV1)
         self.vm = _reset_vm()
-        _clean_vm(self.hv, self.vm.hostname)
-
-
-class XenBuildTest(IGVMTest, BuildTest):
-    def setUp(self):
-        BuildTest.setUp(self)
-        self.hv = Hypervisor.get(HV3)
-        self.vm = _reset_vm(
-            xen_host=HV3,
-            intern_ip=IP3,
-        )
         _clean_vm(self.hv, self.vm.hostname)
 
 
@@ -472,17 +459,6 @@ class KVMCommandTest(IGVMTest, CommandTest):
         CommandTest.setUp(self)
         self.hv = Hypervisor.get(HV1)
         self.vm = _reset_vm()
-        _clean_vm(self.hv, self.vm.hostname)
-
-
-class XenCommandTest(IGVMTest, CommandTest):
-    def setUp(self):
-        CommandTest.setUp(self)
-        self.hv = Hypervisor.get(HV3)
-        self.vm = _reset_vm(
-            xen_host=HV3,
-            intern_ip=IP3,
-        )
         _clean_vm(self.hv, self.vm.hostname)
 
 

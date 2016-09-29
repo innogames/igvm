@@ -20,7 +20,7 @@ migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, maintenance=F
  * vm_hostname - string, hostname of virtual machine
  * dsthv_hostname - string, hostname of destination hypervisor
 * Optional:
- * newip - string, new IP address if you migrate to different segment
+ * newip - string, new IP address if you migrate to different vlan
  * nopuppet - boolean, disable running chrooted puppet after VM image is extracted
  * maintenance - boolean, set VM to maintenance state, thus downtiming it in Testtool and Nagios
  * offline - boolean, allow offline migration, default is to attempt online migration and fail if it is impossible due to hypervisor of network configuration, also implies --maintenance

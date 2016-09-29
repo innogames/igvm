@@ -2,57 +2,66 @@ import logging
 import urllib2
 
 from fabric.api import abort
-
-from adminapi import api
+from adminapi.dataset import query, filters
 
 from igvm.exceptions import NetworkError
 
 log = logging.getLogger(__name__)
 
 def get_network_config(server):
-    ip_api = api.get('ip')
+    ret = {}
 
-    ip_info = {
-        'address4': server['intern_ip'] if 'intern_ip' in server else None,
-        'netmask4': None,
-        'gateway4': None,
-        'address6': server['primary_ip6'] if 'primary_ip6' in server else None,
-        'netmask6': None,
-        'gateway6': None,
-        'vlan':     None,
-        'segment':  None,
-    }
+    route_network = query(
+        state=filters.Not('retired'),
+        hostname=server['route_network'],
+    ).restrict(
+        'hostname',
+        'intern_ip',
+        'default_gateway',
+        'internal_gateway',
+        'primary_ip6',
+        'vlan_tag',
+    ).get()
 
-    if ip_info['address4']:
-        try:
-            net4 = ip_api.get_network_settings(ip_info['address4'])
-            ranges4 = ip_api.get_matching_ranges(ip_info['address4'])
-            ip_info['segment']=ranges4[0]['segment']
-        except urllib2.URLError:
-            raise NetworkError('Admintool is down')
-        except Exception as e:
-            log.warn('Could not configure network automatically!')
-            log.warn('Make sure that IP ranges are configured correctly in admintool.')
-            raise
-        else:
-            # Copy settings from Admintool. Use only internal gateway, it should be enough for installation.
-            ip_info['netmask4'] = net4['prefix_hi']
-            ip_info['gateway4'] = net4['internal_gateway']
+    default_gateway_route, internal_gateway_route = get_gateways(route_network)
 
-    if ip_info['address6']:
-        try:
-            net6 = ip_api.get_network_settings(ip_info['address6'])
-        except urllib2.URLError:
-            raise NetworkError('Admintool is down')
-        except Exception as e:
-            log.warn('Could not configure network automatically!')
-            log.warn('Make sure that IP ranges are configured correctly in admintool.')
-            raise
-        else:
-            # Copy settings from Admintool. Use only internal gateway, it should be enough for installation.
-            ip_info['netmask6'] = net6['prefix_hi']
-            ip_info['gateway6'] = net6['internal_gateway']
+    # For server installation internal gateway is the default and the only one
+    if server.get('intern_ip'):
+        ret['ipv4_address'] = server['intern_ip']
+        ret['ipv4_netmask'] = route_network['intern_ip'].prefixlen
+        ret['ipv4_default_gw']  = internal_gateway_route.get( 'intern_ip', None)
 
-    ip_info['vlan'] = net4['vlan']
+    if server.get('primary_ip6'):
+        ret['ipv6_address'] = server['primary_ip6']
+        ret['ipv6_netmask'] = route_network['primary_ip6'].prefixlen
+        ret['ipv6_default_gw'] = internal_gateway_route.get('primary_ip6', None)
 
-    return ip_info
+
+    ret['vlan_tag'] = route_network['vlan_tag']
+    ret['vlan_name'] = route_network['hostname']
+
+    return ret
+
+def get_gateways(network):
+    """ Get default and internal gateway admintool objects
+        for given network. If they are not defined, return
+        empty dictionaries to simulate admintool objects.
+    """
+
+    if network.get('default_gateway'):
+        default_gateway = query(
+            state=filters.Not('retired'),
+            hostname=network['default_gateway'],
+        ).get()
+    else:
+        default_gateway = {}
+
+    if network.get('internal_gateway'):
+        internal_gateway = query(
+            state=filters.Not('retired'),
+            hostname=network['internal_gateway'],
+        ).get()
+    else:
+        internal_gateway = {}
+
+    return default_gateway, internal_gateway

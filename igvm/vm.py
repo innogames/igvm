@@ -43,17 +43,16 @@ class VM(Host):
         old_ip = self.admintool['intern_ip']
         self.admintool['intern_ip'] = new_ip
         self.network_config = get_network_config(self.admintool)
-        self.admintool['segment'] = self.network_config['segment']
 
         if old_ip != new_ip:
             log.info((
                 '{0} networking changed: '
-                'Segment {1}, IP address {2}, VLAN {3}')
+                'IP address {1}, VLAN {2} ({3})')
                 .format(
                     self.hostname,
-                    self.admintool['segment'],
                     new_ip,
-                    self.network_config['vlan'],
+                    self.network_config['vlan_name'],
+                    self.network_config['vlan_tag'],
             ))
 
     def set_state(self, new_state, tx=None):
@@ -242,7 +241,7 @@ class VM(Host):
         else:
             image = self.admintool['os'] + '-base.tar.gz'
 
-        # Populate initial networking attributes, such as segment.
+        # Populate initial networking attributes.
         self._set_ip(self.admintool['intern_ip'])
 
         # Can VM run on given hypervisor?

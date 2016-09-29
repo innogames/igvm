@@ -62,7 +62,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
         maintenance = True
         nc_listener = netcat_to_device(destination_hv, dst_device, tx)
 
-    # Commit previously changed IP address and segment.
+    # Commit previously changed IP address.
     if newip:
         # TODO: This commit is not rolled back.
         vm.admintool.commit()
