@@ -54,6 +54,7 @@ def _get_ssh_public_key(key_type):
 def _generate_swap(swap_path, size_MiB):
     run(cmd('dd if=/dev/zero of={0} bs=1M count={1}', swap_path, size_MiB))
     run(cmd('/sbin/mkswap {0}', swap_path))
+    run(cmd('/bin/chmod 0600 {0}', swap_path))
 
 
 def _create_interfaces(network_config):
