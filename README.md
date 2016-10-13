@@ -13,7 +13,7 @@ from managevm.migratevm import migratevm
 The functions are to be called like this:
 
 ```python
-migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, maintenance=False, offline=False)
+migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, maintenance=False, offline=False, force=False)
 ```
 
 * Mandatory:
@@ -24,9 +24,10 @@ migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, maintenance=F
  * nopuppet - boolean, disable running chrooted puppet after VM image is extracted
  * maintenance - boolean, set VM to maintenance state, thus downtiming it in Testtool and Nagios
  * offline - boolean, allow offline migration, default is to attempt online migration and fail if it is impossible due to hypervisor of network configuration, also implies --maintenance
+ * force - boolean, allow migration to an online_reserved hypervisor
 
 ```python
-buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None)
+buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None, force=False)
 ```
 
 * Mandatory:
@@ -35,6 +36,7 @@ buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None)
  * localimage - image on filesystem of HV to use as base for VM, if no image is given, one based on os Admintool parameter will be used
  * nopuppet - boolean, disable running chrooted puppet after VM image is extracted
  * postboot - extra command to run after machine is booted
+ * force - boolean, allow build of VM on a online_reserved hypervisor
 
 # Development
 

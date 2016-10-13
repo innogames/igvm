@@ -52,7 +52,7 @@ class Hypervisor(Host):
     """Hypervisor interface."""
 
     @staticmethod
-    def get(hv_admintool):
+    def get(hv_admintool, ignore_reserved=False):
         """Factory to get matching hypervisor implementation for a VM."""
         # TODO We are not validating the servertype of the source and target
         # hypervisor for now, because of the old hypervisors with servertype
@@ -64,6 +64,12 @@ class Hypervisor(Host):
         if hv_admintool.get('state') == 'retired':
             raise InvalidStateError(
                 'Hypervisor "{0}" is retired.'
+                .format(hv_admintool['hostname'])
+            )
+
+        if hv_admintool.get('state') == 'online_reserved' and not ignore_reserved:
+            raise InvalidStateError(
+                'Hypervisor "{0}" is online_reserved. Use --ignore-reserved to override.'
                 .format(hv_admintool['hostname'])
             )
 
@@ -160,7 +166,7 @@ class Hypervisor(Host):
 
     def check_vm(self, vm):
         """Checks whether a VM can run on this hypervisor."""
-        if self.admintool['state'] != 'online':
+        if self.admintool['state'] not in ['online', 'online_reserved']:
             raise InvalidStateError(
                 'Hypervisor {0} is not in online state ({1}).'
                 .format(self.hostname, self.admintool['state'])

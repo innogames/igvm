@@ -30,11 +30,11 @@ class VMError(Exception):
 
 class VM(Host):
     """VM interface."""
-    def __init__(self, vm_admintool, hv=None):
+    def __init__(self, vm_admintool, hv=None, ignore_reserved=False):
         super(VM, self).__init__(vm_admintool, servertype='vm')
 
         if not hv:
-            hv = Hypervisor.get(self.admintool['xen_host'])
+            hv = Hypervisor.get(self.admintool['xen_host'], ignore_reserved)
         assert isinstance(hv, Hypervisor)
         self.hypervisor = hv
 

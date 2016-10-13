@@ -27,9 +27,9 @@ def _check_defined(vm):
 
 
 @with_fabric_settings
-def vcpu_set(vm_hostname, count, offline=False):
+def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
     """Change the number of CPUs in a VM."""
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
     _check_defined(vm)
 
     if offline and not vm.is_running():
@@ -50,7 +50,7 @@ def vcpu_set(vm_hostname, count, offline=False):
 
 
 @with_fabric_settings
-def mem_set(vm_hostname, size, offline=False):
+def mem_set(vm_hostname, size, offline=False, ignore_reserved=False):
     """Change the memory size of a VM.
 
     Size argument is a size unit, which defaults to MiB.
@@ -58,7 +58,7 @@ def mem_set(vm_hostname, size, offline=False):
     difference in the size.  Reducing memory is only allowed while the VM is
     powered off.
     """
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
     _check_defined(vm)
 
     if size.startswith('+'):
@@ -86,7 +86,7 @@ def mem_set(vm_hostname, size, offline=False):
 
 
 @with_fabric_settings
-def disk_set(vm_hostname, size):
+def disk_set(vm_hostname, size, ignore_reserved=False):
     """Change the disk size of a VM
 
     Currently only increasing the disk is implemented.  Size argument is
@@ -95,7 +95,7 @@ def disk_set(vm_hostname, size):
     a relative difference in the size.  Of course, minus is going to
     error out.
     """
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
     _check_defined(vm)
 
     current_size_gib = vm.admintool['disk_size_gib']
@@ -116,12 +116,12 @@ def disk_set(vm_hostname, size):
 
 
 @with_fabric_settings
-def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None):
+def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None, ignore_reserved=False):
     """Create a VM and start it.
 
     Puppet in run once to configure baseline networking.
     """
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
     vm.build(
         localimage=localimage,
         runpuppet=not nopuppet,
@@ -132,7 +132,7 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None):
 @with_fabric_settings
 def vm_rebuild(vm_hostname, force=False):
     """Destroy and reinstall a VM."""
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     if vm.is_running():
@@ -181,7 +181,7 @@ def vm_stop(vm_hostname, force=False):
 @with_fabric_settings
 def vm_restart(vm_hostname, force=False, noredefine=False):
     """Restart a VM."""
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     if not vm.is_running():
@@ -210,7 +210,7 @@ def vm_delete(vm_hostname, force=False):
 
     If force is set, the VM is shutdown automatically and deleted from
     Serveradmin."""
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     if force and vm.is_running():
@@ -243,7 +243,7 @@ def vm_sync(vm_hostname):
 
     This command collects actual resource allocation of a VM from the
     hypervisor and overwrites outdated attribute values in Serveradmin."""
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
@@ -277,7 +277,7 @@ def vm_redefine(vm_hostname):
     useful to discard temporary changes or adapt new hypervisor optimizations.
     No data will be lost."""
 
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     was_running = vm.is_running()
@@ -295,7 +295,7 @@ def vm_redefine(vm_hostname):
 def host_info(vm_hostname):
     """Extracts runtime information about a VM.
     Library consumers should use VM.info() directly."""
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=True)
 
     info = vm.info()
 
@@ -402,7 +402,7 @@ def vm_rename(vm_hostname, new_hostname, force=False):
     to be shut down.  No data will be lost.
     """
 
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     if not force:
