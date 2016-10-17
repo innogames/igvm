@@ -7,7 +7,6 @@ import libvirt
 
 from adminapi.dataset import ServerObject, query, filters
 
-from fabric.api import run
 from fabric.contrib.files import exists
 
 from igvm.exceptions import (
@@ -29,6 +28,7 @@ from igvm.utils.kvm import (
 )
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.storage import (
+    get_free_disk_size_gib,
     create_storage,
     format_storage,
     get_logical_volumes,
@@ -432,6 +432,9 @@ class Hypervisor(Host):
     def vm_info(self, vm):
         """Return runtime information about a VM."""
         raise NotImplementedError(type(self).__name__)
+
+    def get_free_disk_size_gib(self):
+        return get_free_disk_size_gib(self)
 
 
 class KVMHypervisor(Hypervisor):
