@@ -1,6 +1,7 @@
 import logging
 import urllib2
 
+from ipaddress import IPv6Network
 from fabric.api import abort
 from adminapi.dataset import query, filters
 
@@ -10,10 +11,12 @@ log = logging.getLogger(__name__)
 
 def get_network_config(server):
     ret = {}
-
+    # It is impossible to use server['route_network']
+    # if IP address of a server was changed via --newip.
     route_network = query(
+        servertype='route_network',
         state=filters.Not('retired'),
-        hostname=server['route_network'],
+        intern_ip=filters.Overlap(server['intern_ip'])
     ).restrict(
         'hostname',
         'intern_ip',
