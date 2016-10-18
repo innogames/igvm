@@ -79,7 +79,7 @@ def create_storage(hv, vm):
     disk_size_gib = vm.admintool['disk_size_gib']
     for vg_line in vgs.splitlines():
             vg_name, vg_size_GiB = vg_line.split()
-            if vg_size_GiB > disk_size_gib + 5:  # Always keep a few GiB free
+            if float(vg_size_GiB) > disk_size_gib + 5:  # Always keep a few GiB free
                 found_vg = vg_name
                 break
     else:
