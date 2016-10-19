@@ -1,5 +1,6 @@
 import logging
 import time
+from ipaddress import ip_address
 
 from igvm.exceptions import (
     ConfigError,
@@ -41,7 +42,9 @@ class VM(Host):
         """Changes the IP address and updates all related attributes.
         Internal method for VM building and migration."""
         old_ip = self.admintool['intern_ip']
-        self.admintool['intern_ip'] = new_ip
+        # New IP address is given as a string, admintool['intern_ip'] is ip_address!
+        # So convert the type.
+        self.admintool['intern_ip'] = ip_address(new_ip)
         self.network_config = get_network_config(self.admintool)
 
         if old_ip != new_ip:
