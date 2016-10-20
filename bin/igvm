@@ -158,7 +158,7 @@ subparser.add_argument(
     'size',
     help=(
         'New disk size with an optional unit (default GiB). '
-        'Can be specified relative with "+".'
+        'Can be specified relative with "+". Only integers are allowed'
     )
 )
 
@@ -173,7 +173,10 @@ subparser.add_argument(
 )
 subparser.add_argument(
     'size',
-    help='New memory size with optional unit (default is MiB)',
+    help=(
+        'New memory size with optional unit (default is MiB).'
+        'Only integers are allowed.'
+    ),
 )
 subparser.add_argument(
     '--offline',
