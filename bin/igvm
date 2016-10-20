@@ -137,12 +137,12 @@ subparser.add_argument(
 subparser.add_argument(
     '--maintenance',
     action='store_true',
-    help="Set state to maintenance, thus causing downtime in Testtool and Nagios",
+    help='Set state to maintenance, thus downtiming VM in Testtool and Nagios',
 )
 subparser.add_argument(
     '--offline',
     action='store_true',
-    help='Force offline migration, also imples --maintenance',
+    help='Force offline migration, also implies --maintenance',
 )
 
 subparser = subparsers.add_parser(
