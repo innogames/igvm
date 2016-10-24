@@ -10,6 +10,8 @@ from igvm.utils import cmd
 
 log = logging.getLogger(__name__)
 
+VG_NAME = 'xen-data'
+
 
 def get_logical_volumes(host):
     lvolumes = []
@@ -24,22 +26,22 @@ def get_logical_volumes(host):
             'path': '/dev/{}/{}'.format(vg_name, lv_name),
             'name': lv_name,
             'vg_name': vg_name,
-            'size_MiB': math.ceil(float(lv_size) / 1024**2),
+            'size_MiB': math.ceil(float(lv_size) / 1024 ** 2),
         })
     return lvolumes
 
 
 def get_vm_volume(hv, vm):
-    """Returns the path of the LV belonging to the given VM."""
+    """Return the path of the LV belonging to the given VM"""
     for lv in get_logical_volumes(hv):
         if lv['name'] == vm.hostname:
             disk_size = vm.admintool['disk_size_gib']
             if disk_size != int(math.ceil(lv['size_MiB'] / 1024)):
-                raise StorageError((
+                raise StorageError(
                     "Server disk_size_gib {0} on Serveradmin doesn't "
                     'match the volume size {1} MiB.'
-                ).format(disk_size, lv['size_MiB']))
-
+                    .format(disk_size, lv['size_MiB'])
+                )
             return lv['path']
     raise StorageError('Unable to find source LV of {}'.format(vm.hostname))
 
@@ -53,44 +55,36 @@ def lvresize(volume, size_gib):
 
     run('lvresize {0} -L {1}g'.format(volume, size_gib))
 
+
 def lvrename(volume, newname):
     run('lvrename {0} {1}'.format(volume, newname))
 
+
+def get_free_disk_size_gib(hv):
+    """Return free disk space as float in GiB"""
+    vgs_line = hv.run(
+        'vgs --noheadings -o vg_name,vg_free --unit g --nosuffix {0}'
+        ' 2>/dev/null'
+        .format(VG_NAME),
+        silent=True,
+    )
+    vg_name, vg_size_gib = vgs_line.split()
+    assert vg_name == VG_NAME
+    return float(vg_size_gib)
+
+
 def create_storage(hv, vm):
-    # Do not search only for the given LV.
-    # `lvs` must generally not fail and give a list of LVs.
-    lvs = hv.run(
-        'lvs --noheading -o vg_name,name 2>/dev/null',
-        silent=True
-    )
-    for lv_line in lvs.splitlines():
-        vg_name, lv_name = lv_line.split()
-        if lv_name == vm.hostname:
-            raise StorageError(
-                'Logical Volume {}/{} already exists!'
-                .format(vg_name, lv_name)
-            )
-    # Find VG with enough free space
-    vgs = hv.run(
-        'vgs --noheadings -o vg_name,vg_free --unit g --nosuffix'
-        ' 2>/dev/null',
-        silent=True
-    )
     disk_size_gib = vm.admintool['disk_size_gib']
-    for vg_line in vgs.splitlines():
-            vg_name, vg_size_GiB = vg_line.split()
-            if float(vg_size_GiB) > disk_size_gib + 5:  # Always keep a few GiB free
-                found_vg = vg_name
-                break
-    else:
+    # Always keep a few GiB free
+    if disk_size_gib + 5 > get_free_disk_size_gib(hv):
         raise StorageError('Not enough free space in VGs!')
     hv.run(cmd(
         'lvcreate -L {0}g -n {1} {2}',
         disk_size_gib,
         vm.hostname,
-        vg_name,
+        VG_NAME,
     ))
-    return '/dev/{}/{}'.format(found_vg, vm.hostname)
+    return '/dev/{}/{}'.format(VG_NAME, vm.hostname)
 
 
 def mount_temp(host, device, suffix=''):
