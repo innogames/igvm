@@ -1,9 +1,9 @@
 # Usage
 
-The Python library is called managevm.  There are also two scripts you can
-use from command line: buildvm and migratevm.  Scripts are installed in
-/usr/bin and Python library somewhere in PYTHONPATH. Just import the functions
-like this:
+The project consist of a Python library called "igvm", and a single binary
+to call the functions in this library.  The binary is "bin/igvm".
+
+The library functions can be included like this:
 
 ```python
 from managevm.buildvm import buildvm
@@ -42,7 +42,7 @@ buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None)
 2. Create your own branch.
 1. Write the code.
 2. In order to test the code, run it the following way:
-   `python setup.py install --user && bin/(buildvm|migratevm) --params and commands`
+   `python setup.py install --user && bin/igvm command --params`
 3. Commit to your branch.
 4. Go to 2.1. until you are finished.
 3. Checkout master branch again.
