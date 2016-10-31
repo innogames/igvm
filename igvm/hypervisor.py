@@ -28,6 +28,8 @@ from igvm.utils.kvm import (
 )
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.storage import (
+    VG_NAME,
+    RESERVED_DISK,
     get_free_disk_size_gib,
     create_storage,
     format_storage,
@@ -441,8 +443,8 @@ class Hypervisor(Host):
         """Return runtime information about a VM."""
         raise NotImplementedError(type(self).__name__)
 
-    def get_free_disk_size_gib(self):
-        return get_free_disk_size_gib(self)
+    def get_free_disk_size_gib(self, safe=True):
+        return get_free_disk_size_gib(self, safe)
 
 
 class KVMHypervisor(Hypervisor):

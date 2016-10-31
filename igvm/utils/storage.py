@@ -11,6 +11,7 @@ from igvm.utils import cmd
 log = logging.getLogger(__name__)
 
 VG_NAME = 'xen-data'
+RESERVED_DISK = 5.0
 
 
 def get_logical_volumes(host):
@@ -60,7 +61,7 @@ def lvrename(volume, newname):
     run('lvrename {0} {1}'.format(volume, newname))
 
 
-def get_free_disk_size_gib(hv):
+def get_free_disk_size_gib(hv, safe=True):
     """Return free disk space as float in GiB"""
     vgs_line = hv.run(
         'vgs --noheadings -o vg_name,vg_free --unit g --nosuffix {0}'
@@ -69,15 +70,15 @@ def get_free_disk_size_gib(hv):
         silent=True,
     )
     vg_name, vg_size_gib = vgs_line.split()
+    vg_size_gib = float(vg_size_gib)
+    if safe is True:
+        vg_size_gib -= RESERVED_DISK
     assert vg_name == VG_NAME
-    return float(vg_size_gib)
+    return vg_size_gib
 
 
 def create_storage(hv, vm):
     disk_size_gib = vm.admintool['disk_size_gib']
-    # Always keep a few GiB free
-    if disk_size_gib + 5 > get_free_disk_size_gib(hv):
-        raise StorageError('Not enough free space in VGs!')
     hv.run(cmd(
         'lvcreate -L {0}g -n {1} {2}',
         disk_size_gib,
