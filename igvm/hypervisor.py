@@ -188,6 +188,16 @@ class Hypervisor(Host):
                 .format(free_mib, vm.admintool['memory'])
             )
 
+        # Enough disk?
+        free_disk_space = get_free_disk_size_gib(self)
+        vm_disk_size = float(vm.admintool['disk_size_gib'])
+        if vm_disk_size < free_disk_space:
+            raise HypervisorError(
+                'Not enough free space in VG {} to build VM while keeping'
+                ' {} GiB reserved'
+                .format(VG_NAME, RESERVED_DISK)
+            )
+
         # TODO: CPU model
 
         # Proper VLAN?
