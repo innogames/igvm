@@ -28,6 +28,8 @@ from igvm.utils.kvm import (
 )
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.storage import (
+    VG_NAME,
+    RESERVED_DISK,
     get_free_disk_size_gib,
     create_storage,
     format_storage,
@@ -184,6 +186,16 @@ class Hypervisor(Host):
                 'Not enough memory. Destination Hypervisor has {0}MiB but VM '
                 'requires {1}MiB'
                 .format(free_mib, vm.admintool['memory'])
+            )
+
+        # Enough disk?
+        free_disk_space = get_free_disk_size_gib(self)
+        vm_disk_size = float(vm.admintool['disk_size_gib'])
+        if vm_disk_size < free_disk_space:
+            raise HypervisorError(
+                'Not enough free space in VG {} to build VM while keeping'
+                ' {} GiB reserved'
+                .format(VG_NAME, RESERVED_DISK)
             )
 
         # TODO: CPU model
@@ -441,8 +453,8 @@ class Hypervisor(Host):
         """Return runtime information about a VM."""
         raise NotImplementedError(type(self).__name__)
 
-    def get_free_disk_size_gib(self):
-        return get_free_disk_size_gib(self)
+    def get_free_disk_size_gib(self, safe=True):
+        return get_free_disk_size_gib(self, safe)
 
 
 class KVMHypervisor(Hypervisor):
