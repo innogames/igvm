@@ -113,11 +113,9 @@ class Hypervisor(Host):
         hv_vlans = []
         if self.admintool.get('vlan_networks'):
             for vlan_network in query(
-                    hostname=filters.Any(*self.admintool['vlan_networks']),
-                    vlan_tag=filters.Not(filters.Empty()),
-                ).restrict(
-                    'vlan_tag',
-                ):
+                hostname=filters.Any(*self.admintool['vlan_networks']),
+                vlan_tag=filters.Not(filters.Empty()),
+            ).restrict('vlan_tag'):
                 hv_vlans.append(vlan_network['vlan_tag'])
         vm_vlan = vm.network_config['vlan_tag']
         if not hv_vlans:
@@ -137,7 +135,10 @@ class Hypervisor(Host):
         # The VLAN is obviously there, even if not in Admintool.
         # This can happen if vlan is remved in Admintool so that nobody creates
         # new VMs on given HV, but the existing ones must be moved out.
-        if vm.admintool['xen_host'] != self.hostname and vm_vlan not in hv_vlans:
+        if (
+            vm.admintool['xen_host'] != self.hostname and
+            vm_vlan not in hv_vlans
+        ):
             raise HypervisorError(
                 'Hypervisor {} does not support VLAN {}.'
                 .format(self.hostname, vm_vlan)
@@ -191,7 +192,7 @@ class Hypervisor(Host):
         # Enough disk?
         free_disk_space = get_free_disk_size_gib(self)
         vm_disk_size = float(vm.admintool['disk_size_gib'])
-        if vm_disk_size < free_disk_space:
+        if vm_disk_size > free_disk_space:
             raise HypervisorError(
                 'Not enough free space in VG {} to build VM while keeping'
                 ' {} GiB reserved'
