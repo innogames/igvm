@@ -17,13 +17,13 @@ log = logging.getLogger(__name__)
 @with_fabric_settings
 @run_in_transaction
 def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
-               maintenance=False, offline=False, tx=None):
+               maintenance=False, offline=False, tx=None, ignore_reserved=False):
     """Migrate a VM to a new hypervisor."""
     assert tx is not None, 'tx populated by run_in_transaction'
 
     vm = VM(vm_hostname)
     source_hv = vm.hypervisor
-    destination_hv = Hypervisor.get(dsthv_hostname)
+    destination_hv = Hypervisor.get(dsthv_hostname, ignore_reserved)
 
     # There is no point of online migration, if the VM is already
     # shutdown.
