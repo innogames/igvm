@@ -67,9 +67,11 @@ class Hypervisor(Host):
                 .format(hv_admintool['hostname'])
             )
 
-        if hv_admintool.get('state') == 'online_reserved' and not ignore_reserved:
+        if (hv_admintool.get('state') == 'online_reserved' and
+                not ignore_reserved):
             raise InvalidStateError(
-                'Hypervisor "{0}" is online_reserved. Use --ignore-reserved to override.'
+                'Hypervisor "{0}" is online_reserved. '
+                'Use --ignore-reserved to override.'
                 .format(hv_admintool['hostname'])
             )
 
@@ -221,7 +223,7 @@ class Hypervisor(Host):
 
         if not offline and type(self) != type(dst_hv):
             raise HypervisorError(
-                'Online migration between different hypervisor technologies'
+                'Online migration between different hypervisor technologies '
                 'is not supported.'
             )
 
