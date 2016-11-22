@@ -20,7 +20,6 @@ from igvm.exceptions import (
 )
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
-from igvm.utils.backoff import retry_wait_backoff
 from igvm.settings import DEFAULT_SWAP_SIZE
 from igvm.utils.cli import yellow
 from igvm.utils.network import get_network_config
@@ -218,22 +217,6 @@ class VM(Host):
         )
         if not host_up:
             raise VMError('The server is not reachable with SSH')
-
-        # Wait until we can login
-        log.info('Trying SSH login')
-
-        def _try_login():
-            try:
-                self.run('ls', silent=True)
-                return True
-            except Exception:
-                pass
-            return False
-
-        retry_wait_backoff(
-            _try_login,
-            'SSH login failed',
-        )
 
         if tx:
             tx.on_rollback('stop VM', self.shutdown)
