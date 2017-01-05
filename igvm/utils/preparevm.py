@@ -176,7 +176,7 @@ def run_puppet(hv, vm, clear_cert, tx):
         hv.run(
             'chroot . /usr/bin/puppet agent -v --fqdn={}.ig.local'
             ' --waitforcert=60 --onetime --no-daemonize'
-            ' --tags=network'
+            ' --tags=network,puppet --skip_tags=nrpe'
             .format(vm.hostname)
         )
 
