@@ -59,7 +59,10 @@ class Host(object):
 
         self.hostname = server_object['hostname']
         self.admintool = server_object
-        self.fqdn = '{}.ig.local'.format(self.hostname)
+        if self.hostname.endswith('.ig.local'):
+            self.fqdn = self.hostname
+        else:
+            self.fqdn = self.hostname + '.ig.local'
 
     def fabric_settings(self, *args, **kwargs):
         """Builds a fabric context manager to run commands on this host."""

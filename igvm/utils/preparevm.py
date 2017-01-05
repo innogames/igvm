@@ -160,9 +160,9 @@ def run_puppet(hv, vm, clear_cert, tx):
         for puppet_master in puppet_masters:
             with settings(host_string=puppet_master, warn_only=True):
                 run(cmd(
-                    '/usr/bin/puppet cert clean {0}.ig.local'
+                    '/usr/bin/puppet cert clean {0}'
                     ' || echo "No cert for Host found"',
-                    vm.hostname,
+                    vm.fqdn,
                 ), warn_only=True)
 
     with cd(target_dir):
@@ -170,14 +170,14 @@ def run_puppet(hv, vm, clear_cert, tx):
             tx.on_rollback(
                 'Kill puppet',
                 hv.run,
-                'pkill -9 -f "/usr/bin/puppet agent -v --fqdn={}.ig.local"'
-                .format(vm.hostname)
+                'pkill -9 -f "/usr/bin/puppet agent -v --fqdn={}"'
+                .format(vm.fqdn)
             )
         hv.run(
-            'chroot . /usr/bin/puppet agent -v --fqdn={}.ig.local'
+            'chroot . /usr/bin/puppet agent -v --fqdn={}'
             ' --waitforcert=60 --onetime --no-daemonize'
             ' --tags=network,puppet --skip_tags=nrpe'
-            .format(vm.hostname)
+            .format(vm.fqdn)
         )
 
     unblock_autostart(hv, vm)
