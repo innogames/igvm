@@ -1,4 +1,3 @@
-import httplib
 import logging
 import os
 from StringIO import StringIO
