@@ -22,7 +22,9 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     """Migrate a VM to a new hypervisor."""
     assert tx is not None, 'tx populated by run_in_transaction'
 
-    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
+    # For source HV we ignore reserved flag.
+    # It must always be possible to move VMs out of a HV
+    vm = VM(vm_hostname, ignore_reserved=True)
     source_hv = vm.hypervisor
     destination_hv = Hypervisor.get(dsthv_hostname, ignore_reserved)
 
