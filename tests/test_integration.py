@@ -185,7 +185,9 @@ class BuildTest(object):
         image = '{}-base.tar.gz'.format(self.vm.admintool['os'])
         self.hv.run(cmd('test -f {}', image))
 
-        self.hv.run(cmd('dd if=/dev/urandom of={} bs=1M count=10 seek=5', image))
+        self.hv.run(
+            cmd('dd if=/dev/urandom of={} bs=1M count=10 seek=5', image)
+        )
 
         buildvm(self.vm.hostname)
 
