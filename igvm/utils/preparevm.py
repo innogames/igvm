@@ -11,7 +11,6 @@ from igvm.exceptions import IGVMError
 from igvm.settings import (
     DEFAULT_DNS_SERVERS,
     DEFAULT_SWAP_SIZE,
-    PUPPET_CA_MASTERS,
 )
 from igvm.utils.sshkeys import create_authorized_keys
 from igvm.utils.template import upload_template
@@ -135,30 +134,26 @@ def run_puppet(hv, vm, clear_cert, tx):
 
     if clear_cert:
         # Use puppet-controller, if possible.
-        puppet_masters = set(PUPPET_CA_MASTERS)
+        puppet_ca = vm.admintool['puppet_ca']
         controller_token = os.environ.get('PUPPET_CONTROLLER_TOKEN')
         if controller_token:
-            for puppet_master in PUPPET_CA_MASTERS:
-                try:
-                    _clear_cert_controller(
-                        vm.hostname,
-                        puppet_master,
-                        controller_token,
-                    )
-                    puppet_masters.remove(puppet_master)
-                    log.info(
-                        'Cleared Puppet cert of {} on {}'
-                        .format(vm.hostname, puppet_master)
-                    )
-                except IGVMError as e:
-                    log.info(
-                        'Failed to clear Puppet cert of {} on {}: {}'
-                        .format(vm.hostname, puppet_master, e)
-                    )
-
-        # Use SSH for all remaining servers
-        for puppet_master in puppet_masters:
-            with settings(host_string=puppet_master, warn_only=True):
+            try:
+                _clear_cert_controller(
+                    vm.hostname,
+                    puppet_ca,
+                    controller_token,
+                )
+                log.info(
+                    'Cleared Puppet cert of {} on {}'
+                    .format(vm.hostname, puppet_ca)
+                )
+            except IGVMError as e:
+                log.info(
+                    'Failed to clear Puppet cert of {} on {}: {}'
+                    .format(vm.hostname, puppet_ca, e)
+                )
+        else:
+            with settings(host_string=puppet_ca, warn_only=True):
                 run(cmd(
                     '/usr/bin/puppet cert clean {0}'
                     ' || echo "No cert for Host found"',
@@ -175,9 +170,14 @@ def run_puppet(hv, vm, clear_cert, tx):
             )
         hv.run(
             'chroot . /usr/bin/puppet agent -v --fqdn={}'
+            ' --server {} --ca_server {} --no-report'
             ' --waitforcert=60 --onetime --no-daemonize'
             ' --tags=network,puppet --skip_tags=nrpe'
-            .format(vm.fqdn)
+            .format(
+                vm.fqdn,
+                vm.admintool['puppet_master'],
+                vm.admintool['puppet_ca'],
+            )
         )
 
     unblock_autostart(hv, vm)
