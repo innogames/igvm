@@ -39,8 +39,8 @@ logging.basicConfig(level=logging.WARNING)
 env.update(COMMON_FABRIC_SETTINGS)
 
 # Configuration of staging environment
-IP1 = '10.20.10.42'    # aw21.igvm
-IP2 = '10.20.10.43'    # aw21.igvm
+IP1 = IPv4Address('10.20.10.42')    # aw21.igvm
+IP2 = IPv4Address('10.20.10.43')    # aw21.igvm
 VM1 = 'igvm-integration.test'
 HV1 = 'aw-hv-053'  # KVM
 HV2 = 'aw-hv-082'  # KVM
@@ -542,7 +542,7 @@ class MigrationTest(IGVMTest):
         )
         self.vm.reload()
 
-        self.assertEqual(self.vm.admintool['intern_ip'], IPv4Address(IP2))
+        self.assertEqual(self.vm.admintool['intern_ip'], IP2)
         self._check_vm(self.hv2, self.vm)
         self._check_absent(self.hv1, self.vm)
         self.vm.run(cmd('ip a | grep {}', IP2))
@@ -557,7 +557,7 @@ class MigrationTest(IGVMTest):
         )
         self.vm.reload()
 
-        self.assertEqual(self.vm.admintool['intern_ip'], IPv4Address(IP1))
+        self.assertEqual(self.vm.admintool['intern_ip'], IP1)
         self._check_vm(self.hv1, self.vm)
         self._check_absent(self.hv2, self.vm)
         self.vm.run(cmd('ip a | grep {}', IP1))
