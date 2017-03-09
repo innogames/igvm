@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+"""igvm - Setup
+
+Copyright (c) 2017, InnoGames GmbH
+"""
+
 from distutils.core import setup
 
 setup(
@@ -6,9 +11,11 @@ setup(
     version='1.0',
     url='https://gitlab.innogames.de/sysadmins/igvm',
     packages=['igvm', 'igvm.utils', ],
-    scripts=[
-        'bin/igvm',
-    ],
+    entry_points={
+        'console_scripts': [
+            'igvm=igvm.cli:main',
+        ],
+    },
     package_data={
         'igvm': [
             'templates/hv/domain.sxp',
