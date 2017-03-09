@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """igvm - Setup
 
 Copyright (c) 2017, InnoGames GmbH
