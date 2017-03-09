@@ -156,10 +156,10 @@ class Hypervisor(Host):
     def vm_max_memory(self, vm):
         """Calculates the max amount of memory in MiB the VM may receive."""
         mem = vm.admintool['memory']
-        if mem > 12*1024:
-            max_mem = mem + 10*1024
+        if mem > 12 * 1024:
+            max_mem = mem + 10 * 1024
         else:
-            max_mem = 16*1024
+            max_mem = 16 * 1024
 
         # Never go higher than HV
         max_mem = min(self.total_vm_memory(), max_mem)
@@ -411,9 +411,7 @@ class Hypervisor(Host):
             )
 
         self._mount_path[vm] = mount_temp(
-            self,
-            self.vm_disk_path(vm),
-            suffix='-'+vm.hostname,
+            self, self.vm_disk_path(vm), suffix=('-' + vm.hostname)
         )
         if tx:
             tx.on_rollback('unmount storage', self.umount_vm_storage, vm)
@@ -524,7 +522,7 @@ class KVMHypervisor(Hypervisor):
         for dom_id in self.conn.listDomainsID():
             dom = self.conn.lookupByID(dom_id)
             used_kib += dom.info()[2]
-        free_mib = total_mib - used_kib/1024
+        free_mib = total_mib - used_kib / 1024
         return free_mib
 
     def _vm_set_num_cpu(self, vm, num_cpu):
