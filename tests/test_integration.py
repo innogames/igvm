@@ -85,13 +85,6 @@ def _clean_vm(hv, hostname):
             .format(vm=hostname),
             warn_only=True,
         )
-    elif hv.admintool['hypervisor'] == 'xen':
-        hv.run(
-            'xm destroy {vm}; '
-            'rm -f /etc/xen/domains/{vm}.sxp'
-            .format(vm=hostname),
-            warn_only=True,
-        )
     else:
         raise NotImplementedError(
             'Not sure how to clean {} HV'

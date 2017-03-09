@@ -339,7 +339,7 @@ def generate_domain_xml(hv, vm):
     }
 
     jenv = Environment(loader=PackageLoader('igvm', 'templates'))
-    domain_xml = jenv.get_template('hv/domain.xml').render(**config)
+    domain_xml = jenv.get_template('domain.xml').render(**config)
 
     tree = ET.fromstring(domain_xml)
 
