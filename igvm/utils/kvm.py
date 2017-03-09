@@ -33,7 +33,7 @@ def _del_if_exists(tree, name):
             parent = tree.find(name[:p])
             if parent is None:
                 return
-            name = name[p+1:]
+            name = name[(p + 1):]
         else:
             parent = tree
         elements = parent.findall(name)
@@ -369,8 +369,8 @@ def _get_qemu_version(hv):
     # According to documentation:
     # value is major * 1,000,000 + minor * 1,000 + release
     release = version % 1000
-    minor = int(version/1000 % 1000)
-    major = int(version/1000000 % 1000000)
+    minor = int(version / 1000 % 1000)
+    major = int(version / 1000000 % 1000000)
     return major, minor, release
 
 
@@ -469,7 +469,7 @@ def kvm_adjust_cpuset_post(config, offline):
     for i, mask in enumerate(dom.vcpuPinInfo()):
         mask = list(mask)
         for j in range(start_cpu, num_cpus):
-            mask[j] = mask[j-num_nodes]
+            mask[j] = mask[j - num_nodes]
         dom.pinVcpu(i, tuple(mask))
 
 
