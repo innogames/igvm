@@ -20,8 +20,6 @@ setup(
             'templates/etc/resolv.conf',
         ]
     },
-    author='Henning Pridohl',
-    author_email='henning.pridohl@innogames.de',
-    maintainer='Kajetan Staszkiewicz',
-    maintainer_email='kajetan.staszkiewicz@innogames.de',
+    author='InnoGames System Administration',
+    author_email='it@innogames.com',
 )
