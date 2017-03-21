@@ -43,8 +43,7 @@ buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None, ignore_rese
 1. Clone this repo to your local workspace.
 2. Create your own branch.
 1. Write the code.
-2. In order to test the code, run it the following way:
-   `python setup.py install --user && bin/igvm command --params`
+2. In order to test the code, you can use `run.py`
 3. Commit to your branch.
 4. Go to 2.1. until you are finished.
 3. Checkout master branch again.
