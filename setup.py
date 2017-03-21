@@ -4,7 +4,7 @@
 Copyright (c) 2017, InnoGames GmbH
 """
 
-from distutils.core import setup
+from setuptools import setup
 
 setup(
     name='igvm',
