@@ -4,6 +4,6 @@
 Copyright (c) 2017, InnoGames GmbH
 """
 
-from igvm.main import main
+from igvm.cli import main
 
 main()
