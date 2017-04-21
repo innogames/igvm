@@ -45,9 +45,7 @@ class IGVMArgumentParser(ArgumentParser):
 
         out = []
         out.append(white(__doc__, bold=True))
-        out.append('')
-        out.append('Available commands:')
-        out.append('')
+        out.append('Available commands:\n')
 
         subparsers_actions = [
             action for action in self._actions
@@ -63,12 +61,10 @@ class IGVMArgumentParser(ArgumentParser):
                 )
                 if subparser.get_default('func').__doc__:
                     out.append('\n'.join(
-                        l.strip()
-                        for l
-                        in subparser.get_default('func').__doc__.splitlines()
+                        '\t{}'.format(l.strip()) for l in subparser
+                        .get_default('func').__doc__.strip().splitlines()
                     ))
-                out.append('')
-                out.append(subparser.format_usage())
+                out.append('\n\t{}'.format(subparser.format_usage()))
         return '\n'.join(out)
 
 

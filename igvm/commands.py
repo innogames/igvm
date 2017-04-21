@@ -28,7 +28,7 @@ def _check_defined(vm):
 
 @with_fabric_settings
 def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
-    """Change the number of CPUs in a VM."""
+    """Change the number of CPUs in a VM"""
     vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
     _check_defined(vm)
 
@@ -51,7 +51,7 @@ def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
 
 @with_fabric_settings
 def mem_set(vm_hostname, size, offline=False, ignore_reserved=False):
-    """Change the memory size of a VM.
+    """Change the memory size of a VM
 
     Size argument is a size unit, which defaults to MiB.
     The plus (+) and minus (-) prefixes are allowed to specify a relative
@@ -116,8 +116,9 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
 
 
 @with_fabric_settings
-def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None, ignore_reserved=False):
-    """Create a VM and start it.
+def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
+             ignore_reserved=False):
+    """Create a VM and start it
 
     Puppet in run once to configure baseline networking.
     """
@@ -131,7 +132,7 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None, ignore
 
 @with_fabric_settings
 def vm_rebuild(vm_hostname, force=False):
-    """Destroy and reinstall a VM."""
+    """Destroy and reinstall a VM"""
     vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
@@ -152,7 +153,7 @@ def vm_rebuild(vm_hostname, force=False):
 
 @with_fabric_settings
 def vm_start(vm_hostname):
-    """Start a VM."""
+    """Start a VM"""
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -164,7 +165,7 @@ def vm_start(vm_hostname):
 
 @with_fabric_settings
 def vm_stop(vm_hostname, force=False):
-    """Gracefully stop a VM."""
+    """Gracefully stop a VM"""
     vm = VM(vm_hostname)
     _check_defined(vm)
 
@@ -180,7 +181,7 @@ def vm_stop(vm_hostname, force=False):
 
 @with_fabric_settings
 def vm_restart(vm_hostname, force=False, noredefine=False):
-    """Restart a VM."""
+    """Restart a VM"""
     vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
@@ -203,7 +204,7 @@ def vm_restart(vm_hostname, force=False, noredefine=False):
 
 @with_fabric_settings
 def vm_delete(vm_hostname, force=False):
-    """Delete a VM.
+    """Delete a VM
 
     The VM is undefined on the hypervisor, destroys the disk volume, and sets
     the VM to "retired" state. The serveradmin object is not deleted.
@@ -239,7 +240,7 @@ def vm_delete(vm_hostname, force=False):
 
 @with_fabric_settings
 def vm_sync(vm_hostname):
-    """Synchronize VM resource attributes to Serveradmin.
+    """Synchronize VM resource attributes to Serveradmin
 
     This command collects actual resource allocation of a VM from the
     hypervisor and overwrites outdated attribute values in Serveradmin."""
@@ -271,7 +272,7 @@ def vm_sync(vm_hostname):
 
 @with_fabric_settings
 def vm_redefine(vm_hostname):
-    """Redefine a VM on the hypervisor to use latest domain configuration.
+    """Redefine a VM on the hypervisor to use latest domain configuration
 
     The VM is shut down and recreated, using the existing disk. This can be
     useful to discard temporary changes or adapt new hypervisor optimizations.
@@ -293,8 +294,10 @@ def vm_redefine(vm_hostname):
 
 @with_fabric_settings
 def host_info(vm_hostname):
-    """Extracts runtime information about a VM.
-    Library consumers should use VM.info() directly."""
+    """Extract runtime information about a VM
+
+    Library consumers should use VM.info() directly.
+    """
     vm = VM(vm_hostname, ignore_reserved=True)
 
     info = vm.info()
@@ -390,7 +393,7 @@ def host_info(vm_hostname):
 
             # Properly re-indent multiline values
             value = str(info.pop(k))
-            value = ('\n'+' '*(max_key_len + 3)).join(value.splitlines())
+            value = ('\n' + ' ' * (max_key_len + 3)).join(value.splitlines())
             print('{} : {}'.format(k.ljust(max_key_len), value))
 
 
