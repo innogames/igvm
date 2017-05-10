@@ -124,10 +124,10 @@ class Hypervisor(Host):
             # For untagged Hypervisors VM must be untagged, too.
             return None
 
-        # On source hypervisor it is unncessary to perform this check.
-        # The VLAN is obviously there, even if not in Admintool.
-        # This can happen if vlan is remved in Admintool so that nobody creates
-        # new VMs on given HV, but the existing ones must be moved out.
+        # On source hypervisor, it is unnecessary to perform this check.
+        # The VLAN is obviously there, even if not on Serveradmin.  This can
+        # happen if VLAN is removed on Serveradmin so that nobody creates
+        # new VMs on given hypervisor, but the existing ones must be moved out.
         if (
             vm.admintool['xen_host'] != self.hostname and
             vm_vlan not in hv_vlans
