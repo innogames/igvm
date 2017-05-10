@@ -173,8 +173,7 @@ class VM(Host):
             if self.hypervisor.vm_running(self) == running:
                 return True
             time.sleep(1)
-        else:
-            return False
+        return False
 
     def meminfo(self):
         """Returns a dictionary of /proc/meminfo entries."""
