@@ -3,7 +3,7 @@ import math
 
 import libvirt
 
-from adminapi.dataset import query, filters, ServerObject
+from adminapi.dataset import query, filters
 
 from igvm.exceptions import (
     ConfigError,
@@ -11,7 +11,7 @@ from igvm.exceptions import (
     InconsistentAttributeError,
     InvalidStateError,
 )
-from igvm.host import Host, get_server
+from igvm.host import Host
 from igvm.settings import HOST_RESERVED_MEMORY
 from igvm.utils.backoff import retry_wait_backoff
 from igvm.utils.kvm import (
@@ -44,33 +44,32 @@ log = logging.getLogger(__name__)
 
 class Hypervisor(Host):
     """Hypervisor interface."""
+    servertype = 'hypervisor'
 
     @staticmethod
     def get(hv_admintool, ignore_reserved=False):
         """Factory to get matching hypervisor implementation for a VM."""
-        # TODO We are not validating the servertype of the source and target
-        # hypervisor for now, because of the old hypervisors with servertype
-        # "db_server" and "frontend_server".  Fix this after the migration is
-        # complete.
-        if not isinstance(hv_admintool, ServerObject):
-            hv_admintool = get_server(hv_admintool)
 
-        if hv_admintool.get('state') == 'retired':
+        # Currently we only support KVM hypervisors.
+        hypervisor = KVMHypervisor(hv_admintool)
+
+        if hypervisor.admintool['state'] == 'retired':
             raise InvalidStateError(
                 'Hypervisor "{0}" is retired.'
-                .format(hv_admintool['hostname'])
+                .format(hypervisor.hostname)
             )
 
-        if (hv_admintool.get('state') == 'online_reserved' and
-                not ignore_reserved):
+        if (
+            hypervisor.admintool['state'] == 'online_reserved' and
+            not ignore_reserved
+        ):
             raise InvalidStateError(
                 'Hypervisor "{0}" is online_reserved. '
                 'Use --ignore-reserved to override.'
-                .format(hv_admintool['hostname'])
+                .format(hypervisor.hostname)
             )
 
-        # Currently we only support KVM hypervisors.
-        return KVMHypervisor(hv_admintool)
+        return hypervisor
 
     def __init__(self, admintool):
         super(Hypervisor, self).__init__(admintool)

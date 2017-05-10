@@ -11,11 +11,11 @@ from igvm.utils.lazy_property import lazy_property
 from igvm.utils.network import get_network_config
 
 
-def get_server(hostname, servertype=None):
-    """Get a server from admintool by hostname
+def get_server(hostname, servertype):
+    """Get a server from Serveradmin by hostname and servertype
 
-    Optionally check the servertype of the server.  Return the adminapi
-    Server object."""
+    It returns the adminapi Server object.
+    """
 
     # We want to return the server only, if matches with some conditions,
     # but we are not using those conditions on the query to give better errors.
@@ -29,12 +29,9 @@ def get_server(hostname, servertype=None):
     assert len(servers) == 1
     server = servers[0]
 
-    if servertype and server['servertype'] != servertype:
+    if server['servertype'] != servertype:
         raise ConfigError(
-            'Server "{0}" is not a "{1}".'.format(
-                hostname,
-                servertype,
-            )
+            'Server "{0}" is not a "{1}".'.format(hostname, servertype)
         )
 
     return server
@@ -52,10 +49,11 @@ def with_fabric_settings(fn):
 
 class Host(object):
     """A remote host on which commands can be executed."""
-    def __init__(self, server_object, servertype=None):
-        # Support passing hostname or admintool object.
+
+    def __init__(self, server_object):
+        # Support passing hostname or Server object.
         if not isinstance(server_object, ServerObject):
-            server_object = get_server(server_object, servertype)
+            server_object = get_server(server_object, self.servertype)
 
         self.hostname = server_object['hostname']
         self.admintool = server_object
@@ -110,12 +108,9 @@ class Host(object):
         """Reloads the server object from serveradmin."""
         if self.admintool.is_dirty():
             raise ConfigError(
-                'Server object must be committed before reloadeing'
+                'Server object must be committed before reloading'
             )
-        self.admintool = get_server(
-            self.hostname,
-            self.admintool['servertype'],
-        )
+        self.admintool = get_server(self.hostname, self.servertype)
 
     @lazy_property  # Requires fabric call on HV, evaluate lazily.
     def network_config(self):
