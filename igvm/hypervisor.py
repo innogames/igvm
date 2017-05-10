@@ -454,7 +454,7 @@ class Hypervisor(Host):
 class KVMHypervisor(Hypervisor):
     @lazy_property
     def conn(self):
-        conn = get_virtconn(self.hostname, 'kvm')
+        conn = get_virtconn(self.fqdn)
         if not conn:
             raise HypervisorError(
                 'Unable to connect to hypervisor "{}"!'
