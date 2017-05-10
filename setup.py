@@ -8,7 +8,7 @@ from setuptools import setup
 
 setup(
     name='igvm',
-    version='1.0',
+    version='1.1',
     url='https://gitlab.innogames.de/sysadmins/igvm',
     packages=['igvm', 'igvm.utils', ],
     entry_points={
