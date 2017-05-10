@@ -1,7 +1,7 @@
 import logging
 import math
 
-import libvirt
+from libvirt import VIR_DOMAIN_RUNNING, VIR_DOMAIN_SHUTDOWN, libvirtError
 
 from adminapi.dataset import query, filters
 
@@ -461,7 +461,11 @@ class KVMHypervisor(Hypervisor):
         return conn
 
     def _find_domain(self, vm):
-        domain = self.conn.lookupByName(vm.hostname)
+        domain = None
+        try:
+            domain = self.conn.lookupByName(vm.hostname)
+        except libvirtError:
+            pass
         return domain
 
     def _domain(self, vm):
@@ -553,10 +557,10 @@ class KVMHypervisor(Hypervisor):
             if domain.name() != vm.hostname:
                 continue
 
-            return domain.info()[0] in (
-                libvirt.VIR_DOMAIN_RUNNING,
-                libvirt.VIR_DOMAIN_SHUTDOWN,
-            )
+            return domain.info()[0] in [
+                VIR_DOMAIN_RUNNING,
+                VIR_DOMAIN_SHUTDOWN,
+            ]
         raise HypervisorError(
             '{} is not defined on {}'
             .format(vm.hostname, self.hostname)
