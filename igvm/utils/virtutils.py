@@ -1,4 +1,5 @@
-import libvirt
+from libvirt import open as libvirt_open, libvirtError
+
 
 _conns = {}
 
@@ -10,16 +11,16 @@ def get_virtconn(host, hypervisor):
     index = (hypervisor, host)
     if index not in _conns:
         url = 'qemu+ssh://{0}/system'.format(host)
-        _conns[index] = libvirt.open(url)
+        _conns[index] = libvirt_open(url)
 
     return _conns[index]
 
 
 def close_virtconns():
-    print "Here I'd kill the connection to Hypervisor, but I will not."
-    print "Ask Henning why do we do it and why it fails on Basti's scripts."
-#    for conn in _conns.values():
-#        try:
-#            conn.close()
-#        except libvirt.libvirtError:
-#            pass
+    for conn_key in _conns.keys():
+        conn = _conns[conn_key]
+        try:
+            conn.close()
+        except libvirtError:
+            pass
+        del _conns[conn_key]

@@ -5,7 +5,12 @@ import uuid
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
 
-import libvirt
+from libvirt import (
+    VIR_DOMAIN_VCPU_MAXIMUM,
+    VIR_DOMAIN_AFFECT_LIVE,
+    VIR_DOMAIN_AFFECT_CONFIG,
+    libvirtError,
+)
 
 from igvm.exceptions import (
     HypervisorError,
@@ -101,7 +106,7 @@ class DomainProperties(object):
         self.uuid = domain.UUIDString()
         self.hugepages = tree.find('memoryBacking/hugepages') is not None
         self.num_nodes = max(len(tree.findall('cpu/numa/cell')), 1)
-        self.max_cpus = domain.vcpusFlags(libvirt.VIR_DOMAIN_VCPU_MAXIMUM)
+        self.max_cpus = domain.vcpusFlags(VIR_DOMAIN_VCPU_MAXIMUM)
         self.mem_hotplug = tree.find('maxMemory') is not None
 
         memballoon = tree.find('devices/memballoon')
@@ -155,11 +160,9 @@ def set_vcpus(hypervisor, vm, domain, num_cpu):
 
     try:
         domain.setVcpusFlags(
-            num_cpu,
-            libvirt.VIR_DOMAIN_AFFECT_LIVE |
-            libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+            num_cpu, VIR_DOMAIN_AFFECT_LIVE | VIR_DOMAIN_AFFECT_CONFIG
         )
-    except libvirt.libvirtError as e:
+    except libvirtError as e:
         raise HypervisorError('setVcpus failed: {}'.format(e))
 
     # Properly pin all new VCPUs
@@ -259,11 +262,10 @@ def set_memory(hypervisor, vm, domain, memory_mib):
         try:
             domain.setMemoryFlags(
                 memory_mib * 1024,
-                libvirt.VIR_DOMAIN_AFFECT_LIVE |
-                libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+                VIR_DOMAIN_AFFECT_LIVE | VIR_DOMAIN_AFFECT_CONFIG,
             )
             return
-        except libvirt.libvirtError:
+        except libvirtError:
             log.info(
                 'virsh setmem failed, falling back to hotplug'
             )
@@ -303,8 +305,7 @@ def _attach_memory_dimms(vm, domain, props, memory_mib):
         )
 
         domain.attachDeviceFlags(
-            xml,
-            libvirt.VIR_DOMAIN_AFFECT_LIVE | libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+            xml, VIR_DOMAIN_AFFECT_LIVE | VIR_DOMAIN_AFFECT_CONFIG
         )
 
     log.info(
