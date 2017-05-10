@@ -1,6 +1,6 @@
 from StringIO import StringIO
 
-from adminapi.dataset import query, ServerObject
+from adminapi.dataset import query, filters, ServerObject
 
 import fabric.api
 import fabric.state
@@ -15,20 +15,32 @@ from igvm.utils.network import get_network_config
 def get_server(hostname, servertype):
     """Get a server from Serveradmin by hostname and servertype
 
-    It returns the Serveradmin object.
+    The function is accepting hostnames in any length as long as it resolves
+    to a single server on Serveradmin.  It returns the adminapi Server object.
     """
 
-    # We want to return the server only, if matches with some conditions,
-    # but we are not using those conditions on the query to give better errors.
-    servers = tuple(query(hostname=hostname))
+    # We want to return the server, only if it matches with some conditions,
+    # but we are not using those conditions on the query to be able to give
+    # better errors.
+    servers = list(query(hostname=filters.Startswith(hostname)))
 
     if not servers:
-        raise ConfigError('Server "{0}" not found.'.format(hostname))
+        raise ConfigError(
+            'Server with hostname "{}" is not found.'.format(hostname)
+        )
 
-    # Hostnames are unique on the serveradmin.  The query cannot return more
-    # than one server.
-    assert len(servers) == 1
     server = servers[0]
+    for other_server in servers[1:]:
+        if other_server['servertype'] != servertype:
+            continue
+        if server['servertype'] != servertype:
+            server = other_server
+            continue
+
+        raise ConfigError(
+            'Hostname "{}" matches with multiple servers "{}" and "{}".'
+            .format(hostname, server['hostname'], other_server['hostname'])
+        )
 
     if server['servertype'] != servertype:
         raise ConfigError(
@@ -51,13 +63,12 @@ def with_fabric_settings(fn):
 class Host(object):
     """A remote host on which commands can be executed."""
 
-    def __init__(self, server_object):
-        # Support passing hostname or Serveradmin object
-        if not isinstance(server_object, ServerObject):
-            server_object = get_server(server_object, self.servertype)
-
-        self.hostname = server_object['hostname']
-        self.server_obj = server_object
+    def __init__(self, server_name_or_obj):
+        if isinstance(server_name_or_obj, ServerObject):
+            self.server_obj = server_name_or_obj
+        else:
+            self.server_obj = get_server(server_name_or_obj, self.servertype)
+        self.hostname = self.server_obj['hostname']
         if self.hostname.endswith('.ig.local'):
             self.fqdn = self.hostname
         else:
