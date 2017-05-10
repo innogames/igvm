@@ -398,7 +398,7 @@ class Hypervisor(Host):
             )
 
         self._mount_path[vm] = mount_temp(
-            self, self.vm_disk_path(vm), suffix=('-' + vm.hostname)
+            self, self.vm_disk_path(vm), suffix=('-' + vm.fqdn)
         )
         if tx:
             tx.on_rollback('unmount storage', self.umount_vm_storage, vm)
