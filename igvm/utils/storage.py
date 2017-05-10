@@ -44,7 +44,7 @@ def get_vm_volume(hypervisor, vm):
                     .format(disk_size, lv['size_MiB'])
                 )
             return lv['path']
-    raise StorageError('Unable to find source LV of {}'.format(vm.hostname))
+    raise StorageError('Unable to find source volume of "{}"'.format(vm.fqdn))
 
 
 def remove_logical_volume(host, lv):

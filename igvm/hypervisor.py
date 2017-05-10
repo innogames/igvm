@@ -55,8 +55,7 @@ class Hypervisor(Host):
 
         if hypervisor.server_obj['state'] == 'retired':
             raise InvalidStateError(
-                'Hypervisor "{0}" is retired.'
-                .format(hypervisor.hostname)
+                'Hypervisor "{0}" is retired.'.format(hypervisor.fqdn)
             )
 
         if (
@@ -64,9 +63,9 @@ class Hypervisor(Host):
             not ignore_reserved
         ):
             raise InvalidStateError(
-                'Hypervisor "{0}" is online_reserved. '
-                'Use --ignore-reserved to override.'
-                .format(hypervisor.hostname)
+                'Hypervisor "{0}" is online_reserved.  Use --ignore-reserved '
+                'to override.'
+                .format(hypervisor.fqdn)
             )
 
         return hypervisor
@@ -90,8 +89,8 @@ class Hypervisor(Host):
         Raises HypervisorError if not mounted."""
         if vm not in self._mount_path:
             raise HypervisorError(
-                '{} is not mounted on {}'
-                .format(vm.hostname, self.hostname)
+                '"{}" is not mounted on "{}".'
+                .format(vm.fqdn, self.fqdn)
             )
         return self._mount_path[vm]
 
@@ -114,9 +113,9 @@ class Hypervisor(Host):
         if not vlans:
             if self.network_config['vlan_tag'] != vm_vlan:
                 raise HypervisorError(
-                    'Hypervisor {} is not on same VLAN {} as VM {}.'
+                    'Hypervisor "{}" is not on same VLAN {} as VM {}.'
                     .format(
-                        self.hostname,
+                        self.fqdn,
                         self.network_config['vlan_tag'],
                         vm_vlan,
                     )
@@ -133,8 +132,8 @@ class Hypervisor(Host):
             vm_vlan not in vlans
         ):
             raise HypervisorError(
-                'Hypervisor {} does not support VLAN {}.'
-                .format(self.hostname, vm_vlan)
+                'Hypervisor "{}" does not support VLAN {}.'
+                .format(self.fqdn, vm_vlan)
             )
         return vm_vlan
 
@@ -155,14 +154,14 @@ class Hypervisor(Host):
         """Check whether a VM can run on this hypervisor"""
         if self.server_obj['state'] not in ['online', 'online_reserved']:
             raise InvalidStateError(
-                'Hypervisor {0} is not in online state ({1}).'
-                .format(self.hostname, self.server_obj['state'])
+                'Hypervisor "{}" is not in online state ({}).'
+                .format(self.fqdn, self.server_obj['state'])
             )
 
         if self.vm_defined(vm):
             raise HypervisorError(
-                'VM {0} is already defined on {1}'
-                .format(vm.hostname, self.hostname)
+                'VM "{}" is already defined on "{}".'
+                .format(vm.fqdn, self.fqdn)
             )
 
         # Enough CPUs?
@@ -177,8 +176,8 @@ class Hypervisor(Host):
         free_mib = self.free_vm_memory()
         if vm.server_obj['memory'] > free_mib:
             raise HypervisorError(
-                'Not enough memory. Destination Hypervisor has {0}MiB but VM '
-                'requires {1}MiB'
+                'Not enough memory.  Destination Hypervisor has {} MiB but VM '
+                'requires {} MiB '
                 .format(free_mib, vm.server_obj['memory'])
             )
 
@@ -200,10 +199,10 @@ class Hypervisor(Host):
     def check_migration(self, vm, hypervisor, offline):
         """Check whether a VM can be migrated to the given hypervisor"""
 
-        if self.hostname == hypervisor.hostname:
+        if self.fqdn == hypervisor.fqdn:
             raise HypervisorError(
-                'Source and destination hypervisor is the same machine {0}!'
-                .format(self.hostname)
+                'Source and destination Hypervisor is the same "{0}"!'
+                .format(self.fqdn)
             )
 
         if not offline and type(self) != type(hypervisor):
@@ -226,14 +225,14 @@ class Hypervisor(Host):
 
     def define_vm(self, vm, tx=None):
         """Creates a VM on the hypervisor."""
-        log.info('Defining {} on {}'.format(vm.hostname, self.hostname))
+        log.info('Defining "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
 
         self._define_vm(vm, tx)
         if tx:
             tx.on_rollback('undefine VM', self.undefine_vm, vm)
 
     def start_vm(self, vm):
-        log.info('Starting {} on {}'.format(vm.hostname, self.hostname))
+        log.info('Starting "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
         # Implementation must be subclassed
 
     def vm_running(self, vm):
@@ -243,20 +242,19 @@ class Hypervisor(Host):
         raise NotImplementedError(type(self).__name__)
 
     def stop_vm(self, vm):
-        log.info('Shutting down {} on {}'.format(vm.hostname, self.hostname))
+        log.info('Shutting down "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
         # Implementation must be subclassed
 
     def stop_vm_force(self, vm):
-        log.info('Force-stopping {} on {}'.format(vm.hostname, self.hostname))
+        log.info('Force-stopping "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
         # Implementation must be subclassed
 
     def undefine_vm(self, vm):
         if self.vm_running(vm):
             raise InvalidStateError(
-                'Refusing to undefine running VM {}'
-                .format(vm.hostname)
+                'Refusing to undefine running VM "{}"'.format(vm.fqdn)
             )
-        log.info('Undefining {} on {}'.format(vm.hostname, self.hostname))
+        log.info('Undefining "{}" on "{}"'.format(vm.fqdn, self.fqdn))
         # Implementation must be subclassed
 
     def _check_committed(self, vm):
@@ -286,8 +284,10 @@ class Hypervisor(Host):
         if num_cpu < 1:
             raise ConfigError('Invalid num_cpu value: {}'.format(num_cpu))
 
-        log.info('Changing #CPUs of {} on {}: {} -> {}'.format(
-            vm.hostname, self.hostname, vm.server_obj['num_cpu'], num_cpu))
+        log.info(
+            'Changing #CPUs of "{}" on "{}" from {} to {}...'
+            .format(vm.fqdn, self.fqdn, vm.server_obj['num_cpu'], num_cpu)
+        )
 
         # If VM is offline, we can just rebuild the domain
         if not self.vm_running(vm):
@@ -304,8 +304,8 @@ class Hypervisor(Host):
         current_num_cpu = updated_server_obj.get('num_cpu', num_cpu)
         if current_num_cpu != num_cpu:
             raise HypervisorError(
-                'New CPUs are not visible to hypervisor, '
-                'changes will not be committed.'
+                'New CPUs are not visible to hypervisor, changes will not be '
+                'committed.'
             )
 
         vm.server_obj['num_cpu'] = num_cpu
@@ -320,8 +320,10 @@ class Hypervisor(Host):
         if self.free_vm_memory() < memory - vm.server_obj['memory']:
             raise HypervisorError('Not enough free memory on hypervisor.')
 
-        log.info('Changing memory of {} on {}: {} MiB -> {} MiB'.format(
-            vm.hostname, self.hostname, vm.server_obj['memory'], memory))
+        log.info(
+            'Changing memory of "{}" on "{}" from {} MiB to {} MiB'
+            .format(vm.fqdn, self.fqdn, vm.server_obj['memory'], memory)
+        )
 
         # If VM is offline, we can just rebuild the domain
         if not running:
@@ -378,8 +380,8 @@ class Hypervisor(Host):
 
         if self.vm_defined(vm):
             raise InvalidStateError(
-                'Refusing to format storage of defined VM {}'
-                .format(vm.hostname)
+                'Refusing to format storage of defined VM "{}".'
+                .format(vm.fqdn)
             )
 
         format_storage(self, self.vm_disk_path(vm))
@@ -414,8 +416,8 @@ class Hypervisor(Host):
         """Delete logical volume of a VM."""
         if self.vm_defined(vm):
             raise InvalidStateError(
-                'Refusing to delete storage of defined VM {}'
-                .format(vm.hostname)
+                'Refusing to delete storage of defined VM "{}".'
+                .format(vm.fqdn)
             )
         remove_logical_volume(self, self.vm_disk_path(vm))
         del self._disk_path[vm]
@@ -455,8 +457,8 @@ class KVMHypervisor(Hypervisor):
         conn = get_virtconn(self.hostname, 'kvm')
         if not conn:
             raise HypervisorError(
-                'Unable to connect to Hypervisor {}!'
-                .format(self.hostname)
+                'Unable to connect to hypervisor "{}"!'
+                .format(self.fqdn)
             )
         return conn
 
@@ -472,8 +474,7 @@ class KVMHypervisor(Hypervisor):
         domain_obj = self._find_domain(vm)
         if not domain_obj:
             raise HypervisorError(
-                'Unable to find domain {}.'
-                .format(vm.hostname)
+                'Unable to find domain "{}".'.format(vm.fqdn)
             )
         return domain_obj
 
@@ -543,7 +544,7 @@ class KVMHypervisor(Hypervisor):
     def start_vm(self, vm):
         super(KVMHypervisor, self).start_vm(vm)
         if self._domain(vm).create() != 0:
-            raise HypervisorError('{0} failed to start'.format(vm.hostname))
+            raise HypervisorError('"{0}" failed to start'.format(vm.fqdn))
 
     def vm_defined(self, vm):
         # Don't use lookupByName, it prints ugly messages to the console
@@ -566,26 +567,26 @@ class KVMHypervisor(Hypervisor):
             if domain.name() == vm.hostname:
                 return domain.info()[0] < VIR_DOMAIN_SHUTOFF
         raise HypervisorError(
-            '{} is not defined on {}'
-            .format(vm.hostname, self.hostname)
+            '"{}" is not defined on "{}".'
+            .format(vm.fqdn, self.fqdn)
         )
 
     def stop_vm(self, vm):
         super(KVMHypervisor, self).stop_vm(vm)
         if self._domain(vm).shutdown() != 0:
-            raise HypervisorError('Unable to stop {}'.format(vm.hostname))
+            raise HypervisorError('Unable to stop "{}".'.format(vm.fqdn))
 
     def stop_vm_force(self, vm):
         super(KVMHypervisor, self).stop_vm_force(vm)
         if self._domain(vm).destroy() != 0:
             raise HypervisorError(
-                'Unable to force-stop {}'.format(vm.hostname)
+                'Unable to force-stop "{}".'.format(vm.fqdn)
             )
 
     def undefine_vm(self, vm):
         super(KVMHypervisor, self).undefine_vm(vm)
         if self._domain(vm).undefine() != 0:
-            raise HypervisorError('Unable to undefine {}'.format(vm.hostname))
+            raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
 
     def _vm_sync_from_hypervisor(self, vm, result):
         vm_info = self._domain(vm).info()

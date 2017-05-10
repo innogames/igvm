@@ -135,7 +135,10 @@ class DomainProperties(object):
         elif all(all(p for p in pcpus) for pcpus in domain.vcpuPinInfo()):
             self.numa_mode = self.NUMA_UNBOUND
         else:
-            log.warning('KVM: Cannot determine NUMA of {}'.format(vm.hostname))
+            log.warning(
+                'Cannot determine NUMA of "{}" for KVM.'
+                .format(vm.fqdn)
+            )
             self.numa_node = self.NUMA_UNKNOWN
         return self
 
@@ -280,9 +283,9 @@ def set_memory(hypervisor, vm, domain, memory_mib):
         return
 
     raise HypervisorError(
-        '{} does not support any known memory extension strategy. '
+        '"{}" does not support any known memory extension strategy. '
         'You will have to power off the machine and do it offline.'
-        .format(vm.hostname)
+        .format(vm.fqdn)
     )
 
 

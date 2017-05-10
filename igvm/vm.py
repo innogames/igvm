@@ -54,15 +54,15 @@ class VM(Host):
         self.network_config = get_network_config(self.server_obj)
 
         if old_ip != new_ip:
-            log.info((
-                '{0} networking changed: '
-                'IP address {1}, VLAN {2} ({3})')
+            log.info(
+                '"{0}" networking changed to IP address {1}, VLAN {2} ({3}).'
                 .format(
-                    self.hostname,
+                    self.fqdn,
                     new_ip,
                     self.network_config['vlan_name'],
                     self.network_config['vlan_tag'],
-            ))
+                )
+            )
 
     def set_state(self, new_state, tx=None):
         """Changes state of VM for LB and Nagios downtimes"""
@@ -154,8 +154,10 @@ class VM(Host):
         return self.hypervisor.vm_running(self)
 
     def undefine(self):
-        log.debug('Undefining {} on {}'.format(
-            self.hostname, self.hypervisor.hostname))
+        log.debug(
+            'Undefining "{}" on "{}"...'
+            .format(self.fqdn, self.hypervisor.fqdn)
+        )
         self.hypervisor.undefine_vm(self)
 
     def wait_for_running(self, running=True, timeout=60):
@@ -165,8 +167,10 @@ class VM(Host):
         """
         action = 'boot' if running else 'shutdown'
         for i in range(timeout, 1, -1):
-            print("Waiting for VM {} to {}... {}s".format(
-                self.hostname, action, i))
+            print(
+                'Waiting for VM "{}" to {}... {} s'
+                .format(self.fqdn, action, i)
+            )
             if self.hypervisor.vm_running(self) == running:
                 return True
             time.sleep(1)
@@ -209,7 +213,7 @@ class VM(Host):
 
     def info(self):
         result = {
-            'hypervisor': self.hypervisor.hostname,
+            'hypervisor': self.hypervisor.fqdn,
             'intern_ip': self.server_obj['intern_ip'],
             'num_cpu': self.server_obj['num_cpu'],
             'memory': self.server_obj['memory'],
@@ -292,7 +296,7 @@ class VM(Host):
             self.run('/buildvm-postboot')
             self.run('rm -f /buildvm-postboot')
 
-        log.info('{} successfully built.'.format(self.hostname))
+        log.info('"{}" is successfully built.'.format(self.fqdn))
 
     @run_in_transaction
     def rename(self, new_hostname, tx=None):

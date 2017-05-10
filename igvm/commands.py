@@ -21,8 +21,8 @@ log = logging.getLogger(__name__)
 def _check_defined(vm):
     if not vm.hypervisor.vm_defined(vm):
         raise InvalidStateError(
-            '{} is not built yet or is not actually running on {}'
-            .format(vm.hostname, vm.hypervisor.hostname)
+            '"{}" is not built yet or is not running on "{}"'
+            .format(vm.fqdn, vm.hypervisor.fqdn)
         )
 
 
@@ -34,8 +34,8 @@ def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
 
     if offline and not vm.is_running():
         log.info(
-            '{} is already powered off, ignoring --offline.'
-            .format(vm.hostname)
+            '"{}" is already powered off, ignoring --offline.'
+            .format(vm.fqdn)
         )
         offline = False
 
@@ -73,8 +73,8 @@ def mem_set(vm_hostname, size, offline=False, ignore_reserved=False):
 
     if offline and not vm.is_running():
         log.info(
-            '{} is already powered off, ignoring --offline.'
-            .format(vm.hostname)
+            '"{}" is already powered off, ignoring --offline.'
+            .format(vm.fqdn)
         )
         offline = False
 
@@ -141,8 +141,8 @@ def vm_rebuild(vm_hostname, force=False):
             vm.shutdown()
         else:
             raise InvalidStateError(
-                '{} is still running. Please stop it first or pass --force.'
-                .format(vm.hostname)
+                '"{}" is still running.  Please stop it first or pass --force.'
+                .format(vm.fqdn)
             )
 
     vm.hypervisor.undefine_vm(vm)
@@ -158,7 +158,7 @@ def vm_start(vm_hostname):
     _check_defined(vm)
 
     if vm.is_running():
-        log.info('{} is already running.'.format(vm.hostname))
+        log.info('"{}" is already running.'.format(vm.fqdn))
         return
     vm.start()
 
@@ -170,13 +170,13 @@ def vm_stop(vm_hostname, force=False):
     _check_defined(vm)
 
     if not vm.is_running():
-        log.info('{} is already stopped.'.format(vm.hostname))
+        log.info('"{}" is already stopped.'.format(vm.fqdn))
         return
     if force:
         vm.hypervisor.stop_vm_force(vm)
     else:
         vm.shutdown()
-    log.info('{} stopped.'.format(vm.hostname))
+    log.info('"{}" is stopped.'.format(vm.fqdn))
 
 
 @with_fabric_settings
@@ -186,7 +186,7 @@ def vm_restart(vm_hostname, force=False, noredefine=False):
     _check_defined(vm)
 
     if not vm.is_running():
-        raise InvalidStateError('{} is not running'.format(vm.hostname))
+        raise InvalidStateError('"{}" is not running'.format(vm.fqdn))
 
     if force:
         vm.hypervisor.stop_vm_force(vm)
@@ -198,7 +198,7 @@ def vm_restart(vm_hostname, force=False, noredefine=False):
         vm.hypervisor.define_vm(vm)
 
     vm.start()
-    log.info('{} restarted.'.format(vm.hostname))
+    log.info('"{}" is restarted.'.format(vm.fqdn))
 
 
 @with_fabric_settings
@@ -218,7 +218,7 @@ def vm_delete(vm_hostname, force=False):
 
     if vm.is_running():
         raise InvalidStateError(
-            '{} is still running. Please stop it first.'.format(vm.hostname)
+            '"{}" is still running.  Please stop it first.'.format(vm.fqdn)
         )
     vm.hypervisor.undefine_vm(vm)
     vm.hypervisor.destroy_vm_storage(vm)
@@ -230,11 +230,15 @@ def vm_delete(vm_hostname, force=False):
 
     vm.server_obj.commit()
     if force:
-        log.info('{} destroyed and deleted from serveradmin'.format(
-            vm.hostname))
+        log.info(
+            '"{}" is destroyed and deleted from Serveradmin'
+            .format(vm.fqdn)
+        )
     else:
-        log.info('{} destroyed and set to "retired" state.'.format(
-            vm.hostname))
+        log.info(
+            '"{}" is destroyed and set to "retired" state.'
+            .format(vm.fqdn)
+        )
 
 
 @with_fabric_settings
@@ -259,13 +263,12 @@ def vm_sync(vm_hostname):
     if changed:
         vm.server_obj.commit()
         log.info(
-            '{}: Synchronized {} attributes ({}).'
-            .format(vm.hostname, len(changed), ', '.join(changed))
+            '"{}" is synchronized {} attributes ({}).'
+            .format(vm.fqdn, len(changed), ', '.join(changed))
         )
     else:
         log.info(
-            '{}: Serveradmin is already synchronized.'
-            .format(vm.hostname)
+            '"{}" is already synchronized on Serveradmin.'.format(vm.fqdn)
         )
 
 
