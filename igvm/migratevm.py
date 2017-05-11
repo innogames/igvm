@@ -25,11 +25,9 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     # For source HV we ignore reserved flag.
     # It must always be possible to move VMs out of a HV
     vm = VM(vm_hostname, ignore_reserved=True)
-    source_hv = vm.hypervisor
     destination_hv = Hypervisor.get(dsthv_hostname, ignore_reserved)
 
-    # There is no point of online migration, if the VM is already
-    # shutdown.
+    # There is no point of online migration, if the VM is already shutdown.
     if not offline and not vm.is_running():
         offline = True
 
@@ -45,13 +43,10 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
         )
 
     # Require VM to be in sync with serveradmin
-    synced_attributes = source_hv.vm_sync_from_hypervisor(vm)
-    for attr, value in synced_attributes.iteritems():
-        if vm.admintool[attr] != value:
-            raise InconsistentAttributeError(vm, attr, value)
+    check_attributes(vm)
 
     vm.check_serveradmin_config()
-    source_hv.check_migration(vm, destination_hv, offline)
+    vm.hypervisor.check_migration(vm, destination_hv, offline)
 
     if newip:
         vm._set_ip(newip)
@@ -61,9 +56,6 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
 
     # Setup destination Hypervisor
     dst_device = destination_hv.create_vm_storage(vm, tx)
-    if offline:
-        maintenance = True
-        nc_listener = netcat_to_device(destination_hv, dst_device, tx)
 
     # Commit previously changed IP address.
     if newip:
@@ -71,38 +63,14 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
         vm.admintool.commit()
         tx.on_rollback('newip warning', log.info, '--newip is not rolled back')
 
-    if maintenance:
+    if maintenance or offline:
         vm.set_state('maintenance', tx=tx)
 
     # Finally migrate the VM
     if offline:
-        if vm.is_running():
-            vm.shutdown(tx=tx)
-
-        source_hv.accept_ssh_hostkey(destination_hv)
-        device_to_netcat(
-            source_hv,
-            source_hv.vm_disk_path(vm),
-            vm.admintool['disk_size_gib'] * 1024**3,
-            nc_listener,
-            tx,
-        )
-
-        if runpuppet:
-            destination_hv.mount_vm_storage(vm, tx)
-            run_puppet(destination_hv, vm, clear_cert=False, tx=tx)
-            destination_hv.umount_vm_storage(vm)
-
-        destination_hv.define_vm(vm, tx)
-        vm.hypervisor = destination_hv
-
-        def _reset_hypervisor():
-            vm.hypervisor = source_hv
-        tx.on_rollback('reset hypervisor', _reset_hypervisor)
-
-        vm.start(tx=tx)
+        offline_migrate(vm, destination_hv, dst_device, runpuppet, tx)
     else:
-        source_hv.vm_migrate_online(vm, destination_hv)
+        vm.hypervisor.vm_migrate_online(vm, destination_hv)
         vm.hypervisor = destination_hv
 
     vm.reset_state()
@@ -116,5 +84,42 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     tx.checkpoint()
 
     # Remove the existing VM
-    source_hv.undefine_vm(vm)
-    source_hv.destroy_vm_storage(vm)
+    vm.hypervisor.undefine_vm(vm)
+    vm.hypervisor.destroy_vm_storage(vm)
+
+
+def check_attributes(vm):
+    synced_attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
+    for attr, value in synced_attributes.iteritems():
+        if vm.admintool[attr] != value:
+            raise InconsistentAttributeError(vm, attr, value)
+
+
+def offline_migrate(vm, destination_hv, dst_device, runpuppet, tx):
+    source_hv = vm.hypervisor
+    nc_listener = netcat_to_device(destination_hv, dst_device, tx)
+    if vm.is_running():
+        vm.shutdown(tx=tx)
+
+    source_hv.accept_ssh_hostkey(destination_hv)
+    device_to_netcat(
+        source_hv,
+        source_hv.vm_disk_path(vm),
+        vm.admintool['disk_size_gib'] * 1024**3,
+        nc_listener,
+        tx,
+    )
+
+    if runpuppet:
+        destination_hv.mount_vm_storage(vm, tx)
+        run_puppet(destination_hv, vm, clear_cert=False, tx=tx)
+        destination_hv.umount_vm_storage(vm)
+
+    destination_hv.define_vm(vm, tx)
+    vm.hypervisor = destination_hv
+
+    def _reset_hypervisor():
+        vm.hypervisor = source_hv
+    tx.on_rollback('reset hypervisor', _reset_hypervisor)
+
+    vm.start(tx=tx)
