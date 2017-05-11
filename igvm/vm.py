@@ -32,22 +32,23 @@ class VM(Host):
     """VM interface."""
     servertype = 'vm'
 
-    def __init__(self, vm_admintool, hv=None, ignore_reserved=False):
-        super(VM, self).__init__(vm_admintool)
+    def __init__(self, vm_server_obj, hv=None, ignore_reserved=False):
+        super(VM, self).__init__(vm_server_obj)
 
         if not hv:
-            hv = Hypervisor.get(self.admintool['xen_host'], ignore_reserved)
+            hv = Hypervisor.get(self.server_obj['xen_host'], ignore_reserved)
         assert isinstance(hv, Hypervisor)
         self.hypervisor = hv
 
     def _set_ip(self, new_ip):
         """Changes the IP address and updates all related attributes.
         Internal method for VM building and migration."""
-        old_ip = self.admintool['intern_ip']
-        # New IP address is given as a string, admintool['intern_ip'] is ip_address!
+        old_ip = self.server_obj['intern_ip']
+        # New IP address is given as a string,
+        # server_obj['intern_ip'] is ip_address!
         # So convert the type.
-        self.admintool['intern_ip'] = ip_address(new_ip)
-        self.network_config = get_network_config(self.admintool)
+        self.server_obj['intern_ip'] = ip_address(new_ip)
+        self.network_config = get_network_config(self.server_obj)
 
         if old_ip != new_ip:
             log.info((
@@ -62,12 +63,12 @@ class VM(Host):
 
     def set_state(self, new_state, tx=None):
         """Changes state of VM for LB and Nagios downtimes"""
-        self.previous_state = self.admintool['state']
+        self.previous_state = self.server_obj['state']
         if new_state == self.previous_state:
             return
         log.debug('Setting VM to state {}'.format(new_state))
-        self.admintool['state'] = new_state
-        self.admintool.commit()
+        self.server_obj['state'] = new_state
+        self.server_obj.commit()
         if tx:
             tx.on_rollback('reset_state', self.reset_state)
 
@@ -101,7 +102,7 @@ class VM(Host):
         )
 
         for (attr, (check, err)) in validations:
-            value = self.admintool[attr]
+            value = self.server_obj[attr]
             if not value:
                 raise ConfigError('"{}" attribute is not set'.format(attr))
             if not check(value):
@@ -116,7 +117,7 @@ class VM(Host):
             raise VMError('VM did not come online in time')
 
         host_up = wait_until(
-            str(self.admintool['intern_ip']),
+            str(self.server_obj['intern_ip']),
             waitmsg='Waiting for SSH server',
         )
         if not host_up:
@@ -213,10 +214,10 @@ class VM(Host):
     def info(self):
         result = {
             'hypervisor': self.hypervisor.hostname,
-            'intern_ip': self.admintool['intern_ip'],
-            'num_cpu': self.admintool['num_cpu'],
-            'memory': self.admintool['memory'],
-            'disk_size_gib': self.admintool['disk_size_gib'],
+            'intern_ip': self.server_obj['intern_ip'],
+            'num_cpu': self.server_obj['num_cpu'],
+            'memory': self.server_obj['memory'],
+            'disk_size_gib': self.server_obj['disk_size_gib'],
         }
 
         if self.hypervisor.vm_defined(self) and self.is_running():
@@ -245,15 +246,15 @@ class VM(Host):
         if localimage is not None:
             image = localimage
         else:
-            image = self.admintool['os'] + '-base.tar.gz'
+            image = self.server_obj['os'] + '-base.tar.gz'
 
         # Populate initial networking attributes.
-        self._set_ip(self.admintool['intern_ip'])
+        self._set_ip(self.server_obj['intern_ip'])
 
         # Can VM run on given hypervisor?
         self.hypervisor.check_vm(self)
 
-        if not runpuppet or self.admintool['puppet_disabled']:
+        if not runpuppet or self.server_obj['puppet_disabled']:
             log.warn(yellow(
                 'Puppet is disabled on the VM.  It will not receive network '
                 'configuration.  Expect things to go south.'
@@ -266,7 +267,7 @@ class VM(Host):
         with hv.fabric_settings():
             if not localimage:
                 download_image(image)
-            extract_image(image, mount_path, hv.admintool['os'])
+            extract_image(image, mount_path, hv.server_obj['os'])
 
         prepare_vm(hv, self)
 
@@ -282,7 +283,7 @@ class VM(Host):
         # We are updating the information on the Serveradmin, before starting
         # the VM, because the VM would still be on the hypervisor even if it
         # fails to start.
-        self.admintool.commit()
+        self.server_obj.commit()
 
         # VM was successfully built, don't risk undoing all this just because
         # start fails.
@@ -314,10 +315,10 @@ class VM(Host):
         hosts_file = [
             line
             for line in self.run('cat /etc/hosts').splitlines()
-            if not line.startswith(str(self.admintool['intern_ip']))
+            if not line.startswith(str(self.server_obj['intern_ip']))
         ]
         hosts_file.append('{0}\t{1}\t{2}'.format(
-            self.admintool['intern_ip'], new_fqdn, new_hostname
+            self.server_obj['intern_ip'], new_fqdn, new_hostname
         ))
         self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
 
@@ -325,8 +326,8 @@ class VM(Host):
         self.hypervisor.undefine_vm(self)
         self.hypervisor.rename_vm_storage(self, new_hostname)
 
-        self.admintool['hostname'] = new_hostname
-        self.admintool.commit()
+        self.server_obj['hostname'] = new_hostname
+        self.server_obj.commit()
 
         new = VM(new_hostname)
         new.hypervisor.define_vm(new, tx=tx)

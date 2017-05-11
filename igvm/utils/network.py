@@ -44,9 +44,9 @@ def get_network_config(server):
 
 
 def get_gateways(network):
-    """ Get default and internal gateway admintool objects
+    """ Get default and internal gateway Serveradmin objects
         for given network. If they are not defined, return
-        empty dictionaries to simulate admintool objects.
+        empty dictionaries to simulate Serveradmin objects.
     """
 
     if network.get('default_gateway'):

@@ -75,13 +75,13 @@ class DomainProperties(object):
         self.qemu_version = _get_qemu_version(hv)
         self.hugepages = False
         self.num_nodes = _num_numa_nodes(hv)
-        self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.admintool['num_cpu'])
+        self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.server_obj['num_cpu'])
         self.max_cpus = min(self.max_cpus, hv.num_cpus)
         self.max_mem = hv.vm_max_memory(vm)
         self.numa_mode = self.NUMA_SPREAD
         self.mem_hotplug = (self.qemu_version >= (2, 3))
         self.mem_balloon = False
-        self.mac_address = _generate_mac_address(vm.admintool['intern_ip'])
+        self.mac_address = _generate_mac_address(vm.server_obj['intern_ip'])
 
     def info(self):
         """Returns a dictionary with user-exposable information."""
@@ -201,9 +201,9 @@ def migrate_live(source_hv, destination_hv, vm, domain):
     # it should have coped the initial disk and memory and changes on them.
     timeout = sum((
         # We assume the disk can be copied at 33 MB/s;
-        vm.admintool['disk_size_gib'] * 1024 / 33,
+        vm.server_obj['disk_size_gib'] * 1024 / 33,
         # the memory at 100 MB/s;
-        vm.admintool['memory'] / 100,
+        vm.server_obj['memory'] / 100,
         # and 5 minutes more for other operations.
         5 * 60,
     ))
@@ -273,7 +273,7 @@ def set_memory(hv, vm, domain, memory_mib):
             raise IGVMError(
                 'Configured memory is not a multiple of 128 MiB'
             )
-        add_memory = memory_mib - vm.admintool['memory']
+        add_memory = memory_mib - vm.server_obj['memory']
         assert add_memory > 0
         _attach_memory_dimms(vm, domain, props, add_memory)
         return
@@ -337,7 +337,7 @@ def generate_domain_xml(hv, vm):
 
     config = {
         'disk_device': hv.vm_disk_path(vm),
-        'serveradmin': vm.admintool,
+        'serveradmin': vm.server_obj,
         'props': props,
         'vlan_tag': hv.vlan_for_vm(vm),
     }
@@ -352,7 +352,7 @@ def generate_domain_xml(hv, vm):
         _place_numa(hv, vm, tree, props)
 
     log.info('KVM: VCPUs current: {} max: {} available on host: {}'.format(
-        vm.admintool['num_cpu'], props.max_cpus, hv.num_cpus,
+        vm.server_obj['num_cpu'], props.max_cpus, hv.num_cpus,
     ))
     if props.mem_hotplug:
         _set_memory_hotplug(vm, tree, props)
@@ -382,7 +382,7 @@ def _set_cpu_model(hv, vm, tree):
     """
     Selects CPU model based on hardware model.
     """
-    hw_model = hv.admintool.get('hardware_model')
+    hw_model = hv.server_obj.get('hardware_model')
     if not hw_model:
         return
 
@@ -485,7 +485,7 @@ def _place_numa(hv, vm, tree, props):
             cell.attrib = {
                 'id': str(i),
                 'cpus': cpuset,
-                'memory': str(vm.admintool['memory'] // num_nodes),
+                'memory': str(vm.server_obj['memory'] // num_nodes),
                 'unit': 'MiB',
             }
         # </cell></numa>

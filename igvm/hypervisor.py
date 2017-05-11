@@ -47,20 +47,20 @@ class Hypervisor(Host):
     servertype = 'hypervisor'
 
     @staticmethod
-    def get(hv_admintool, ignore_reserved=False):
+    def get(hv_server_obj, ignore_reserved=False):
         """Factory to get matching hypervisor implementation for a VM."""
 
         # Currently we only support KVM hypervisors.
-        hypervisor = KVMHypervisor(hv_admintool)
+        hypervisor = KVMHypervisor(hv_server_obj)
 
-        if hypervisor.admintool['state'] == 'retired':
+        if hypervisor.server_obj['state'] == 'retired':
             raise InvalidStateError(
                 'Hypervisor "{0}" is retired.'
                 .format(hypervisor.hostname)
             )
 
         if (
-            hypervisor.admintool['state'] == 'online_reserved' and
+            hypervisor.server_obj['state'] == 'online_reserved' and
             not ignore_reserved
         ):
             raise InvalidStateError(
@@ -71,8 +71,8 @@ class Hypervisor(Host):
 
         return hypervisor
 
-    def __init__(self, admintool):
-        super(Hypervisor, self).__init__(admintool)
+    def __init__(self, server_obj):
+        super(Hypervisor, self).__init__(server_obj)
 
         # Store per-VM path information
         # We cannot store these in the VM object due to migrations.
@@ -104,9 +104,9 @@ class Hypervisor(Host):
         """Returns the VLAN number a VM should use on this hypervisor.
         None for untagged."""
         hv_vlans = []
-        if self.admintool.get('vlan_networks'):
+        if self.server_obj.get('vlan_networks'):
             for vlan_network in query(
-                hostname=filters.Any(*self.admintool['vlan_networks']),
+                hostname=filters.Any(*self.server_obj['vlan_networks']),
                 vlan_tag=filters.Not(filters.Empty()),
             ).restrict('vlan_tag'):
                 hv_vlans.append(vlan_network['vlan_tag'])
@@ -129,7 +129,7 @@ class Hypervisor(Host):
         # happen if VLAN is removed on Serveradmin so that nobody creates
         # new VMs on given hypervisor, but the existing ones must be moved out.
         if (
-            vm.admintool['xen_host'] != self.hostname and
+            vm.server_obj['xen_host'] != self.hostname and
             vm_vlan not in hv_vlans
         ):
             raise HypervisorError(
@@ -140,7 +140,7 @@ class Hypervisor(Host):
 
     def vm_max_memory(self, vm):
         """Calculates the max amount of memory in MiB the VM may receive."""
-        mem = vm.admintool['memory']
+        mem = vm.server_obj['memory']
         if mem > 12 * 1024:
             max_mem = mem + 10 * 1024
         else:
@@ -153,10 +153,10 @@ class Hypervisor(Host):
 
     def check_vm(self, vm):
         """Checks whether a VM can run on this hypervisor."""
-        if self.admintool['state'] not in ['online', 'online_reserved']:
+        if self.server_obj['state'] not in ['online', 'online_reserved']:
             raise InvalidStateError(
                 'Hypervisor {0} is not in online state ({1}).'
-                .format(self.hostname, self.admintool['state'])
+                .format(self.hostname, self.server_obj['state'])
             )
 
         if self.vm_defined(vm):
@@ -166,25 +166,25 @@ class Hypervisor(Host):
             )
 
         # Enough CPUs?
-        if vm.admintool['num_cpu'] > self.num_cpus:
+        if vm.server_obj['num_cpu'] > self.num_cpus:
             raise HypervisorError(
                 'Not enough CPUs. Destination Hypervisor has {0}, '
                 'but VM requires {1}.'
-                .format(self.num_cpus, vm.admintool['num_cpu'])
+                .format(self.num_cpus, vm.server_obj['num_cpu'])
             )
 
         # Enough memory?
         free_mib = self.free_vm_memory()
-        if vm.admintool['memory'] > free_mib:
+        if vm.server_obj['memory'] > free_mib:
             raise HypervisorError(
                 'Not enough memory. Destination Hypervisor has {0}MiB but VM '
                 'requires {1}MiB'
-                .format(free_mib, vm.admintool['memory'])
+                .format(free_mib, vm.server_obj['memory'])
             )
 
         # Enough disk?
         free_disk_space = get_free_disk_size_gib(self)
-        vm_disk_size = float(vm.admintool['disk_size_gib'])
+        vm_disk_size = float(vm.server_obj['disk_size_gib'])
         if vm_disk_size > free_disk_space:
             raise HypervisorError(
                 'Not enough free space in VG {} to build VM while keeping'
@@ -262,7 +262,7 @@ class Hypervisor(Host):
 
     def _check_committed(self, vm):
         """Checks that the given VM has no uncommitted changes."""
-        if vm.admintool.is_dirty():
+        if vm.server_obj.is_dirty():
             raise ConfigError(
                 'VM object has uncommitted changes, commit them first!'
             )
@@ -275,7 +275,7 @@ class Hypervisor(Host):
             log.warning('Cannot validate attribute "{}"!'.format(attrib))
             return
         current_value = synced_values[attrib]
-        if current_value != vm.admintool[attrib]:
+        if current_value != vm.server_obj[attrib]:
             raise InconsistentAttributeError(vm, attrib, current_value)
 
     def vm_set_num_cpu(self, vm, num_cpu):
@@ -287,12 +287,12 @@ class Hypervisor(Host):
             raise ConfigError('Invalid num_cpu value: {}'.format(num_cpu))
 
         log.info('Changing #CPUs of {} on {}: {} -> {}'.format(
-            vm.hostname, self.hostname, vm.admintool['num_cpu'], num_cpu))
+            vm.hostname, self.hostname, vm.server_obj['num_cpu'], num_cpu))
 
         # If VM is offline, we can just rebuild the domain
         if not self.vm_running(vm):
             log.info('VM is offline, rebuilding domain with new settings')
-            vm.admintool['num_cpu'] = num_cpu
+            vm.server_obj['num_cpu'] = num_cpu
             self.undefine_vm(vm)
             self.define_vm(vm)
         else:
@@ -300,16 +300,16 @@ class Hypervisor(Host):
 
         # Validate changes
         # We can't rely on the HV to provide data on VMs all the time.
-        updated_admintool = self.vm_sync_from_hypervisor(vm)
-        current_num_cpu = updated_admintool.get('num_cpu', num_cpu)
+        updated_server_obj = self.vm_sync_from_hypervisor(vm)
+        current_num_cpu = updated_server_obj.get('num_cpu', num_cpu)
         if current_num_cpu != num_cpu:
             raise HypervisorError(
                 'New CPUs are not visible to hypervisor, '
                 'changes will not be committed.'
             )
 
-        vm.admintool['num_cpu'] = num_cpu
-        vm.admintool.commit()
+        vm.server_obj['num_cpu'] = num_cpu
+        vm.server_obj.commit()
 
     def vm_set_memory(self, vm, memory):
         self._check_committed(vm)
@@ -317,16 +317,16 @@ class Hypervisor(Host):
 
         running = self.vm_running(vm)
 
-        if self.free_vm_memory() < memory - vm.admintool['memory']:
+        if self.free_vm_memory() < memory - vm.server_obj['memory']:
             raise HypervisorError('Not enough free memory on hypervisor.')
 
         log.info('Changing memory of {} on {}: {} MiB -> {} MiB'.format(
-            vm.hostname, self.hostname, vm.admintool['memory'], memory))
+            vm.hostname, self.hostname, vm.server_obj['memory'], memory))
 
         # If VM is offline, we can just rebuild the domain
         if not running:
             log.info('VM is offline, rebuilding domain with new settings')
-            vm.admintool['memory'] = memory
+            vm.server_obj['memory'] = memory
             self.undefine_vm(vm)
             self.define_vm(vm)
         else:
@@ -347,12 +347,12 @@ class Hypervisor(Host):
                 'changes will not be committed.'
             )
 
-        vm.admintool['memory'] = memory
-        vm.admintool.commit()
+        vm.server_obj['memory'] = memory
+        vm.server_obj.commit()
 
     def vm_set_disk_size_gib(self, vm, new_size_gib):
         """Changes disk size of a VM."""
-        if new_size_gib < vm.admintool['disk_size_gib']:
+        if new_size_gib < vm.server_obj['disk_size_gib']:
             raise NotImplementedError('Cannot shrink the disk.')
         with self.fabric_settings():
             lvresize(self.vm_disk_path(vm), new_size_gib)
@@ -518,7 +518,7 @@ class KVMHypervisor(Hypervisor):
         set_vcpus(self, vm, self._domain(vm), num_cpu)
 
     def _vm_set_memory(self, vm, memory_mib):
-        if self.vm_running(vm) and memory_mib < vm.admintool['memory']:
+        if self.vm_running(vm) and memory_mib < vm.server_obj['memory']:
             raise InvalidStateError(
                 'Cannot shrink memory while VM is running'
             )

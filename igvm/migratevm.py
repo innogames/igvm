@@ -60,7 +60,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     # Commit previously changed IP address.
     if newip:
         # TODO: This commit is not rolled back.
-        vm.admintool.commit()
+        vm.server_obj.commit()
         tx.on_rollback('newip warning', log.info, '--newip is not rolled back')
 
     if maintenance or offline:
@@ -75,9 +75,9 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
 
     vm.reset_state()
 
-    # Update admintool information
-    vm.admintool['xen_host'] = destination_hv.hostname
-    vm.admintool.commit()
+    # Update Serveradmin
+    vm.server_obj['xen_host'] = destination_hv.hostname
+    vm.server_obj.commit()
 
     # If removing the existing VM fails we shouldn't risk undoing the newly
     # migrated one.
@@ -91,7 +91,7 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
 def check_attributes(vm):
     synced_attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
     for attr, value in synced_attributes.iteritems():
-        if vm.admintool[attr] != value:
+        if vm.server_obj[attr] != value:
             raise InconsistentAttributeError(vm, attr, value)
 
 
@@ -105,7 +105,7 @@ def offline_migrate(vm, destination_hv, dst_device, runpuppet, tx):
     device_to_netcat(
         source_hv,
         source_hv.vm_disk_path(vm),
-        vm.admintool['disk_size_gib'] * 1024**3,
+        vm.server_obj['disk_size_gib'] * 1024**3,
         nc_listener,
         tx,
     )

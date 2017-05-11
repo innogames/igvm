@@ -15,7 +15,7 @@ from igvm.utils.network import get_network_config
 def get_server(hostname, servertype):
     """Get a server from Serveradmin by hostname and servertype
 
-    It returns the adminapi Server object.
+    It returns the Serveradmin object.
     """
 
     # We want to return the server only, if matches with some conditions,
@@ -52,12 +52,12 @@ class Host(object):
     """A remote host on which commands can be executed."""
 
     def __init__(self, server_object):
-        # Support passing hostname or Server object.
+        # Support passing hostname or Serveradmin object
         if not isinstance(server_object, ServerObject):
             server_object = get_server(server_object, self.servertype)
 
         self.hostname = server_object['hostname']
-        self.admintool = server_object
+        self.server_obj = server_object
         if self.hostname.endswith('.ig.local'):
             self.fqdn = self.hostname
         else:
@@ -68,7 +68,7 @@ class Host(object):
         settings = COMMON_FABRIC_SETTINGS.copy()
         settings.update({
             'abort_exception': RemoteCommandError,
-            'host_string': str(self.admintool['intern_ip']),
+            'host_string': str(self.server_obj['intern_ip']),
         })
         settings.update(kwargs)
         return fabric.api.settings(*args, **settings)
@@ -113,16 +113,16 @@ class Host(object):
 
     def reload(self):
         """Reloads the server object from serveradmin."""
-        if self.admintool.is_dirty():
+        if self.server_obj.is_dirty():
             raise ConfigError(
-                'Server object must be committed before reloading'
+                'Serveradmin object must be committed before reloading'
             )
-        self.admintool = get_server(self.hostname, self.servertype)
+        self.server_obj = get_server(self.hostname, self.servertype)
 
     @lazy_property  # Requires fabric call on HV, evaluate lazily.
     def network_config(self):
         """Returns networking attributes, such as IP address and VLAN."""
-        return get_network_config(self.admintool)
+        return get_network_config(self.server_obj)
 
     @lazy_property
     def num_cpus(self):

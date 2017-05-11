@@ -84,8 +84,8 @@ def prepare_vm(hv, vm):
         run(cmd('echo {0} > etc/mailname', vm.fqdn))
 
         _create_interfaces(vm.network_config)
-        _create_ssh_keys(vm.admintool['os'])
-        vm.admintool['ssh_pubkey'] = _get_ssh_public_key('rsa')
+        _create_ssh_keys(vm.server_obj['os'])
+        vm.server_obj['ssh_pubkey'] = _get_ssh_public_key('rsa')
 
         upload_template('etc/fstab', 'etc/fstab', {
             'blk_dev': hv.vm_block_device_name(),
@@ -134,7 +134,7 @@ def run_puppet(hv, vm, clear_cert, tx):
 
     if clear_cert:
         # Use puppet-controller, if possible.
-        puppet_ca = vm.admintool['puppet_ca']
+        puppet_ca = vm.server_obj['puppet_ca']
         controller_token = os.environ.get('PUPPET_CONTROLLER_TOKEN')
         if controller_token:
             try:
@@ -175,8 +175,8 @@ def run_puppet(hv, vm, clear_cert, tx):
             ' --tags=network,puppet --skip_tags=nrpe'
             .format(
                 vm.fqdn,
-                vm.admintool['puppet_master'],
-                vm.admintool['puppet_ca'],
+                vm.server_obj['puppet_master'],
+                vm.server_obj['puppet_ca'],
             )
         )
 

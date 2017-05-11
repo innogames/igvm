@@ -36,7 +36,7 @@ def get_vm_volume(hv, vm):
     """Return the path of the LV belonging to the given VM"""
     for lv in get_logical_volumes(hv):
         if lv['name'] == vm.hostname:
-            disk_size = vm.admintool['disk_size_gib']
+            disk_size = vm.server_obj['disk_size_gib']
             if disk_size != int(math.ceil(lv['size_MiB'] / 1024)):
                 raise StorageError(
                     "Server disk_size_gib {0} on Serveradmin doesn't "
@@ -78,7 +78,7 @@ def get_free_disk_size_gib(hv, safe=True):
 
 
 def create_storage(hv, vm):
-    disk_size_gib = vm.admintool['disk_size_gib']
+    disk_size_gib = vm.server_obj['disk_size_gib']
     hv.run(cmd(
         'lvcreate -L {0}g -n {1} {2}',
         disk_size_gib,
