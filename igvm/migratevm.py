@@ -16,16 +16,16 @@ log = logging.getLogger(__name__)
 
 @with_fabric_settings
 @run_in_transaction
-def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
+def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
               maintenance=False, offline=False, tx=None,
               ignore_reserved=False):
     """Migrate a VM to a new hypervisor."""
     assert tx is not None, 'tx populated by run_in_transaction'
 
-    # For source HV we ignore reserved flag.
-    # It must always be possible to move VMs out of a HV
+    # For source hypervisor we ignore reserved flag.  It must always be
+    # possible to move VMs out of a hypervisor.
     vm = VM(vm_hostname, ignore_reserved=True)
-    destination_hv = Hypervisor.get(dsthv_hostname, ignore_reserved)
+    hypervisor = Hypervisor.get(hypervisor_hostname, ignore_reserved)
 
     # There is no point of online migration, if the VM is already shutdown.
     if not offline and not vm.is_running():
@@ -46,16 +46,17 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
     check_attributes(vm)
 
     vm.check_serveradmin_config()
-    vm.hypervisor.check_migration(vm, destination_hv, offline)
+    vm.hypervisor.check_migration(vm, hypervisor, offline)
 
     if newip:
         vm._set_ip(newip)
 
-    # Validate dst HV can run VM (needs to happen after setting new IP!)
-    destination_hv.check_vm(vm)
+    # Validate destination hypervisor can run the VM (needs to happen after
+    # setting new IP!)
+    hypervisor.check_vm(vm)
 
     # Setup destination Hypervisor
-    dst_device = destination_hv.create_vm_storage(vm, tx)
+    device = hypervisor.create_vm_storage(vm, tx)
 
     # Commit previously changed IP address.
     if newip:
@@ -68,15 +69,15 @@ def migratevm(vm_hostname, dsthv_hostname, newip=None, runpuppet=False,
 
     # Finally migrate the VM
     if offline:
-        offline_migrate(vm, destination_hv, dst_device, runpuppet, tx)
+        offline_migrate(vm, hypervisor, device, runpuppet, tx)
     else:
-        vm.hypervisor.vm_migrate_online(vm, destination_hv)
-        vm.hypervisor = destination_hv
+        vm.hypervisor.vm_migrate_online(vm, hypervisor)
+        vm.hypervisor = hypervisor
 
     vm.reset_state()
 
     # Update Serveradmin
-    vm.server_obj['xen_host'] = destination_hv.hostname
+    vm.server_obj['xen_host'] = hypervisor.hostname
     vm.server_obj.commit()
 
     # If removing the existing VM fails we shouldn't risk undoing the newly
@@ -95,31 +96,31 @@ def check_attributes(vm):
             raise InconsistentAttributeError(vm, attr, value)
 
 
-def offline_migrate(vm, destination_hv, dst_device, runpuppet, tx):
-    source_hv = vm.hypervisor
-    nc_listener = netcat_to_device(destination_hv, dst_device, tx)
+def offline_migrate(vm, hypervisor, device, runpuppet, tx):
+    existing_hypervisor = vm.hypervisor
+    nc_listener = netcat_to_device(hypervisor, device, tx)
     if vm.is_running():
         vm.shutdown(tx=tx)
 
-    source_hv.accept_ssh_hostkey(destination_hv)
+    existing_hypervisor.accept_ssh_hostkey(hypervisor)
     device_to_netcat(
-        source_hv,
-        source_hv.vm_disk_path(vm),
+        existing_hypervisor,
+        existing_hypervisor.vm_disk_path(vm),
         vm.server_obj['disk_size_gib'] * 1024**3,
         nc_listener,
         tx,
     )
 
     if runpuppet:
-        destination_hv.mount_vm_storage(vm, tx)
-        run_puppet(destination_hv, vm, clear_cert=False, tx=tx)
-        destination_hv.umount_vm_storage(vm)
+        hypervisor.mount_vm_storage(vm, tx)
+        run_puppet(hypervisor, vm, clear_cert=False, tx=tx)
+        hypervisor.umount_vm_storage(vm)
 
-    destination_hv.define_vm(vm, tx)
-    vm.hypervisor = destination_hv
+    hypervisor.define_vm(vm, tx)
+    vm.hypervisor = hypervisor
 
     def _reset_hypervisor():
-        vm.hypervisor = source_hv
+        vm.hypervisor = existing_hypervisor
     tx.on_rollback('reset hypervisor', _reset_hypervisor)
 
     vm.start(tx=tx)

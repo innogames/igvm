@@ -115,7 +115,7 @@ def parse_args():
         help='Hostname of the guest system',
     )
     subparser.add_argument(
-        'dsthv_hostname',
+        'hypervisor_hostname',
         help='Hostname of destination hypervisor',
     )
     subparser.add_argument(

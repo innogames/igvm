@@ -119,7 +119,7 @@ class Host(object):
             )
         self.server_obj = get_server(self.hostname, self.servertype)
 
-    @lazy_property  # Requires fabric call on HV, evaluate lazily.
+    @lazy_property  # Requires fabric call on hypervisor, evaluate lazily.
     def network_config(self):
         """Returns networking attributes, such as IP address and VLAN."""
         return get_network_config(self.server_obj)
@@ -132,12 +132,12 @@ class Host(object):
             silent=True,
         ))
 
-    def accept_ssh_hostkey(self, dst_host):
+    def accept_ssh_hostkey(self, host):
         """Scans and accepts the SSH remote host key of a given host.
         NO VERIFICATION IS PERFORMED, THIS IS INSECURE!"""
-        self.run('touch .ssh/known_hosts'.format(dst_host.hostname))
-        self.run('ssh-keygen -R {0}'.format(dst_host.hostname))
+        self.run('touch .ssh/known_hosts'.format(host.hostname))
+        self.run('ssh-keygen -R {0}'.format(host.hostname))
         self.run(
             'ssh-keyscan -t rsa {0} >> .ssh/known_hosts'
-            .format(dst_host.hostname)
+            .format(host.hostname)
         )

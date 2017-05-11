@@ -47,11 +47,11 @@ class Hypervisor(Host):
     servertype = 'hypervisor'
 
     @staticmethod
-    def get(hv_server_obj, ignore_reserved=False):
+    def get(server_obj, ignore_reserved=False):
         """Factory to get matching hypervisor implementation for a VM."""
 
         # Currently we only support KVM hypervisors.
-        hypervisor = KVMHypervisor(hv_server_obj)
+        hypervisor = KVMHypervisor(server_obj)
 
         if hypervisor.server_obj['state'] == 'retired':
             raise InvalidStateError(
@@ -103,15 +103,15 @@ class Hypervisor(Host):
     def vlan_for_vm(self, vm):
         """Returns the VLAN number a VM should use on this hypervisor.
         None for untagged."""
-        hv_vlans = []
+        vlans = []
         if self.server_obj.get('vlan_networks'):
             for vlan_network in query(
                 hostname=filters.Any(*self.server_obj['vlan_networks']),
                 vlan_tag=filters.Not(filters.Empty()),
             ).restrict('vlan_tag'):
-                hv_vlans.append(vlan_network['vlan_tag'])
+                vlans.append(vlan_network['vlan_tag'])
         vm_vlan = vm.network_config['vlan_tag']
-        if not hv_vlans:
+        if not vlans:
             if self.network_config['vlan_tag'] != vm_vlan:
                 raise HypervisorError(
                     'Hypervisor {} is not on same VLAN {} as VM {}.'
@@ -130,7 +130,7 @@ class Hypervisor(Host):
         # new VMs on given hypervisor, but the existing ones must be moved out.
         if (
             vm.server_obj['xen_host'] != self.hostname and
-            vm_vlan not in hv_vlans
+            vm_vlan not in vlans
         ):
             raise HypervisorError(
                 'Hypervisor {} does not support VLAN {}.'
@@ -146,13 +146,13 @@ class Hypervisor(Host):
         else:
             max_mem = 16 * 1024
 
-        # Never go higher than HV
+        # Never go higher than the hypervisor
         max_mem = min(self.total_vm_memory(), max_mem)
 
         return max_mem
 
     def check_vm(self, vm):
-        """Checks whether a VM can run on this hypervisor."""
+        """Check whether a VM can run on this hypervisor"""
         if self.server_obj['state'] not in ['online', 'online_reserved']:
             raise InvalidStateError(
                 'Hypervisor {0} is not in online state ({1}).'
@@ -197,31 +197,31 @@ class Hypervisor(Host):
         # Proper VLAN?
         self.vlan_for_vm(vm)
 
-    def check_migration(self, vm, dst_hv, offline):
-        """Checks whether a VM can be migrated to the given hypervisor."""
+    def check_migration(self, vm, hypervisor, offline):
+        """Check whether a VM can be migrated to the given hypervisor"""
 
-        if self.hostname == dst_hv.hostname:
+        if self.hostname == hypervisor.hostname:
             raise HypervisorError(
-                'Source and destination Hypervisor is the same machine {0}!'
+                'Source and destination hypervisor is the same machine {0}!'
                 .format(self.hostname)
             )
 
-        if not offline and type(self) != type(dst_hv):
+        if not offline and type(self) != type(hypervisor):
             raise HypervisorError(
                 'Online migration between different hypervisor technologies '
                 'is not supported.'
             )
 
-    def vm_migrate_online(self, vm, dst_hv):
-        """Online-migrates a VM to the given destination HV."""
-        self.check_migration(vm, dst_hv, offline=False)
+    def vm_migrate_online(self, vm, hypervisor):
+        """Online-migrate a VM to the given destination hypervisor"""
+        self.check_migration(vm, hypervisor, offline=False)
 
     def total_vm_memory(self):
-        """Returns amount of memory in MiB available to Hypervisor."""
+        """Return amount of memory in MiB available to hypervisor"""
         raise NotImplementedError(type(self).__name__)
 
     def free_vm_memory(self):
-        """Returns MiB memory available (=unallocated) for VMs on the HV."""
+        """Return memory in MiB available (unallocated) on the hypervisor"""
         raise NotImplementedError(type(self).__name__)
 
     def define_vm(self, vm, tx=None):
@@ -261,15 +261,16 @@ class Hypervisor(Host):
         # Implementation must be subclassed
 
     def _check_committed(self, vm):
-        """Checks that the given VM has no uncommitted changes."""
+        """Check that the given VM has no uncommitted changes"""
         if vm.server_obj.is_dirty():
             raise ConfigError(
                 'VM object has uncommitted changes, commit them first!'
             )
 
     def _check_attribute_synced(self, vm, attrib):
-        """Compares an attribute value in Serveradmin with the actual value on
-        the HV."""
+        """Compare an attribute value in Serveradmin with the actual value on
+        the hypervisor
+        """
         synced_values = self.vm_sync_from_hypervisor(vm)
         if attrib not in synced_values:
             log.warning('Cannot validate attribute "{}"!'.format(attrib))
@@ -279,7 +280,7 @@ class Hypervisor(Host):
             raise InconsistentAttributeError(vm, attrib, current_value)
 
     def vm_set_num_cpu(self, vm, num_cpu):
-        """Changes the number of CPUs of a VM."""
+        """Change the number of CPUs of a VM"""
         self._check_committed(vm)
         self._check_attribute_synced(vm, 'num_cpu')
 
@@ -299,7 +300,7 @@ class Hypervisor(Host):
             self._vm_set_num_cpu(vm, num_cpu)
 
         # Validate changes
-        # We can't rely on the HV to provide data on VMs all the time.
+        # We can't rely on the hypervisor to provide data on VMs all the time.
         updated_server_obj = self.vm_sync_from_hypervisor(vm)
         current_num_cpu = updated_server_obj.get('num_cpu', num_cpu)
         if current_num_cpu != num_cpu:
@@ -332,7 +333,7 @@ class Hypervisor(Host):
         else:
             old_total = vm.meminfo()['MemTotal']
             self._vm_set_memory(vm, memory)
-            # HV might take some time to propagate memory changes,
+            # Hypervisor might take some time to propagate memory changes,
             # wait until MemTotal changes.
             retry_wait_backoff(
                 lambda: vm.meminfo()['MemTotal'] != old_total,
@@ -480,19 +481,19 @@ class KVMHypervisor(Hypervisor):
     def vm_block_device_name(self):
         return 'vda1'
 
-    def check_migration(self, vm, dst_hv, offline):
-        super(KVMHypervisor, self).check_migration(vm, dst_hv, offline)
+    def check_migration(self, vm, hypervisor, offline):
+        super(KVMHypervisor, self).check_migration(vm, hypervisor, offline)
 
         # Online migration only works with the same VLAN
-        if not offline and self.vlan_for_vm(vm) != dst_hv.vlan_for_vm(vm):
+        if not offline and self.vlan_for_vm(vm) != hypervisor.vlan_for_vm(vm):
             raise HypervisorError(
                 'Online migration is not possible with the current network '
                 'configuration (different VLAN).'
             )
 
-    def vm_migrate_online(self, vm, dst_hv):
-        super(KVMHypervisor, self).vm_migrate_online(vm, dst_hv)
-        migrate_live(self, dst_hv, vm, self._domain(vm))
+    def vm_migrate_online(self, vm, hypervisor):
+        super(KVMHypervisor, self).vm_migrate_online(vm, hypervisor)
+        migrate_live(self, hypervisor, vm, self._domain(vm))
 
     def total_vm_memory(self):
         # Start with what OS sees as total memory (not installed memory)
@@ -505,7 +506,7 @@ class KVMHypervisor(Hypervisor):
         total_mib = self.total_vm_memory()
 
         # Calculate memory used by other VMs.
-        # We can not trust hv_conn.getFreeMemory(), sum up memory used by
+        # We can not trust conn.getFreeMemory(), sum up memory used by
         # each VM instead
         used_kib = 0
         for dom_id in self.conn.listDomainsID():

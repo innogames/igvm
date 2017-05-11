@@ -20,10 +20,10 @@ DEFAULT_SWAP_SIZE = 1024
 
 
 # Reserved memory for host OS in MiB
-HOST_RESERVED_MEMORY = 2*1024
+HOST_RESERVED_MEMORY = 2 * 1024
 
 
-# Default max number of CPUs, unless the HV has fewer cores or num_cpu
+# Default max number of CPUs, unless the hypervisor has fewer cores or num_cpu
 # is larger than this value.
 KVM_DEFAULT_MAX_CPUS = 24
 

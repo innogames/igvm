@@ -32,13 +32,16 @@ class VM(Host):
     """VM interface."""
     servertype = 'vm'
 
-    def __init__(self, vm_server_obj, hv=None, ignore_reserved=False):
+    def __init__(self, vm_server_obj, hypervisor=None, ignore_reserved=False):
         super(VM, self).__init__(vm_server_obj)
 
-        if not hv:
-            hv = Hypervisor.get(self.server_obj['xen_host'], ignore_reserved)
-        assert isinstance(hv, Hypervisor)
-        self.hypervisor = hv
+        if not hypervisor:
+            hypervisor = Hypervisor.get(
+                self.server_obj['xen_host'], ignore_reserved
+            )
+        else:
+            assert isinstance(hypervisor, Hypervisor)
+        self.hypervisor = hypervisor
 
     def _set_ip(self, new_ip):
         """Changes the IP address and updates all related attributes.
@@ -108,11 +111,12 @@ class VM(Host):
             if not check(value):
                 raise ConfigError(err)
 
-    def start(self, hv=None, tx=None):
-        hv = hv or self.hypervisor
-        log.debug('Starting {} on {}'.format(
-            self.hostname, hv.hostname))
-        hv.start_vm(self)
+    def start(self, hypervisor=None, tx=None):
+        hypervisor = hypervisor or self.hypervisor
+        log.debug(
+            'Starting {} on {}'.format(self.hostname, hypervisor.hostname)
+        )
+        hypervisor.start_vm(self)
         if not self.wait_for_running(running=True):
             raise VMError('VM did not come online in time')
 
@@ -140,15 +144,16 @@ class VM(Host):
         )
 
         if tx:
-            tx.on_rollback('stop VM', self.shutdown, hv)
+            tx.on_rollback('stop VM', self.shutdown, hypervisor)
 
-    def shutdown(self, hv=None, tx=None):
-        hv = hv or self.hypervisor
-        log.debug('Stopping {} on {}'.format(
-            self.hostname, hv.hostname))
-        hv.stop_vm(self)
+    def shutdown(self, hypervisor=None, tx=None):
+        hypervisor = hypervisor or self.hypervisor
+        log.debug(
+            'Stopping {} on {}'.format(self.hostname, hypervisor.hostname)
+        )
+        hypervisor.stop_vm(self)
         if not self.wait_for_running(running=False):
-            hv.stop_vm_force(self)
+            hypervisor.stop_vm_force(self)
         self.disconnect()
 
         if tx:
@@ -240,7 +245,7 @@ class VM(Host):
         """Builds a VM."""
         assert tx is not None, 'tx populated by run_in_transaction'
 
-        hv = self.hypervisor
+        hypervisor = self.hypervisor
         self.check_serveradmin_config()
 
         if localimage is not None:
@@ -260,25 +265,25 @@ class VM(Host):
                 'configuration.  Expect things to go south.'
             ))
 
-        # Perform operations on Hypervisor
+        # Perform operations on the hypervisor
         self.hypervisor.create_vm_storage(self, tx)
         mount_path = self.hypervisor.format_vm_storage(self, tx)
 
-        with hv.fabric_settings():
+        with hypervisor.fabric_settings():
             if not localimage:
                 download_image(image)
-            extract_image(image, mount_path, hv.server_obj['os'])
+            extract_image(image, mount_path, hypervisor.server_obj['os'])
 
-        prepare_vm(hv, self)
+        prepare_vm(hypervisor, self)
 
         if runpuppet:
-            run_puppet(hv, self, clear_cert=True, tx=tx)
+            run_puppet(hypervisor, self, clear_cert=True, tx=tx)
 
         if postboot is not None:
-            copy_postboot_script(hv, self, postboot)
+            copy_postboot_script(hypervisor, self, postboot)
 
         self.hypervisor.umount_vm_storage(self)
-        hv.define_vm(self, tx)
+        hypervisor.define_vm(self, tx)
 
         # We are updating the information on the Serveradmin, before starting
         # the VM, because the VM would still be on the hypervisor even if it

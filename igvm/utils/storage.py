@@ -32,9 +32,9 @@ def get_logical_volumes(host):
     return lvolumes
 
 
-def get_vm_volume(hv, vm):
+def get_vm_volume(hypervisor, vm):
     """Return the path of the LV belonging to the given VM"""
-    for lv in get_logical_volumes(hv):
+    for lv in get_logical_volumes(hypervisor):
         if lv['name'] == vm.hostname:
             disk_size = vm.server_obj['disk_size_gib']
             if disk_size != int(math.ceil(lv['size_MiB'] / 1024)):
@@ -61,9 +61,9 @@ def lvrename(volume, newname):
     run('lvrename {0} {1}'.format(volume, newname))
 
 
-def get_free_disk_size_gib(hv, safe=True):
+def get_free_disk_size_gib(hypervisor, safe=True):
     """Return free disk space as float in GiB"""
-    vgs_line = hv.run(
+    vgs_line = hypervisor.run(
         'vgs --noheadings -o vg_name,vg_free --unit g --nosuffix {0}'
         ' 2>/dev/null'
         .format(VG_NAME),
@@ -77,9 +77,9 @@ def get_free_disk_size_gib(hv, safe=True):
     return vg_size_gib
 
 
-def create_storage(hv, vm):
+def create_storage(hypervisor, vm):
     disk_size_gib = vm.server_obj['disk_size_gib']
-    hv.run(cmd(
+    hypervisor.run(cmd(
         'lvcreate -L {0}g -n {1} {2}',
         disk_size_gib,
         vm.hostname,
@@ -102,8 +102,8 @@ def remove_temp(host, mount_path):
     host.run(cmd('rm -rf {0}', mount_path))
 
 
-def format_storage(hv, device):
-    hv.run(cmd('mkfs.xfs -f {}', device))
+def format_storage(hypervisor, device):
+    hypervisor.run(cmd('mkfs.xfs -f {}', device))
 
 
 def _check_netcat(host, port):
@@ -143,9 +143,9 @@ def netcat_to_device(host, device, tx=None):
 
 def device_to_netcat(host, device, size, listener, tx=None):
     # Using DD lowers load on device with big enough Block Size
-    (dst_host, dst_port) = listener
+    host, port = listener
     host.run(
         'dd if={0} ibs=1048576 | pv -f -s {1} '
         '| /bin/nc.traditional -q 1 {2} {3}'
-        .format(device, size, dst_host, dst_port)
+        .format(device, size, host, port)
     )
