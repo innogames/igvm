@@ -1,13 +1,9 @@
 import logging
-import urllib2
 
-from ipaddress import IPv6Network
-from fabric.api import abort
 from adminapi.dataset import query, filters
 
-from igvm.exceptions import NetworkError
-
 log = logging.getLogger(__name__)
+
 
 def get_network_config(server):
     ret = {}
@@ -32,18 +28,20 @@ def get_network_config(server):
     if server.get('intern_ip'):
         ret['ipv4_address'] = server['intern_ip']
         ret['ipv4_netmask'] = route_network['intern_ip'].prefixlen
-        ret['ipv4_default_gw']  = internal_gateway_route.get( 'intern_ip', None)
+        ret['ipv4_default_gw'] = internal_gateway_route.get('intern_ip', None)
 
     if server.get('primary_ip6'):
         ret['ipv6_address'] = server['primary_ip6']
         ret['ipv6_netmask'] = route_network['primary_ip6'].prefixlen
-        ret['ipv6_default_gw'] = internal_gateway_route.get('primary_ip6', None)
-
+        ret['ipv6_default_gw'] = internal_gateway_route.get(
+            'primary_ip6', None
+        )
 
     ret['vlan_tag'] = route_network['vlan_tag']
     ret['vlan_name'] = route_network['hostname']
 
     return ret
+
 
 def get_gateways(network):
     """ Get default and internal gateway admintool objects
