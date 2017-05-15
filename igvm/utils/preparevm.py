@@ -80,7 +80,7 @@ def prepare_vm(hv, vm):
     """Prepares the rootfs for a VM. VM storage must be mounted on the HV."""
     target_dir = hv.vm_mount_path(vm)
     with hv.fabric_settings(cd(target_dir)):
-        run(cmd('echo {0} > etc/hostname', vm.hostname))
+        run(cmd('echo {0} > etc/hostname', vm.fqdn))
         run(cmd('echo {0} > etc/mailname', vm.fqdn))
 
         _create_interfaces(vm.network_config)

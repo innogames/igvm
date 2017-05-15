@@ -100,10 +100,9 @@ def _clean_vm(hv, hostname):
 
 class IGVMTest(unittest.TestCase):
     def _check_vm(self, hv, vm):
-        hostname = vm.run('hostname').strip()
-        self.assertEqual(hostname, vm.hostname)
+        fqdn = vm.run('hostname -f').strip()
+        self.assertEqual(fqdn, vm.fqdn)
 
-        self.assertEqual(vm.admintool['xen_host'], hv.hostname)
         self.assertEqual(vm.admintool.is_dirty(), False)
 
         self.assertEqual(hv.vm_defined(vm), True)

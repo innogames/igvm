@@ -308,7 +308,7 @@ class VM(Host):
             else new_hostname + '.ig.local'
         )
 
-        self.run('echo {0} > /etc/hostname'.format(new_hostname))
+        self.run('echo {0} > /etc/hostname'.format(new_fqdn))
         self.run('echo {0} > /etc/mailname'.format(new_fqdn))
 
         hosts_file = [
