@@ -5,6 +5,7 @@ from adminapi.dataset import query, ServerObject
 import fabric.api
 import fabric.state
 
+from paramiko import transport
 from igvm.exceptions import ConfigError, RemoteCommandError
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.lazy_property import lazy_property
@@ -88,7 +89,13 @@ class Host(object):
                 del kwargs[setting]
 
         with self.fabric_settings(*settings, warn_only=warn_only):
-            return fabric.api.run(*args, **kwargs)
+            try:
+                return fabric.api.run(*args, **kwargs)
+            except transport.socket.error:
+                host = fabric.api.env.host_string
+                if host and host in fabric.state.connections:
+                    fabric.state.connections[host].get_transport().close()
+                return fabric.api.run(*args, **kwargs)
 
     def read_file(self, path):
         """Reads a file from the remote host and returns contents."""
