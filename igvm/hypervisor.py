@@ -1,13 +1,9 @@
 import logging
 import math
-import os
-import time
 
-import libvirt
+from libvirt import VIR_DOMAIN_RUNNING, VIR_DOMAIN_SHUTDOWN, libvirtError
 
-from adminapi.dataset import query, filters, ServerObject
-
-from fabric.contrib.files import exists
+from adminapi.dataset import query, filters
 
 from igvm.exceptions import (
     ConfigError,
@@ -15,9 +11,8 @@ from igvm.exceptions import (
     InconsistentAttributeError,
     InvalidStateError,
 )
-from igvm.host import Host, get_server
+from igvm.host import Host
 from igvm.settings import HOST_RESERVED_MEMORY
-from igvm.utils import cmd
 from igvm.utils.backoff import retry_wait_backoff
 from igvm.utils.kvm import (
     DomainProperties,
@@ -42,7 +37,6 @@ from igvm.utils.storage import (
     remove_temp,
     umount_temp,
 )
-from igvm.utils.template import upload_template
 from igvm.utils.virtutils import get_virtconn
 
 log = logging.getLogger(__name__)
@@ -50,41 +44,32 @@ log = logging.getLogger(__name__)
 
 class Hypervisor(Host):
     """Hypervisor interface."""
+    servertype = 'hypervisor'
 
     @staticmethod
     def get(hv_admintool, ignore_reserved=False):
         """Factory to get matching hypervisor implementation for a VM."""
-        # TODO We are not validating the servertype of the source and target
-        # hypervisor for now, because of the old hypervisors with servertype
-        # "db_server" and "frontend_server".  Fix this after the migration is
-        # complete.
-        if not isinstance(hv_admintool, ServerObject):
-            hv_admintool = get_server(hv_admintool)
 
-        if hv_admintool.get('state') == 'retired':
+        # Currently we only support KVM hypervisors.
+        hypervisor = KVMHypervisor(hv_admintool)
+
+        if hypervisor.admintool['state'] == 'retired':
             raise InvalidStateError(
                 'Hypervisor "{0}" is retired.'
-                .format(hv_admintool['hostname'])
+                .format(hypervisor.hostname)
             )
 
-        if (hv_admintool.get('state') == 'online_reserved' and
-                not ignore_reserved):
+        if (
+            hypervisor.admintool['state'] == 'online_reserved' and
+            not ignore_reserved
+        ):
             raise InvalidStateError(
                 'Hypervisor "{0}" is online_reserved. '
                 'Use --ignore-reserved to override.'
-                .format(hv_admintool['hostname'])
+                .format(hypervisor.hostname)
             )
 
-        if hv_admintool['hypervisor'] == 'kvm':
-            cls = KVMHypervisor
-        elif hv_admintool['hypervisor'] == 'xen':
-            cls = XenHypervisor
-        else:
-            raise NotImplementedError(
-                'Not a valid hypervisor type: {}'
-                .format(hv_admintool['hypervisor'])
-            )
-        return cls(hv_admintool)
+        return hypervisor
 
     def __init__(self, admintool):
         super(Hypervisor, self).__init__(admintool)
@@ -156,10 +141,10 @@ class Hypervisor(Host):
     def vm_max_memory(self, vm):
         """Calculates the max amount of memory in MiB the VM may receive."""
         mem = vm.admintool['memory']
-        if mem > 12*1024:
-            max_mem = mem + 10*1024
+        if mem > 12 * 1024:
+            max_mem = mem + 10 * 1024
         else:
-            max_mem = 16*1024
+            max_mem = 16 * 1024
 
         # Never go higher than HV
         max_mem = min(self.total_vm_memory(), max_mem)
@@ -411,9 +396,7 @@ class Hypervisor(Host):
             )
 
         self._mount_path[vm] = mount_temp(
-            self,
-            self.vm_disk_path(vm),
-            suffix='-'+vm.hostname,
+            self, self.vm_disk_path(vm), suffix=('-' + vm.hostname)
         )
         if tx:
             tx.on_rollback('unmount storage', self.umount_vm_storage, vm)
@@ -478,7 +461,11 @@ class KVMHypervisor(Hypervisor):
         return conn
 
     def _find_domain(self, vm):
-        domain = self.conn.lookupByName(vm.hostname)
+        domain = None
+        try:
+            domain = self.conn.lookupByName(vm.hostname)
+        except libvirtError:
+            pass
         return domain
 
     def _domain(self, vm):
@@ -524,7 +511,7 @@ class KVMHypervisor(Hypervisor):
         for dom_id in self.conn.listDomainsID():
             dom = self.conn.lookupByID(dom_id)
             used_kib += dom.info()[2]
-        free_mib = total_mib - used_kib/1024
+        free_mib = total_mib - used_kib / 1024
         return free_mib
 
     def _vm_set_num_cpu(self, vm, num_cpu):
@@ -570,10 +557,10 @@ class KVMHypervisor(Hypervisor):
             if domain.name() != vm.hostname:
                 continue
 
-            return domain.info()[0] in (
-                libvirt.VIR_DOMAIN_RUNNING,
-                libvirt.VIR_DOMAIN_SHUTDOWN,
-            )
+            return domain.info()[0] in [
+                VIR_DOMAIN_RUNNING,
+                VIR_DOMAIN_SHUTDOWN,
+            ]
         raise HypervisorError(
             '{} is not defined on {}'
             .format(vm.hostname, self.hostname)
@@ -610,141 +597,3 @@ class KVMHypervisor(Hypervisor):
     def vm_info(self, vm):
         props = DomainProperties.from_running(self, vm, self._domain(vm))
         return props.info()
-
-
-class XenHypervisor(Hypervisor):
-    def vm_block_device_name(self):
-        return 'xvda1'
-
-    def check_migration(self, vm, dst_hv, offline):
-        super(XenHypervisor, self).check_migration(vm, dst_hv, offline)
-        if not offline:
-            raise HypervisorError(
-                '{} does not support online migration.'
-                .format(self.hostname)
-            )
-
-    def total_vm_memory(self):
-        # We can't trust the dom0, so let's assume Serveradmin is right.
-        return self.admintool['memory'] - HOST_RESERVED_MEMORY
-
-    def free_vm_memory(self):
-        # FIXME: We don't seem to know, so let's assume it's fine.
-        return 99999
-
-    def _sxp_path(self, vm):
-        return os.path.join('/etc/xen/domains', vm.hostname + '.sxp')
-
-    def _define_vm(self, vm, tx):
-        sxp_file = 'hv/domain.sxp'
-        with self.fabric_settings():
-            upload_template(sxp_file, self._sxp_path(vm), {
-                'disk_device': self.vm_disk_path(vm),
-                'serveradmin': vm.admintool,
-                'max_mem': self.vm_max_memory(vm),
-            })
-
-    def start_vm(self, vm):
-        super(XenHypervisor, self).start_vm(vm)
-        self.run(cmd('xm create {0}', self._sxp_path(vm)))
-
-    def vm_defined(self, vm):
-        path = self._sxp_path(vm)
-        with self.fabric_settings():
-            return exists(path, use_sudo=False, verbose=False)
-
-    def vm_running(self, vm):
-        xm_list = self.run('xm list', silent=True)
-        for line in xm_list.split('\n'):
-            pieces = line.split()
-            if len(pieces) >= 3 and pieces[2] == vm.hostname:
-                return True
-            # Newer xm version?
-            if pieces[0] == vm.hostname:
-                return True
-        return False
-
-    def stop_vm(self, vm):
-        super(XenHypervisor, self).stop_vm(vm)
-        self.run(cmd('xm shutdown {0}', vm.hostname))
-
-    def stop_vm_force(self, vm):
-        super(XenHypervisor, self).stop_vm_force(vm)
-        self.run(cmd('xm destroy {0}', vm.hostname))
-
-    def undefine_vm(self, vm):
-        super(XenHypervisor, self).undefine_vm(vm)
-        self.run(cmd('rm {0}', self._sxp_path(vm)))
-
-    def _vm_set_num_cpu(self, vm, num_cpu):
-        self.run(cmd('xm vcpu-set {} {}', vm.hostname, num_cpu))
-
-        # Activate all CPUs in the guest
-        vm.run(
-            'echo 1 | tee /sys/devices/system/cpu/cpu*/online',
-            # Xen often throws "invalid argument", but it works anyway
-            warn_only=True,
-        )
-
-    def _vm_set_memory(self, vm, memory_mib):
-        max_mem = self.vm_max_memory(vm)
-        if max_mem < memory_mib:
-            raise HypervisorError(
-                '{} can only receive up to {} MiB'.format(max_mem)
-                .format(vm.hostname)
-            )
-        self.run(cmd('xm mem-max {} {}', vm.hostname, max_mem))
-        self.run(cmd('xm mem-set {} {}', vm.hostname, memory_mib))
-        # Xen takes time...
-        log.info('Waiting 5 seconds for Xen to tell the VM about new memory')
-        time.sleep(5)
-        # Activate DIMMs
-        vm.run(
-            'echo online | tee /sys/devices/system/memory/memory*/state',
-            silent=True,
-            warn_only=True,
-        )
-
-    def _vm_set_disk_size_gib(self, vm, disk_size_gib):
-        # Xen seems to take a while before disk changes propagate...
-        def _try_grow():
-            vm.run('mknod /dev/root b 202 1', warn_only=True, silent=True)
-            output = vm.run('xfs_growfs /')
-            if 'changed' in output:
-                return True
-            # Otherwise assume the last line is something like:
-            # "realtime =none              extsz=4096   blocks=0, rtextents=0"
-            if output.strip().splitlines()[-1].count('=') < 3:
-                raise HypervisorError(
-                    'xfs_growfs yielded unexpected output:\n{}'
-                    .format(output)
-                )
-            return False
-        retry_wait_backoff(
-            _try_grow,
-            'New disk size is not yet visible in VM',
-        )
-
-    def _vm_sync_from_hypervisor(self, vm, result):
-        # xm only works if the VM is running.
-        if not self.vm_running(vm):
-            return
-
-        result['num_cpu'] = int(self.run(
-            'xm list --long {0} '
-            '| grep \'(online_vcpus \' '
-            '| sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''
-            .format(vm.hostname),
-            silent=True,
-        ))
-        result['memory'] = int(self.run(
-            'xm list --long {0} '
-            '| grep \'(memory \' '
-            '| sed -E \'s/[ a-z\(_]+ ([0-9]+)\)/\\1/\''
-            .format(vm.hostname),
-            silent=True,
-        ))
-
-    def vm_info(self, vm):
-        # Any volunteers to still put effort into Xen? :-)
-        return {}

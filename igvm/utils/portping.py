@@ -3,6 +3,7 @@ import socket
 
 from fabric.api import puts
 
+
 def ping_port(ip, port=22, timeout=1):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(timeout)
@@ -15,12 +16,14 @@ def ping_port(ip, port=22, timeout=1):
     finally:
         s.close()
 
+
 def wait_until(ip, port=22, timeout=60, waitmsg=None):
     if waitmsg:
         puts(waitmsg)
 
-    for sec in xrange(timeout):
+    for sec in range(timeout):
         if ping_port(ip, port):
+            puts('Success')
             return True
 
         if waitmsg:

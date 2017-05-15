@@ -33,7 +33,7 @@ def _del_if_exists(tree, name):
             parent = tree.find(name[:p])
             if parent is None:
                 return
-            name = name[p+1:]
+            name = name[(p + 1):]
         else:
             parent = tree
         elements = parent.findall(name)
@@ -339,7 +339,7 @@ def generate_domain_xml(hv, vm):
     }
 
     jenv = Environment(loader=PackageLoader('igvm', 'templates'))
-    domain_xml = jenv.get_template('hv/domain.xml').render(**config)
+    domain_xml = jenv.get_template('domain.xml').render(**config)
 
     tree = ET.fromstring(domain_xml)
 
@@ -369,8 +369,8 @@ def _get_qemu_version(hv):
     # According to documentation:
     # value is major * 1,000,000 + minor * 1,000 + release
     release = version % 1000
-    minor = int(version/1000 % 1000)
-    major = int(version/1000000 % 1000000)
+    minor = int(version / 1000 % 1000)
+    major = int(version / 1000000 % 1000000)
     return major, minor, release
 
 
@@ -406,71 +406,6 @@ def _set_memory_hotplug(vm, tree, props):
         'unit': 'MiB',
     })
     max_memory.text = str(props.max_mem)
-
-
-def kvm_adjust_cpuset_pre(config, offline):
-    """
-    Reduces the cpuset to the minimum number of CPUs on source and destination.
-    """
-    # TODO: why exactly is this needed?
-    if config['dsthv']['hypervisor'] != 'kvm' or offline:
-        return
-    conn_src = config['srchv_conn']
-    conn_dst = config['dsthv_conn']
-
-    dom = conn_src.lookupByName(config['vm_hostname'])
-    if re.search(r'placement=.?auto', dom.XMLDesc()):
-        log.warning(
-            'Skipping cpuset adjustment for old-style VM. '
-            'Please rebuild or offline-migrate to apply latest KVM settings.'
-        )
-        return
-
-    # https://libvirt.org/html/libvirt-libvirt-host.html#virNodeInfo
-    num_cpus_src = conn_src.getInfo()[2]
-    num_cpus_dst = conn_dst.getInfo()[2]
-
-    if num_cpus_src < num_cpus_dst:
-        # After migration we will need to include the additional cores from dst
-        config['__postmigrate_expand_cpuset'] = num_cpus_src
-        return
-    elif num_cpus_src == num_cpus_dst:
-        return  # Nothing to do
-
-    log.info(
-        'Target hypervisor has less cores, shrinking cpuset from {} to {} CPUs'
-        .format(num_cpus_src, num_cpus_dst)
-    )
-    assert num_cpus_dst >= 4, 'hypervisor has at least four cores'
-
-    for i, mask in enumerate(dom.vcpuPinInfo()):
-        # Truncate CPU mask
-        dom.pinVcpu(i, mask[:num_cpus_dst])
-
-
-def kvm_adjust_cpuset_post(config, offline):
-    """
-    Includes all new physical cores in the cpuset.
-    For each new core P, the bit on VCPU V equals the bit of pcpu
-    P-<num nodes>.
-    """
-    start_cpu = config.get('__postmigrate_expand_cpuset', 0)
-    if not start_cpu:
-        return
-    conn = config['dsthv_conn']
-
-    info = conn.getInfo()
-    num_cpus = info[2]
-    num_nodes = info[4]
-
-    log.info('Expanding cpuset from {} to {} CPUs'.format(start_cpu, num_cpus))
-
-    dom = conn.lookupByName(config['vm_hostname'])
-    for i, mask in enumerate(dom.vcpuPinInfo()):
-        mask = list(mask)
-        for j in range(start_cpu, num_cpus):
-            mask[j] = mask[j-num_nodes]
-        dom.pinVcpu(i, tuple(mask))
 
 
 def _place_numa(hv, vm, tree, props):
