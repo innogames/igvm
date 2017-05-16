@@ -18,7 +18,7 @@ setup(
     },
     package_data={
         'igvm': [
-            'templates/hv/domain.xml',
+            'templates/domain.xml',
             'templates/etc/network/interfaces',
             'templates/etc/fstab',
             'templates/etc/hosts',
