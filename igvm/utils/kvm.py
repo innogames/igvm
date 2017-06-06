@@ -269,6 +269,10 @@ def set_memory(hv, vm, domain, memory_mib):
             )
 
     if props.mem_hotplug:
+        if memory_mib % 128:
+            raise IGVMError(
+                'Configured memory is not a multiple of 128 MiB'
+            )
         add_memory = memory_mib - vm.admintool['memory']
         assert add_memory > 0
         _attach_memory_dimms(vm, domain, props, add_memory)
