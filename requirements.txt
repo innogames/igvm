@@ -1,0 +1,6 @@
+Fabric==1.11.0
+cffi
+paramiko
+ipaddress
+libvirt-python
+jinja2
