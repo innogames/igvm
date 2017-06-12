@@ -67,21 +67,21 @@ class DomainProperties(object):
     NUMA_UNBOUND = 'unbound'
     NUMA_UNKNOWN = 'unknown'
 
-    def __init__(self, hv, vm):
-        self._hv = hv
+    def __init__(self, hypervisor, vm):
+        self._hypervisor = hypervisor
         self._vm = vm
         self._domain = None
         self.uuid = uuid.uuid1()
-        self.qemu_version = _get_qemu_version(hv)
+        self.qemu_version = _get_qemu_version(hypervisor)
         self.hugepages = False
-        self.num_nodes = _num_numa_nodes(hv)
-        self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.admintool['num_cpu'])
-        self.max_cpus = min(self.max_cpus, hv.num_cpus)
-        self.max_mem = hv.vm_max_memory(vm)
+        self.num_nodes = _num_numa_nodes(hypervisor)
+        self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.server_obj['num_cpu'])
+        self.max_cpus = min(self.max_cpus, hypervisor.num_cpus)
+        self.max_mem = hypervisor.vm_max_memory(vm)
         self.numa_mode = self.NUMA_SPREAD
         self.mem_hotplug = (self.qemu_version >= (2, 3))
         self.mem_balloon = False
-        self.mac_address = _generate_mac_address(vm.admintool['intern_ip'])
+        self.mac_address = _generate_mac_address(vm.server_obj['intern_ip'])
 
     def info(self):
         """Returns a dictionary with user-exposable information."""
@@ -92,11 +92,11 @@ class DomainProperties(object):
         }
 
     @classmethod
-    def from_running(cls, hv, vm, domain):
+    def from_running(cls, hypervisor, vm, domain):
         xml = domain.XMLDesc()
         tree = ET.fromstring(xml)
 
-        self = cls(hv, vm)
+        self = cls(hypervisor, vm)
         self._domain = domain
         self.uuid = domain.UUIDString()
         self.hugepages = tree.find('memoryBacking/hugepages') is not None
@@ -138,9 +138,9 @@ class DomainProperties(object):
         return '<DomainProperties:{}>'.format(self.__dict__)
 
 
-def set_vcpus(hv, vm, domain, num_cpu):
+def set_vcpus(hypervisor, vm, domain, num_cpu):
     """Changes the number of active VCPUs."""
-    props = DomainProperties.from_running(hv, vm, domain)
+    props = DomainProperties.from_running(hypervisor, vm, domain)
     if num_cpu > props.max_cpus:
         raise HypervisorError(
             'VM can not receive more than {} VCPUs'
@@ -163,7 +163,7 @@ def set_vcpus(hv, vm, domain, num_cpu):
         raise HypervisorError('setVcpus failed: {}'.format(e))
 
     # Properly pin all new VCPUs
-    _live_repin_cpus(domain, props, hv.num_cpus)
+    _live_repin_cpus(domain, props, hypervisor.num_cpus)
 
     # Activate all CPUs in the guest
     log.info('KVM: Activating new CPUs in guest')
@@ -194,16 +194,16 @@ def _live_repin_cpus(domain, props, max_phys_cpus):
         domain.pinVcpu(vcpu, tuple(mask))
 
 
-def migrate_live(source_hv, destination_hv, vm, domain):
+def migrate_live(source, destination, vm, domain):
     """Live-migrates a VM via libvirt."""
     # Unfortunately, virsh provides a global timeout, but what we need it to
     # timeout if it is catching up the dirtied memory.  To be in this stage,
     # it should have coped the initial disk and memory and changes on them.
     timeout = sum((
         # We assume the disk can be copied at 33 MB/s;
-        vm.admintool['disk_size_gib'] * 1024 / 33,
+        vm.server_obj['disk_size_gib'] * 1024 / 33,
         # the memory at 100 MB/s;
-        vm.admintool['memory'] / 100,
+        vm.server_obj['memory'] / 100,
         # and 5 minutes more for other operations.
         5 * 60,
     ))
@@ -223,36 +223,36 @@ def migrate_live(source_hv, destination_hv, vm, domain):
         # Don't tolerate soft errors
         ' --abort-on-error'
         # We need SSH agent forwarding
-        ' --desturi qemu+ssh://{dsthv_hostname}/system'
+        ' --desturi qemu+ssh://{destination}/system'
         # Force guest to suspend, if noting else helped
         ' --timeout {timeout}'
         ' --verbose'
     )
 
-    # Reduce CPU pinning to minimum number of available cores on both HVs to
-    # avoid "invalid cpuset" errors.
-    props = DomainProperties.from_running(source_hv, vm, domain)
+    # Reduce CPU pinning to minimum number of available cores on both
+    # hypervisors to avoid "invalid cpuset" errors.
+    props = DomainProperties.from_running(source, vm, domain)
     _live_repin_cpus(
         domain,
         props,
-        min(source_hv.num_cpus, destination_hv.num_cpus),
+        min(source.num_cpus, destination.num_cpus),
     )
 
-    source_hv.accept_ssh_hostkey(destination_hv)
-    source_hv.run(migrate_cmd.format(
+    source.accept_ssh_hostkey(destination)
+    source.run(migrate_cmd.format(
         vm_hostname=vm.hostname,
-        dsthv_hostname=destination_hv.hostname,
+        destination=destination.hostname,
         timeout=timeout,
     ))
 
     # And pin again, in case we migrated to a host with more physical cores
-    domain = destination_hv._domain(vm)
-    _live_repin_cpus(domain, props, destination_hv.num_cpus)
+    domain = destination._domain(vm)
+    _live_repin_cpus(domain, props, destination.num_cpus)
 
 
-def set_memory(hv, vm, domain, memory_mib):
+def set_memory(hypervisor, vm, domain, memory_mib):
     """Changes the amount of memory of a VM."""
-    props = DomainProperties.from_running(hv, vm, domain)
+    props = DomainProperties.from_running(hypervisor, vm, domain)
 
     if props.mem_balloon:
         log.info('Attempting to increase memory with ballooning')
@@ -273,7 +273,7 @@ def set_memory(hv, vm, domain, memory_mib):
             raise IGVMError(
                 'Configured memory is not a multiple of 128 MiB'
             )
-        add_memory = memory_mib - vm.admintool['memory']
+        add_memory = memory_mib - vm.server_obj['memory']
         assert add_memory > 0
         _attach_memory_dimms(vm, domain, props, add_memory)
         return
@@ -328,18 +328,18 @@ def _generate_mac_address(ip):
     return ':'.join(format(d, '02x') for d in mac_address)
 
 
-def generate_domain_xml(hv, vm):
+def generate_domain_xml(hypervisor, vm):
     """Generates the domain XML for a VM."""
     # Note: We make no attempts to import anything from a previously defined
     #       VM, instead the VM is updated to the latest settings.
     #       Every KVM setting should be configurable via Serveradmin anyway.
-    props = DomainProperties(hv, vm)
+    props = DomainProperties(hypervisor, vm)
 
     config = {
-        'disk_device': hv.vm_disk_path(vm),
-        'serveradmin': vm.admintool,
+        'disk_device': hypervisor.vm_disk_path(vm),
+        'serveradmin': vm.server_obj,
         'props': props,
-        'vlan_tag': hv.vlan_for_vm(vm),
+        'vlan_tag': hypervisor.vlan_for_vm(vm),
     }
 
     jenv = Environment(loader=PackageLoader('igvm', 'templates'))
@@ -348,11 +348,11 @@ def generate_domain_xml(hv, vm):
     tree = ET.fromstring(domain_xml)
 
     if props.qemu_version >= (2, 3):
-        _set_cpu_model(hv, vm, tree)
-        _place_numa(hv, vm, tree, props)
+        _set_cpu_model(hypervisor, vm, tree)
+        _place_numa(hypervisor, vm, tree, props)
 
     log.info('KVM: VCPUs current: {} max: {} available on host: {}'.format(
-        vm.admintool['num_cpu'], props.max_cpus, hv.num_cpus,
+        vm.server_obj['num_cpu'], props.max_cpus, hypervisor.num_cpus,
     ))
     if props.mem_hotplug:
         _set_memory_hotplug(vm, tree, props)
@@ -368,8 +368,8 @@ def generate_domain_xml(hv, vm):
     return domain_xml
 
 
-def _get_qemu_version(hv):
-    version = hv.conn.getVersion()
+def _get_qemu_version(hypervisor):
+    version = hypervisor.conn.getVersion()
     # According to documentation:
     # value is major * 1,000,000 + minor * 1,000 + release
     release = version % 1000
@@ -378,11 +378,11 @@ def _get_qemu_version(hv):
     return major, minor, release
 
 
-def _set_cpu_model(hv, vm, tree):
+def _set_cpu_model(hypervisor, vm, tree):
     """
     Selects CPU model based on hardware model.
     """
-    hw_model = hv.admintool.get('hardware_model')
+    hw_model = hypervisor.server_obj.get('hardware_model')
     if not hw_model:
         return
 
@@ -412,14 +412,14 @@ def _set_memory_hotplug(vm, tree, props):
     max_memory.text = str(props.max_mem)
 
 
-def _place_numa(hv, vm, tree, props):
+def _place_numa(hypervisor, vm, tree, props):
     """
     Configures NUMA placement.
     """
     num_vcpus = props.max_cpus
 
     # Which physical CPU belongs to which physical node
-    pcpu_sets = hv.run(
+    pcpu_sets = hypervisor.run(
         'cat /sys/devices/system/node/node*/cpulist',
         silent=True,
     ).splitlines()
@@ -485,7 +485,7 @@ def _place_numa(hv, vm, tree, props):
             cell.attrib = {
                 'id': str(i),
                 'cpus': cpuset,
-                'memory': str(vm.admintool['memory'] // num_nodes),
+                'memory': str(vm.server_obj['memory'] // num_nodes),
                 'unit': 'MiB',
             }
         # </cell></numa>

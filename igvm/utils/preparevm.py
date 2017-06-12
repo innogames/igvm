@@ -34,7 +34,7 @@ def _create_ssh_keys(os):
     # This will also create the public key files.
     for key_type in key_types:
         run(
-            # Use ssh-keygen from chroot in case HV OS is too old
+            # Use ssh-keygen from chroot in case hypervisor OS is too old
             'chroot . ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'
             .format(key_type)
         )
@@ -62,33 +62,36 @@ def _create_interfaces(network_config):
     })
 
 
-def block_autostart(hv, vm):
-    target_dir = hv.vm_mount_path(vm)
+def block_autostart(hypervisor, vm):
+    target_dir = hypervisor.vm_mount_path(vm)
     with cd(target_dir):
-        hv.run('echo "#!/bin/sh" >> usr/sbin/policy-rc.d')
-        hv.run('echo "exit 101"  >> usr/sbin/policy-rc.d')
-        hv.run('chmod +x usr/sbin/policy-rc.d')
+        hypervisor.run('echo "#!/bin/sh" >> usr/sbin/policy-rc.d')
+        hypervisor.run('echo "exit 101"  >> usr/sbin/policy-rc.d')
+        hypervisor.run('chmod +x usr/sbin/policy-rc.d')
 
 
-def unblock_autostart(hv, vm):
-    target_dir = hv.vm_mount_path(vm)
+def unblock_autostart(hypervisor, vm):
+    target_dir = hypervisor.vm_mount_path(vm)
     with cd(target_dir):
-        hv.run('rm usr/sbin/policy-rc.d')
+        hypervisor.run('rm usr/sbin/policy-rc.d')
 
 
-def prepare_vm(hv, vm):
-    """Prepares the rootfs for a VM. VM storage must be mounted on the HV."""
-    target_dir = hv.vm_mount_path(vm)
-    with hv.fabric_settings(cd(target_dir)):
+def prepare_vm(hypervisor, vm):
+    """Prepare the rootfs for a VM
+
+    VM storage must be mounted on the hypervisor.
+    """
+    target_dir = hypervisor.vm_mount_path(vm)
+    with hypervisor.fabric_settings(cd(target_dir)):
         run(cmd('echo {0} > etc/hostname', vm.fqdn))
         run(cmd('echo {0} > etc/mailname', vm.fqdn))
 
         _create_interfaces(vm.network_config)
-        _create_ssh_keys(vm.admintool['os'])
-        vm.admintool['ssh_pubkey'] = _get_ssh_public_key('rsa')
+        _create_ssh_keys(vm.server_obj['os'])
+        vm.server_obj['ssh_pubkey'] = _get_ssh_public_key('rsa')
 
         upload_template('etc/fstab', 'etc/fstab', {
-            'blk_dev': hv.vm_block_device_name(),
+            'blk_dev': hypervisor.vm_block_device_name(),
             'type': 'xfs',
             'mount_options': 'defaults'
         })
@@ -104,9 +107,9 @@ def prepare_vm(hv, vm):
         create_authorized_keys(target_dir)
 
 
-def copy_postboot_script(hv, vm, script):
-    target_dir = hv.vm_mount_path(vm)
-    with hv.fabric_settings(cd(target_dir)):
+def copy_postboot_script(hypervisor, vm, script):
+    target_dir = hypervisor.vm_mount_path(vm)
+    with hypervisor.fabric_settings(cd(target_dir)):
         put(script, 'buildvm-postboot', mode=755)
 
 
@@ -127,14 +130,14 @@ def _clear_cert_controller(hostname, puppet_master, token):
         raise IGVMError(e)
 
 
-def run_puppet(hv, vm, clear_cert, tx):
+def run_puppet(hypervisor, vm, clear_cert, tx):
     """Runs Puppet in chroot on the hypervisor."""
-    target_dir = hv.vm_mount_path(vm)
-    block_autostart(hv, vm)
+    target_dir = hypervisor.vm_mount_path(vm)
+    block_autostart(hypervisor, vm)
 
     if clear_cert:
         # Use puppet-controller, if possible.
-        puppet_ca = vm.admintool['puppet_ca']
+        puppet_ca = vm.server_obj['puppet_ca']
         controller_token = os.environ.get('PUPPET_CONTROLLER_TOKEN')
         if controller_token:
             try:
@@ -164,20 +167,20 @@ def run_puppet(hv, vm, clear_cert, tx):
         if tx:
             tx.on_rollback(
                 'Kill puppet',
-                hv.run,
+                hypervisor.run,
                 'pkill -9 -f "/usr/bin/puppet agent -v --fqdn={}"'
                 .format(vm.fqdn)
             )
-        hv.run(
+        hypervisor.run(
             'chroot . /usr/bin/puppet agent -v --fqdn={}'
             ' --server {} --ca_server {} --no-report'
             ' --waitforcert=60 --onetime --no-daemonize'
             ' --tags=network,puppet --skip_tags=nrpe'
             .format(
                 vm.fqdn,
-                vm.admintool['puppet_master'],
-                vm.admintool['puppet_ca'],
+                vm.server_obj['puppet_master'],
+                vm.server_obj['puppet_ca'],
             )
         )
 
-    unblock_autostart(hv, vm)
+    unblock_autostart(hypervisor, vm)

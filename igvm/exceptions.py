@@ -3,7 +3,7 @@ class IGVMError(Exception):
 
 
 class ConfigError(IGVMError):
-    """Indicates an error with the admintool configuration."""
+    """Indicates an error with the Serveradmin configuration."""
     pass
 
 
@@ -43,7 +43,7 @@ class InconsistentAttributeError(IGVMError):
         self.hostname = vm.hostname
         self.attribute = attribute
         self.actual_value = actual_value
-        self.config_value = vm.admintool[attribute]
+        self.config_value = vm.server_obj[attribute]
         assert self.config_value != self.actual_value
 
     def __str__(self):
