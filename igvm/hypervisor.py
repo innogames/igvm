@@ -552,6 +552,15 @@ class KVMHypervisor(Hypervisor):
         return vm.hostname in [dom.name() for dom in domains]
 
     def vm_running(self, vm):
+        """Check if the VM is kinda running using libvirt
+
+        Libvirt has a state called "RUNNING", but it is not we want in here.
+        The callers of this function expect us to cover all possible states
+        the VM is somewhat alive.  So we return true for all states before
+        "SHUTOFF" state including "SHUTDOWN" which actually only means
+        "being shutdown".  If we would return false for this state
+        then consecutive start() call would fail.
+        """
         # _domain seems to fail on non-running VMs
         domains = self.conn.listAllDomains()
         for domain in domains:
