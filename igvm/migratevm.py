@@ -26,9 +26,10 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
     # possible to move VMs out of a hypervisor.
     vm = VM(vm_hostname, ignore_reserved=True)
     hypervisor = Hypervisor.get(hypervisor_hostname, ignore_reserved)
+    was_running = vm.is_running()
 
     # There is no point of online migration, if the VM is already shutdown.
-    if not offline and not vm.is_running():
+    if not was_running:
         offline = True
 
     if not offline and newip:
@@ -69,6 +70,8 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
 
     # Finally migrate the VM
     if offline:
+        if was_running:
+            vm.shutdown(tx=tx)
         offline_migrate(vm, hypervisor, device, runpuppet, tx)
     else:
         vm.hypervisor.vm_migrate_online(vm, hypervisor)
@@ -80,7 +83,7 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
         vm.hypervisor = existing_hypervisor
     tx.on_rollback('reset hypervisor', _reset_hypervisor)
 
-    if offline:
+    if offline and was_running:
         vm.start(tx=tx)
     vm.reset_state()
 
@@ -106,8 +109,6 @@ def check_attributes(vm):
 
 def offline_migrate(vm, hypervisor, device, runpuppet, tx):
     nc_listener = netcat_to_device(hypervisor, device, tx)
-    if vm.is_running():
-        vm.shutdown(tx=tx)
 
     vm.hypervisor.accept_ssh_hostkey(hypervisor)
     device_to_netcat(
