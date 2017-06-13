@@ -1,7 +1,7 @@
 import logging
 import math
 
-from libvirt import VIR_DOMAIN_RUNNING, VIR_DOMAIN_SHUTDOWN, libvirtError
+from libvirt import VIR_DOMAIN_SHUTOFF, libvirtError
 
 from adminapi.dataset import query, filters
 
@@ -555,13 +555,8 @@ class KVMHypervisor(Hypervisor):
         # _domain seems to fail on non-running VMs
         domains = self.conn.listAllDomains()
         for domain in domains:
-            if domain.name() != vm.hostname:
-                continue
-
-            return domain.info()[0] in [
-                VIR_DOMAIN_RUNNING,
-                VIR_DOMAIN_SHUTDOWN,
-            ]
+            if domain.name() == vm.hostname:
+                return domain.info()[0] < VIR_DOMAIN_SHUTOFF
         raise HypervisorError(
             '{} is not defined on {}'
             .format(vm.hostname, self.hostname)

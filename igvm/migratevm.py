@@ -14,7 +14,7 @@ from igvm.vm import VM
 log = logging.getLogger(__name__)
 
 
-@with_fabric_settings
+@with_fabric_settings   # NOQA: C901
 @run_in_transaction
 def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
               maintenance=False, offline=False, tx=None,
@@ -26,9 +26,10 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
     # possible to move VMs out of a hypervisor.
     vm = VM(vm_hostname, ignore_reserved=True)
     hypervisor = Hypervisor.get(hypervisor_hostname, ignore_reserved)
+    was_running = vm.is_running()
 
     # There is no point of online migration, if the VM is already shutdown.
-    if not offline and not vm.is_running():
+    if not was_running:
         offline = True
 
     if not offline and newip:
@@ -69,11 +70,21 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
 
     # Finally migrate the VM
     if offline:
+        if was_running:
+            vm.shutdown(tx=tx)
         offline_migrate(vm, hypervisor, device, runpuppet, tx)
     else:
         vm.hypervisor.vm_migrate_online(vm, hypervisor)
-        vm.hypervisor = hypervisor
 
+    existing_hypervisor = vm.hypervisor
+    vm.hypervisor = hypervisor
+
+    def _reset_hypervisor():
+        vm.hypervisor = existing_hypervisor
+    tx.on_rollback('reset hypervisor', _reset_hypervisor)
+
+    if offline and was_running:
+        vm.start(tx=tx)
     vm.reset_state()
 
     # Update Serveradmin
@@ -85,8 +96,8 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
     tx.checkpoint()
 
     # Remove the existing VM
-    vm.hypervisor.undefine_vm(vm)
-    vm.hypervisor.destroy_vm_storage(vm)
+    existing_hypervisor.undefine_vm(vm)
+    existing_hypervisor.destroy_vm_storage(vm)
 
 
 def check_attributes(vm):
@@ -97,15 +108,12 @@ def check_attributes(vm):
 
 
 def offline_migrate(vm, hypervisor, device, runpuppet, tx):
-    existing_hypervisor = vm.hypervisor
     nc_listener = netcat_to_device(hypervisor, device, tx)
-    if vm.is_running():
-        vm.shutdown(tx=tx)
 
-    existing_hypervisor.accept_ssh_hostkey(hypervisor)
+    vm.hypervisor.accept_ssh_hostkey(hypervisor)
     device_to_netcat(
-        existing_hypervisor,
-        existing_hypervisor.vm_disk_path(vm),
+        vm.hypervisor,
+        vm.hypervisor.vm_disk_path(vm),
         vm.server_obj['disk_size_gib'] * 1024**3,
         nc_listener,
         tx,
@@ -117,10 +125,3 @@ def offline_migrate(vm, hypervisor, device, runpuppet, tx):
         hypervisor.umount_vm_storage(vm)
 
     hypervisor.define_vm(vm, tx)
-    vm.hypervisor = hypervisor
-
-    def _reset_hypervisor():
-        vm.hypervisor = existing_hypervisor
-    tx.on_rollback('reset hypervisor', _reset_hypervisor)
-
-    vm.start(tx=tx)
