@@ -143,9 +143,8 @@ def netcat_to_device(host, device, tx=None):
 
 def device_to_netcat(host, device, size, listener, tx=None):
     # Using DD lowers load on device with big enough Block Size
-    host, port = listener
     host.run(
         'dd if={0} ibs=1048576 | pv -f -s {1} '
         '| /bin/nc.traditional -q 1 {2} {3}'
-        .format(device, size, host, port)
+        .format(device, size, *listener)
     )
