@@ -111,12 +111,8 @@ class VM(Host):
             if not check(value):
                 raise ConfigError(err)
 
-    def start(self, hypervisor=None, tx=None):
-        hypervisor = hypervisor or self.hypervisor
-        log.debug(
-            'Starting {} on {}'.format(self.hostname, hypervisor.hostname)
-        )
-        hypervisor.start_vm(self)
+    def start(self, tx=None):
+        self.hypervisor.start_vm(self)
         if not self.wait_for_running(running=True):
             raise VMError('VM did not come online in time')
 
@@ -144,20 +140,16 @@ class VM(Host):
         )
 
         if tx:
-            tx.on_rollback('stop VM', self.shutdown, hypervisor)
+            tx.on_rollback('stop VM', self.shutdown)
 
-    def shutdown(self, hypervisor=None, tx=None):
-        hypervisor = hypervisor or self.hypervisor
-        log.debug(
-            'Stopping {} on {}'.format(self.hostname, hypervisor.hostname)
-        )
-        hypervisor.stop_vm(self)
+    def shutdown(self, tx=None):
+        self.hypervisor.stop_vm(self)
         if not self.wait_for_running(running=False):
-            hypervisor.stop_vm_force(self)
+            self.hypervisor.stop_vm_force(self)
         self.disconnect()
 
         if tx:
-            tx.on_rollback('start VM', self.start, self.hypervisor)
+            tx.on_rollback('start VM', self.start)
 
     def is_running(self):
         return self.hypervisor.vm_running(self)
