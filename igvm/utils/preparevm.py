@@ -1,16 +1,10 @@
 import logging
 import os
 from StringIO import StringIO
-import socket
-import urllib
-import urllib2
 
 from fabric.api import run, cd, get, put, settings
 
-from igvm.exceptions import IGVMError
-from igvm.settings import (
-    DEFAULT_SWAP_SIZE,
-)
+from igvm.settings import DEFAULT_SWAP_SIZE
 from igvm.utils.sshkeys import create_authorized_keys
 from igvm.utils.template import upload_template
 from igvm.utils import cmd
@@ -110,55 +104,14 @@ def copy_postboot_script(hypervisor, vm, script):
         put(script, 'buildvm-postboot', mode=755)
 
 
-def _clear_cert_controller(hostname, puppet_master, token):
-    try:
-        response = urllib2.urlopen(
-            'https://{}:9000/'.format(puppet_master),
-            urllib.urlencode({
-                'token': token,
-                'hostname': hostname,
-                'command': 'clear',
-            }),
-        )
-
-        if response.getcode() != 200:
-            raise IGVMError(response.read().strip())
-    except (socket.error, urllib2.URLError) as e:
-        raise IGVMError(e)
-
-
 def run_puppet(hypervisor, vm, clear_cert, tx):
     """Runs Puppet in chroot on the hypervisor."""
     target_dir = hypervisor.vm_mount_path(vm)
     block_autostart(hypervisor, vm)
 
     if clear_cert:
-        # Use puppet-controller, if possible.
-        puppet_ca = vm.server_obj['puppet_ca']
-        controller_token = os.environ.get('PUPPET_CONTROLLER_TOKEN')
-        if controller_token:
-            try:
-                _clear_cert_controller(
-                    vm.hostname,
-                    puppet_ca,
-                    controller_token,
-                )
-                log.info(
-                    'Cleared Puppet cert of {} on {}'
-                    .format(vm.hostname, puppet_ca)
-                )
-            except IGVMError as e:
-                log.info(
-                    'Failed to clear Puppet cert of {} on {}: {}'
-                    .format(vm.hostname, puppet_ca, e)
-                )
-        else:
-            with settings(host_string=puppet_ca, warn_only=True):
-                run(cmd(
-                    '/usr/bin/puppet cert clean {0}'
-                    ' || echo "No cert for Host found"',
-                    vm.fqdn,
-                ), warn_only=True)
+        with settings(host_string=vm.server_obj['puppet_ca'], warn_only=True):
+            run(cmd('/usr/bin/puppet cert clean {}', vm.fqdn))
 
     with cd(target_dir):
         if tx:
