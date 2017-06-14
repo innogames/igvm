@@ -241,7 +241,6 @@ def migrate_live(source, destination, vm, domain):
         min(source.num_cpus, destination.num_cpus),
     )
 
-    source.accept_ssh_hostkey(destination)
     source.run(migrate_cmd.format(
         vm_hostname=vm.hostname,
         destination=destination.hostname,
