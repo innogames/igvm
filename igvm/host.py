@@ -141,9 +141,8 @@ class Host(object):
     def accept_ssh_hostkey(self, host):
         """Scans and accepts the SSH remote host key of a given host.
         NO VERIFICATION IS PERFORMED, THIS IS INSECURE!"""
-        self.run('touch .ssh/known_hosts'.format(host.hostname))
-        self.run('ssh-keygen -R {0}'.format(host.hostname))
+        self.run('ssh-keygen -R {}'.format(host.fqdn))
         self.run(
-            'ssh-keyscan -t rsa {0} >> .ssh/known_hosts'
-            .format(host.hostname)
+            'ssh-keyscan -t rsa {} >> .ssh/known_hosts'
+            .format(host.fqdn)
         )

@@ -138,7 +138,7 @@ def netcat_to_device(host, device, tx=None):
     )
     if tx:
         tx.on_rollback('kill netcat', _kill_netcat, host, port)
-    return (host.hostname, port)
+    return host.fqdn, port
 
 
 def device_to_netcat(host, device, size, listener, tx=None):

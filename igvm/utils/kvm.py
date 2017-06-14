@@ -246,7 +246,7 @@ def migrate_live(source, destination, vm, domain):
 
     source.run(migrate_cmd.format(
         vm_hostname=vm.hostname,
-        destination=destination.hostname,
+        destination=destination.fqdn,
         timeout=timeout,
     ))
 
