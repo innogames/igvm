@@ -248,7 +248,6 @@ class Hypervisor(Host):
 
     def stop_vm_force(self, vm):
         log.info('Force-stopping {} on {}'.format(vm.hostname, self.hostname))
-        vm.disconnect()
         # Implementation must be subclassed
 
     def undefine_vm(self, vm):

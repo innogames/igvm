@@ -146,7 +146,6 @@ class VM(Host):
         self.hypervisor.stop_vm(self)
         if not self.wait_for_running(running=False):
             self.hypervisor.stop_vm_force(self)
-        self.disconnect()
 
         if tx:
             tx.on_rollback('start VM', self.start)

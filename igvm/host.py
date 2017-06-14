@@ -106,11 +106,6 @@ class Host(object):
             fabric.api.get(path, fd)
             return fd.getvalue()
 
-    def disconnect(self):
-        """Disconnect active Fabric sessions."""
-        if self.hostname in fabric.state.connections:
-            fabric.state.connections[self.hostname].get_transport().close()
-
     def reload(self):
         """Reloads the server object from serveradmin."""
         if self.server_obj.is_dirty():
