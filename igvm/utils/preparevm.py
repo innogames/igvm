@@ -9,7 +9,6 @@ from fabric.api import run, cd, get, put, settings
 
 from igvm.exceptions import IGVMError
 from igvm.settings import (
-    DEFAULT_DNS_SERVERS,
     DEFAULT_SWAP_SIZE,
 )
 from igvm.utils.sshkeys import create_authorized_keys
@@ -97,9 +96,7 @@ def prepare_vm(hypervisor, vm):
         })
         upload_template('etc/hosts', 'etc/hosts')
         upload_template('etc/inittab', 'etc/inittab')
-        upload_template('etc/resolv.conf', 'etc/resolv.conf', {
-            'dns_servers': DEFAULT_DNS_SERVERS
-        })
+        run(cmd('cp /etc/resolv.conf etc/resolv.conf'))
 
         swap_path = os.path.join(target_dir, 'swap')
         _generate_swap(swap_path, DEFAULT_SWAP_SIZE)

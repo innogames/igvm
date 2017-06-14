@@ -9,12 +9,6 @@ COMMON_FABRIC_SETTINGS = dict(
     connection_attempts=1,
 )
 
-DEFAULT_DNS_SERVERS = (
-    '10.0.0.102',
-    '10.0.0.85',
-    '10.0.0.83',
-)
-
 # Swap size in MiB
 DEFAULT_SWAP_SIZE = 1024
 
