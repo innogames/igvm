@@ -73,7 +73,7 @@ def _reset_vm(**kwargs):
     vm.server_obj.update(kwargs)
     vm.server_obj.commit()
     # Might have changed!
-    vm.hypervisor = Hypervisor.get(vm.server_obj['xen_host'])
+    vm.hypervisor = Hypervisor(vm.server_obj['xen_host'])
     return vm
 
 
@@ -217,7 +217,7 @@ class BuildTest(object):
 class KVMBuildTest(IGVMTest, BuildTest):
     def setUp(self):
         BuildTest.setUp(self)
-        self.hv = Hypervisor.get(HV1)
+        self.hv = Hypervisor(HV1)
         self.vm = _reset_vm()
         _clean_vm(self.hv, self.vm.hostname)
 
@@ -451,7 +451,7 @@ class CommandTest(object):
 class KVMCommandTest(IGVMTest, CommandTest):
     def setUp(self):
         CommandTest.setUp(self)
-        self.hv = Hypervisor.get(HV1)
+        self.hv = Hypervisor(HV1)
         self.vm = _reset_vm()
         _clean_vm(self.hv, self.vm.hostname)
 
@@ -462,8 +462,8 @@ class MigrationTest(IGVMTest):
         adminapi.auth()
         _check_environment()
 
-        cls.hv1 = Hypervisor.get(HV1)
-        cls.hv2 = Hypervisor.get(HV2)
+        cls.hv1 = Hypervisor(HV1)
+        cls.hv2 = Hypervisor(HV2)
         cls.vm = _reset_vm()
 
         _clean_vm(cls.hv1, cls.vm.hostname)

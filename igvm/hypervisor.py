@@ -46,32 +46,13 @@ class Hypervisor(Host):
     """Hypervisor interface."""
     servertype = 'hypervisor'
 
-    @staticmethod
-    def get(server_obj, ignore_reserved=False):
-        """Factory to get matching hypervisor implementation for a VM."""
+    def __init__(self, *args, **kwargs):
+        super(Hypervisor, self).__init__(*args, **kwargs)
 
-        # Currently we only support KVM hypervisors.
-        hypervisor = KVMHypervisor(server_obj)
-
-        if hypervisor.server_obj['state'] == 'retired':
+        if self.server_obj['state'] == 'retired':
             raise InvalidStateError(
-                'Hypervisor "{0}" is retired.'.format(hypervisor.fqdn)
+                'Hypervisor "{0}" is retired.'.format(self.fqdn)
             )
-
-        if (
-            hypervisor.server_obj['state'] == 'online_reserved' and
-            not ignore_reserved
-        ):
-            raise InvalidStateError(
-                'Hypervisor "{0}" is online_reserved.  Use --ignore-reserved '
-                'to override.'
-                .format(hypervisor.fqdn)
-            )
-
-        return hypervisor
-
-    def __init__(self, server_obj):
-        super(Hypervisor, self).__init__(server_obj)
 
         # Store per-VM path information
         # We cannot store these in the VM object due to migrations.
@@ -93,11 +74,6 @@ class Hypervisor(Host):
                 .format(vm.fqdn, self.fqdn)
             )
         return self._mount_path[vm]
-
-    def vm_block_device_name(self):
-        """Returns the name of the rootfs block device, as seen by the guest
-        OS."""
-        raise NotImplementedError(type(self).__name__)
 
     def vlan_for_vm(self, vm):
         """Returns the VLAN number a VM should use on this hypervisor.
@@ -196,33 +172,6 @@ class Hypervisor(Host):
         # Proper VLAN?
         self.vlan_for_vm(vm)
 
-    def check_migration(self, vm, hypervisor, offline):
-        """Check whether a VM can be migrated to the given hypervisor"""
-
-        if self.fqdn == hypervisor.fqdn:
-            raise HypervisorError(
-                'Source and destination Hypervisor is the same "{0}"!'
-                .format(self.fqdn)
-            )
-
-        if not offline and type(self) != type(hypervisor):
-            raise HypervisorError(
-                'Online migration between different hypervisor technologies '
-                'is not supported.'
-            )
-
-    def vm_migrate_online(self, vm, hypervisor):
-        """Online-migrate a VM to the given destination hypervisor"""
-        self.check_migration(vm, hypervisor, offline=False)
-
-    def total_vm_memory(self):
-        """Return amount of memory in MiB available to hypervisor"""
-        raise NotImplementedError(type(self).__name__)
-
-    def free_vm_memory(self):
-        """Return memory in MiB available (unallocated) on the hypervisor"""
-        raise NotImplementedError(type(self).__name__)
-
     def define_vm(self, vm, tx=None):
         """Creates a VM on the hypervisor."""
         log.info('Defining "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
@@ -230,32 +179,6 @@ class Hypervisor(Host):
         self._define_vm(vm, tx)
         if tx:
             tx.on_rollback('undefine VM', self.undefine_vm, vm)
-
-    def start_vm(self, vm):
-        log.info('Starting "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
-        # Implementation must be subclassed
-
-    def vm_running(self, vm):
-        raise NotImplementedError(type(self).__name__)
-
-    def vm_defined(self, vm):
-        raise NotImplementedError(type(self).__name__)
-
-    def stop_vm(self, vm):
-        log.info('Shutting down "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
-        # Implementation must be subclassed
-
-    def stop_vm_force(self, vm):
-        log.info('Force-stopping "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
-        # Implementation must be subclassed
-
-    def undefine_vm(self, vm):
-        if self.vm_running(vm):
-            raise InvalidStateError(
-                'Refusing to undefine running VM "{}"'.format(vm.fqdn)
-            )
-        log.info('Undefining "{}" on "{}"'.format(vm.fqdn, self.fqdn))
-        # Implementation must be subclassed
 
     def _check_committed(self, vm):
         """Check that the given VM has no uncommitted changes"""
@@ -443,15 +366,9 @@ class Hypervisor(Host):
         self._vm_sync_from_hypervisor(vm, result)
         return result
 
-    def vm_info(self, vm):
-        """Return runtime information about a VM."""
-        raise NotImplementedError(type(self).__name__)
-
     def get_free_disk_size_gib(self, safe=True):
         return get_free_disk_size_gib(self, safe)
 
-
-class KVMHypervisor(Hypervisor):
     @lazy_property
     def conn(self):
         conn = get_virtconn(self.fqdn)
@@ -479,10 +396,18 @@ class KVMHypervisor(Hypervisor):
         return domain_obj
 
     def vm_block_device_name(self):
+        """Get the name of the root file system block device as seen by
+        the guest OS"""
         return 'vda1'
 
     def check_migration(self, vm, hypervisor, offline):
-        super(KVMHypervisor, self).check_migration(vm, hypervisor, offline)
+        """Check whether a VM can be migrated to the given hypervisor"""
+
+        if self.fqdn == hypervisor.fqdn:
+            raise HypervisorError(
+                'Source and destination Hypervisor is the same "{0}"!'
+                .format(self.fqdn)
+            )
 
         # Online migration only works with the same VLAN
         if not offline and self.vlan_for_vm(vm) != hypervisor.vlan_for_vm(vm):
@@ -492,10 +417,12 @@ class KVMHypervisor(Hypervisor):
             )
 
     def vm_migrate_online(self, vm, hypervisor):
-        super(KVMHypervisor, self).vm_migrate_online(vm, hypervisor)
+        """Online-migrate a VM to the given destination hypervisor"""
+        self.check_migration(vm, hypervisor, offline=False)
         migrate_live(self, hypervisor, vm, self._domain(vm))
 
     def total_vm_memory(self):
+        """Get amount of memory in MiB available to hypervisor"""
         # Start with what OS sees as total memory (not installed memory)
         total_mib = self.conn.getMemoryStats(-1)['total'] / 1024
         # Always keep some extra memory free for Hypervisor
@@ -503,6 +430,7 @@ class KVMHypervisor(Hypervisor):
         return total_mib
 
     def free_vm_memory(self):
+        """Get memory in MiB available (unallocated) on the hypervisor"""
         total_mib = self.total_vm_memory()
 
         # Calculate memory used by other VMs.
@@ -542,7 +470,7 @@ class KVMHypervisor(Hypervisor):
             pool.refresh(0)
 
     def start_vm(self, vm):
-        super(KVMHypervisor, self).start_vm(vm)
+        log.info('Starting "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
         if self._domain(vm).create() != 0:
             raise HypervisorError('"{0}" failed to start'.format(vm.fqdn))
 
@@ -572,19 +500,23 @@ class KVMHypervisor(Hypervisor):
         )
 
     def stop_vm(self, vm):
-        super(KVMHypervisor, self).stop_vm(vm)
+        log.info('Shutting down "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
         if self._domain(vm).shutdown() != 0:
             raise HypervisorError('Unable to stop "{}".'.format(vm.fqdn))
 
     def stop_vm_force(self, vm):
-        super(KVMHypervisor, self).stop_vm_force(vm)
+        log.info('Force-stopping "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
         if self._domain(vm).destroy() != 0:
             raise HypervisorError(
                 'Unable to force-stop "{}".'.format(vm.fqdn)
             )
 
     def undefine_vm(self, vm):
-        super(KVMHypervisor, self).undefine_vm(vm)
+        if self.vm_running(vm):
+            raise InvalidStateError(
+                'Refusing to undefine running VM "{}"'.format(vm.fqdn)
+            )
+        log.info('Undefining "{}" on "{}"'.format(vm.fqdn, self.fqdn))
         if self._domain(vm).undefine() != 0:
             raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
 
@@ -600,5 +532,6 @@ class KVMHypervisor(Hypervisor):
             result['num_cpu'] = num_cpu
 
     def vm_info(self, vm):
+        """Get runtime information about a VM"""
         props = DomainProperties.from_running(self, vm, self._domain(vm))
         return props.info()

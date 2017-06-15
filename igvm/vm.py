@@ -32,11 +32,12 @@ class VM(Host):
     """VM interface."""
     servertype = 'vm'
 
-    def __init__(self, vm_server_obj, hypervisor=None, ignore_reserved=False):
-        super(VM, self).__init__(vm_server_obj)
+    def __init__(self, server_name_or_obj, ignore_reserved=False,
+                 hypervisor=None):
+        super(VM, self).__init__(server_name_or_obj, ignore_reserved)
 
         if not hypervisor:
-            hypervisor = Hypervisor.get(
+            hypervisor = Hypervisor(
                 self.server_obj['xen_host'], ignore_reserved
             )
         else:

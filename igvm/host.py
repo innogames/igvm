@@ -6,7 +6,7 @@ import fabric.api
 import fabric.state
 
 from paramiko import transport
-from igvm.exceptions import ConfigError, RemoteCommandError
+from igvm.exceptions import ConfigError, RemoteCommandError, InvalidStateError
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.network import get_network_config
@@ -63,7 +63,7 @@ def with_fabric_settings(fn):
 class Host(object):
     """A remote host on which commands can be executed."""
 
-    def __init__(self, server_name_or_obj):
+    def __init__(self, server_name_or_obj, ignore_reserved=False):
         if isinstance(server_name_or_obj, ServerObject):
             self.server_obj = server_name_or_obj
         else:
@@ -73,6 +73,14 @@ class Host(object):
             self.fqdn = self.hostname
         else:
             self.fqdn = self.hostname + '.ig.local'
+
+        if (
+            not ignore_reserved and
+            self.server_obj['state'] == 'online_reserved'
+        ):
+            raise InvalidStateError(
+                'Server "{0}" is online_reserved.'.format(self.fqdn)
+            )
 
     def fabric_settings(self, *args, **kwargs):
         """Builds a fabric context manager to run commands on this host."""
