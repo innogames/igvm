@@ -183,7 +183,7 @@ class VM(Host):
         result = {}
         for line in contents.splitlines():
             try:
-                (key, value) = [tok.strip() for tok in line.split(':')]
+                key, value = [tok.strip() for tok in line.split(':')]
             except IndexError:
                 continue
             result[key] = value
@@ -325,7 +325,7 @@ class VM(Host):
 
         self.shutdown(tx=tx)
         self.hypervisor.undefine_vm(self)
-        self.hypervisor.rename_vm_storage(self, new_hostname)
+        self.hypervisor.rename_vm_storage(self, new_fqdn)
 
         self.server_obj['hostname'] = new_hostname
         self.server_obj.commit()

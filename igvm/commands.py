@@ -194,8 +194,7 @@ def vm_restart(vm_hostname, force=False, noredefine=False):
         vm.shutdown()
 
     if not noredefine:
-        vm.hypervisor.undefine_vm(vm)
-        vm.hypervisor.define_vm(vm)
+        vm.hypervisor.redefine_vm(vm)
 
     vm.start()
     log.info('"{}" is restarted.'.format(vm.fqdn))
@@ -287,8 +286,7 @@ def vm_redefine(vm_hostname):
     if was_running:
         vm.shutdown()
 
-    vm.hypervisor.undefine_vm(vm)
-    vm.hypervisor.define_vm(vm)
+    vm.hypervisor.redefine_vm(vm)
 
     if was_running:
         vm.start()

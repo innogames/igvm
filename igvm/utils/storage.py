@@ -6,12 +6,10 @@ import math
 from fabric.api import run
 
 from igvm.exceptions import StorageError
+from igvm.settings import VG_NAME, RESERVED_DISK
 from igvm.utils import cmd
 
 log = logging.getLogger(__name__)
-
-VG_NAME = 'xen-data'
-RESERVED_DISK = 5.0
 
 
 def get_logical_volumes(host):
@@ -34,8 +32,9 @@ def get_logical_volumes(host):
 
 def get_vm_volume(hypervisor, vm):
     """Return the path of the LV belonging to the given VM"""
+    domain = hypervisor._get_domain(vm)
     for lv in get_logical_volumes(hypervisor):
-        if lv['name'] == vm.hostname:
+        if lv['name'] == domain.name():
             disk_size = vm.server_obj['disk_size_gib']
             if disk_size != int(math.ceil(lv['size_MiB'] / 1024)):
                 raise StorageError(
@@ -82,10 +81,10 @@ def create_storage(hypervisor, vm):
     hypervisor.run(cmd(
         'lvcreate -L {0}g -n {1} {2}',
         disk_size_gib,
-        vm.hostname,
+        vm.fqdn,
         VG_NAME,
     ))
-    return '/dev/{}/{}'.format(VG_NAME, vm.hostname)
+    return '/dev/{}/{}'.format(VG_NAME, vm.fqdn)
 
 
 def mount_temp(host, device, suffix=''):

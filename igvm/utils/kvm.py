@@ -20,6 +20,7 @@ from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
     MAC_ADDRESS_PREFIX,
+    VG_NAME,
 )
 from igvm.utils.units import parse_size
 
@@ -225,7 +226,7 @@ def migrate_live(source, destination, vm, domain):
         ' --change-protection'
         # Force convergence, # otherwise migrations never end
         ' --auto-converge'
-        ' --domain {vm_hostname}'
+        ' --domain {domain}'
         # Don't tolerate soft errors
         ' --abort-on-error'
         # We need SSH agent forwarding
@@ -245,13 +246,13 @@ def migrate_live(source, destination, vm, domain):
     )
 
     source.run(migrate_cmd.format(
-        vm_hostname=vm.hostname,
+        domain=domain.name(),
         destination=destination.fqdn,
         timeout=timeout,
     ))
 
     # And pin again, in case we migrated to a host with more physical cores
-    domain = destination._domain(vm)
+    domain = destination._get_domain(vm)
     _live_repin_cpus(domain, props, destination.num_cpus)
 
 
@@ -339,8 +340,10 @@ def generate_domain_xml(hypervisor, vm):
     props = DomainProperties(hypervisor, vm)
 
     config = {
-        'disk_device': hypervisor.vm_disk_path(vm),
-        'serveradmin': vm.server_obj,
+        'disk_device': '/dev/{}/{}'.format(VG_NAME, vm.fqdn),
+        'fqdn': vm.fqdn,
+        'memory': vm.server_obj['memory'],
+        'num_cpu': vm.server_obj['num_cpu'],
         'props': props,
         'vlan_tag': hypervisor.vlan_for_vm(vm),
     }

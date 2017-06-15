@@ -1,7 +1,7 @@
 import logging
 import math
 
-from libvirt import VIR_DOMAIN_SHUTOFF, libvirtError
+from libvirt import VIR_DOMAIN_SHUTOFF
 
 from adminapi.dataset import query, filters
 
@@ -104,7 +104,7 @@ class Hypervisor(Host):
         # happen if VLAN is removed on Serveradmin so that nobody creates
         # new VMs on given hypervisor, but the existing ones must be moved out.
         if (
-            vm.server_obj['xen_host'] != self.hostname and
+            vm.server_obj['xen_host'] != self.server_obj['hostname'] and
             vm_vlan not in vlans
         ):
             raise HypervisorError(
@@ -216,8 +216,7 @@ class Hypervisor(Host):
         if not self.vm_running(vm):
             log.info('VM is offline, rebuilding domain with new settings')
             vm.server_obj['num_cpu'] = num_cpu
-            self.undefine_vm(vm)
-            self.define_vm(vm)
+            self.redefine_vm(vm)
         else:
             self._vm_set_num_cpu(vm, num_cpu)
 
@@ -252,8 +251,7 @@ class Hypervisor(Host):
         if not running:
             log.info('VM is offline, rebuilding domain with new settings')
             vm.server_obj['memory'] = memory
-            self.undefine_vm(vm)
-            self.define_vm(vm)
+            self.redefine_vm(vm)
         else:
             old_total = vm.meminfo()['MemTotal']
             self._vm_set_memory(vm, memory)
@@ -351,8 +349,9 @@ class Hypervisor(Host):
         # Update disk size
         result = {}
         lvs = get_logical_volumes(self)
+        domain = self._get_domain(vm)
         for lv in lvs:
-            if lv['name'] == vm.hostname:
+            if lv['name'] == domain.name():
                 assert self._disk_path.get(vm, lv['path']) == lv['path'], \
                     'Inconsistent LV path'
                 self._disk_path[vm] = lv['path']
@@ -380,20 +379,32 @@ class Hypervisor(Host):
         return conn
 
     def _find_domain(self, vm):
-        domain = None
-        try:
-            domain = self.conn.lookupByName(vm.hostname)
-        except libvirtError:
-            pass
-        return domain
+        """Search and return the domain on hypervisor
 
-    def _domain(self, vm):
-        domain_obj = self._find_domain(vm)
-        if not domain_obj:
+        It is erroring out when multiple domains found, and returning None,
+        when none found.
+        """
+        found = None
+        # We are not using lookupByName(), because it prints ugly messages to
+        # the console.
+        for domain in self.conn.listAllDomains():
+            if not vm.fqdn.startswith(domain.name()):
+                continue
+            if found is not None:
+                raise HypervisorError(
+                    'Same VM is defined multiple times as "{}" and "{}".'
+                    .format(found.name(), domain.name())
+                )
+            found = domain
+        return found
+
+    def _get_domain(self, vm):
+        domain = self._find_domain(vm)
+        if not domain:
             raise HypervisorError(
                 'Unable to find domain "{}".'.format(vm.fqdn)
             )
-        return domain_obj
+        return domain
 
     def vm_block_device_name(self):
         """Get the name of the root file system block device as seen by
@@ -419,7 +430,7 @@ class Hypervisor(Host):
     def vm_migrate_online(self, vm, hypervisor):
         """Online-migrate a VM to the given destination hypervisor"""
         self.check_migration(vm, hypervisor, offline=False)
-        migrate_live(self, hypervisor, vm, self._domain(vm))
+        migrate_live(self, hypervisor, vm, self._get_domain(vm))
 
     def total_vm_memory(self):
         """Get amount of memory in MiB available to hypervisor"""
@@ -444,19 +455,21 @@ class Hypervisor(Host):
         return free_mib
 
     def _vm_set_num_cpu(self, vm, num_cpu):
-        set_vcpus(self, vm, self._domain(vm), num_cpu)
+        set_vcpus(self, vm, self._get_domain(vm), num_cpu)
 
     def _vm_set_memory(self, vm, memory_mib):
         if self.vm_running(vm) and memory_mib < vm.server_obj['memory']:
             raise InvalidStateError(
                 'Cannot shrink memory while VM is running'
             )
-        set_memory(self, vm, self._domain(vm), memory_mib)
+        set_memory(self, vm, self._get_domain(vm), memory_mib)
 
     def _vm_set_disk_size_gib(self, vm, disk_size_gib):
+        # TODO: Use libvirt
+        domain = self._get_domain(vm)
         self.run(
-            'virsh blockresize --path {0} --size {1}GiB {2}'
-            .format(self.vm_disk_path(vm), disk_size_gib, vm.hostname)
+            'virsh blockresize --path {} --size {}GiB {}'
+            .format(self.vm_disk_path(vm), disk_size_gib, domain.name())
         )
         vm.run('xfs_growfs /')
 
@@ -471,13 +484,11 @@ class Hypervisor(Host):
 
     def start_vm(self, vm):
         log.info('Starting "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
-        if self._domain(vm).create() != 0:
+        if self._get_domain(vm).create() != 0:
             raise HypervisorError('"{0}" failed to start'.format(vm.fqdn))
 
     def vm_defined(self, vm):
-        # Don't use lookupByName, it prints ugly messages to the console
-        domains = self.conn.listAllDomains()
-        return vm.hostname in [dom.name() for dom in domains]
+        return self._find_domain(vm) is not None
 
     def vm_running(self, vm):
         """Check if the VM is kinda running using libvirt
@@ -489,27 +500,26 @@ class Hypervisor(Host):
         "being shutdown".  If we would return false for this state
         then consecutive start() call would fail.
         """
-        # _domain seems to fail on non-running VMs
-        domains = self.conn.listAllDomains()
-        for domain in domains:
-            if domain.name() == vm.hostname:
-                return domain.info()[0] < VIR_DOMAIN_SHUTOFF
-        raise HypervisorError(
-            '"{}" is not defined on "{}".'
-            .format(vm.fqdn, self.fqdn)
-        )
+        return self._get_domain(vm).info()[0] < VIR_DOMAIN_SHUTOFF
 
     def stop_vm(self, vm):
         log.info('Shutting down "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
-        if self._domain(vm).shutdown() != 0:
+        if self._get_domain(vm).shutdown() != 0:
             raise HypervisorError('Unable to stop "{}".'.format(vm.fqdn))
 
     def stop_vm_force(self, vm):
         log.info('Force-stopping "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
-        if self._domain(vm).destroy() != 0:
+        if self._get_domain(vm).destroy() != 0:
             raise HypervisorError(
                 'Unable to force-stop "{}".'.format(vm.fqdn)
             )
+
+    def redefine_vm(self, vm):
+        domain = self._get_domain(vm)
+        self.undefine_vm(vm)
+        if domain.name() != vm.fqdn:
+            self.rename_vm_storage(vm, vm.fqdn)
+        self.define_vm(vm)
 
     def undefine_vm(self, vm):
         if self.vm_running(vm):
@@ -517,11 +527,11 @@ class Hypervisor(Host):
                 'Refusing to undefine running VM "{}"'.format(vm.fqdn)
             )
         log.info('Undefining "{}" on "{}"'.format(vm.fqdn, self.fqdn))
-        if self._domain(vm).undefine() != 0:
+        if self._get_domain(vm).undefine() != 0:
             raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
 
     def _vm_sync_from_hypervisor(self, vm, result):
-        vm_info = self._domain(vm).info()
+        vm_info = self._get_domain(vm).info()
 
         mem = int(vm_info[2] / 1024)
         if mem > 0:
@@ -533,5 +543,5 @@ class Hypervisor(Host):
 
     def vm_info(self, vm):
         """Get runtime information about a VM"""
-        props = DomainProperties.from_running(self, vm, self._domain(vm))
+        props = DomainProperties.from_running(self, vm, self._get_domain(vm))
         return props.info()

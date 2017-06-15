@@ -13,6 +13,10 @@ COMMON_FABRIC_SETTINGS = dict(
 DEFAULT_SWAP_SIZE = 1024
 
 
+VG_NAME = 'xen-data'
+RESERVED_DISK = 5.0
+
+
 # Reserved memory for host OS in MiB
 HOST_RESERVED_MEMORY = 2 * 1024
 

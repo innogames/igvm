@@ -94,7 +94,7 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
     vm.reset_state()
 
     # Update Serveradmin
-    vm.server_obj['xen_host'] = hypervisor.hostname
+    vm.server_obj['xen_host'] = hypervisor.server_obj['hostname']
     vm.server_obj.commit()
 
     # If removing the existing VM fails we shouldn't risk undoing the newly

@@ -1,14 +1,14 @@
 <domain type='kvm'>
-  <name>{{ serveradmin.hostname }}</name>
+  <name>{{ fqdn }}</name>
   <uuid>{{ props.uuid }}</uuid>
 {% if props.mem_hotplug %}
   <maxMemory slots='16' unit='MiB'>{{ props.max_mem }}</maxMemory>
 {% endif %}
-  <memory unit='MiB'>{{ serveradmin.memory }}</memory>
-  <currentMemory unit='MiB'>{{ serveradmin.memory }}</currentMemory>
+  <memory unit='MiB'>{{ memory }}</memory>
+  <currentMemory unit='MiB'>{{ memory }}</currentMemory>
   
   <!-- Don't put placement attribute unless NUMA settings are set! -->
-  <vcpu current='{{ serveradmin.num_cpu }}'>{{ props.max_cpus }}</vcpu>
+  <vcpu current='{{ num_cpu }}'>{{ props.max_cpus }}</vcpu>
 
   <!-- These are filled by KVM hooks in managevm/utils/kvm.py. -->
   <!-- Disabled for now, without hooks this will break.

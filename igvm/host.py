@@ -68,11 +68,11 @@ class Host(object):
             self.server_obj = server_name_or_obj
         else:
             self.server_obj = get_server(server_name_or_obj, self.servertype)
-        self.hostname = self.server_obj['hostname']
-        if self.hostname.endswith('.ig.local'):
-            self.fqdn = self.hostname
+
+        if self.server_obj['hostname'].endswith('.ig.local'):
+            self.fqdn = self.server_obj['hostname']
         else:
-            self.fqdn = self.hostname + '.ig.local'
+            self.fqdn = self.server_obj['hostname'] + '.ig.local'
 
         if (
             not ignore_reserved and
@@ -131,7 +131,9 @@ class Host(object):
             raise ConfigError(
                 'Serveradmin object must be committed before reloading'
             )
-        self.server_obj = get_server(self.hostname, self.servertype)
+        self.server_obj = get_server(
+            self.server_obj['hostname'], self.servertype
+        )
 
     @lazy_property  # Requires fabric call on hypervisor, evaluate lazily.
     def network_config(self):
