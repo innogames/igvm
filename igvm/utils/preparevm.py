@@ -1,3 +1,5 @@
+from base64 import b64decode
+from hashlib import sha256
 import logging
 import os
 from StringIO import StringIO
@@ -38,7 +40,6 @@ def _get_ssh_public_key(key_type):
     get('etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)
     key_split = fd.getvalue().split()
 
-    assert key_split[0] == 'ssh-' + key_type
     return key_split[1]
 
 
@@ -82,6 +83,9 @@ def prepare_vm(hypervisor, vm):
         _create_interfaces(vm.network_config)
         _create_ssh_keys(vm.server_obj['os'])
         vm.server_obj['ssh_pubkey'] = _get_ssh_public_key('rsa')
+        vm.server_obj['ssh_ecdsa_sig'] = sha256(b64decode(
+            _get_ssh_public_key('ecdsa')
+        )).hexdigest()
 
         upload_template('etc/fstab', 'etc/fstab', {
             'blk_dev': hypervisor.vm_block_device_name(),
