@@ -145,9 +145,7 @@ def vm_rebuild(vm_hostname, force=False):
                 .format(vm.fqdn)
             )
 
-    vm.hypervisor.undefine_vm(vm)
-    vm.hypervisor.destroy_vm_storage(vm)
-
+    vm.hypervisor.delete_vm(vm)
     vm.build()
 
 
@@ -219,8 +217,7 @@ def vm_delete(vm_hostname, force=False):
         raise InvalidStateError(
             '"{}" is still running.  Please stop it first.'.format(vm.fqdn)
         )
-    vm.hypervisor.undefine_vm(vm)
-    vm.hypervisor.destroy_vm_storage(vm)
+    vm.hypervisor.delete_vm(vm)
 
     if force:
         vm.server_obj.delete()

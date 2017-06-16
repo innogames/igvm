@@ -4,10 +4,6 @@ from igvm.exceptions import IGVMError, InconsistentAttributeError
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.utils.preparevm import run_puppet
-from igvm.utils.storage import (
-    netcat_to_device,
-    device_to_netcat,
-)
 from igvm.utils.transaction import run_in_transaction
 from igvm.vm import VM
 
@@ -57,7 +53,7 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
     hypervisor.check_vm(vm)
 
     # Setup destination Hypervisor
-    device = hypervisor.create_vm_storage(vm, tx)
+    hypervisor.create_vm_storage(vm, tx)
 
     # Commit previously changed IP address.
     if newip:
@@ -75,12 +71,15 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
         vm.set_state('maintenance', tx=tx)
 
     # Finally migrate the VM
-    if offline:
-        if was_running:
-            vm.shutdown(tx=tx)
-        offline_migrate(vm, hypervisor, device, runpuppet, tx)
-    else:
-        vm.hypervisor.vm_migrate_online(vm, hypervisor)
+    if offline and was_running:
+        vm.shutdown(tx=tx)
+
+    vm.hypervisor.migrate_vm(vm, hypervisor, offline, tx)
+
+    if runpuppet:
+        hypervisor.mount_vm_storage(vm, tx)
+        run_puppet(hypervisor, vm, clear_cert=False, tx=tx)
+        hypervisor.umount_vm_storage(vm)
 
     existing_hypervisor = vm.hypervisor
     vm.hypervisor = hypervisor
@@ -101,9 +100,7 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
     # migrated one.
     tx.checkpoint()
 
-    # Remove the existing VM
-    existing_hypervisor.undefine_vm(vm)
-    existing_hypervisor.destroy_vm_storage(vm)
+    existing_hypervisor.delete_vm(vm)
 
 
 def check_attributes(vm):
@@ -111,22 +108,3 @@ def check_attributes(vm):
     for attr, value in synced_attributes.iteritems():
         if vm.server_obj[attr] != value:
             raise InconsistentAttributeError(vm, attr, value)
-
-
-def offline_migrate(vm, hypervisor, device, runpuppet, tx):
-    nc_listener = netcat_to_device(hypervisor, device, tx)
-
-    device_to_netcat(
-        vm.hypervisor,
-        vm.hypervisor.vm_disk_path(vm),
-        vm.server_obj['disk_size_gib'] * 1024**3,
-        nc_listener,
-        tx,
-    )
-
-    if runpuppet:
-        hypervisor.mount_vm_storage(vm, tx)
-        run_puppet(hypervisor, vm, clear_cert=False, tx=tx)
-        hypervisor.umount_vm_storage(vm)
-
-    hypervisor.define_vm(vm, tx)

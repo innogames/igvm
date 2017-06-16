@@ -104,8 +104,6 @@ class IGVMTest(unittest.TestCase):
 
     def _check_absent(self, hv, vm):
         self.assertEqual(hv.vm_defined(vm), False)
-        with self.assertRaises(IGVMError):
-            hv.vm_disk_path(vm)
         hv.run('test ! -b /dev/xen-data/{}'.format(vm.fqdn))
 
 

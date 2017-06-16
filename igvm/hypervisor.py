@@ -12,7 +12,7 @@ from igvm.exceptions import (
     InvalidStateError,
 )
 from igvm.host import Host
-from igvm.settings import HOST_RESERVED_MEMORY
+from igvm.settings import HOST_RESERVED_MEMORY, VG_NAME, RESERVED_DISK
 from igvm.utils.backoff import retry_wait_backoff
 from igvm.utils.kvm import (
     DomainProperties,
@@ -23,19 +23,18 @@ from igvm.utils.kvm import (
 )
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.storage import (
-    VG_NAME,
-    RESERVED_DISK,
     get_free_disk_size_gib,
     create_storage,
     format_storage,
     get_logical_volumes,
-    get_vm_volume,
+    lvremove,
     lvresize,
     lvrename,
     mount_temp,
-    remove_logical_volume,
     remove_temp,
     umount_temp,
+    netcat_to_device,
+    device_to_netcat,
 )
 from igvm.utils.virtutils import get_virtconn
 
@@ -56,14 +55,10 @@ class Hypervisor(Host):
 
         # Store per-VM path information
         # We cannot store these in the VM object due to migrations.
-        self._disk_path = {}
         self._mount_path = {}
 
-    def vm_disk_path(self, vm):
-        """Returns the disk device path for a VM."""
-        if vm not in self._disk_path:
-            self._disk_path[vm] = get_vm_volume(self, vm)
-        return self._disk_path[vm]
+    def vm_disk_path(self, name):
+        return '/dev/{}/{}'.format(VG_NAME, name)
 
     def vm_mount_path(self, vm):
         """Returns the mount path for a VM.
@@ -176,9 +171,16 @@ class Hypervisor(Host):
         """Creates a VM on the hypervisor."""
         log.info('Defining "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
 
-        self._define_vm(vm, tx)
+        self.conn.defineXML(generate_domain_xml(self, vm))
+
+        # Refresh storage pools to register the vm image
+        for pool_name in self.conn.listStoragePools():
+            pool = self.conn.storagePoolLookupByName(pool_name)
+            pool.refresh(0)
         if tx:
-            tx.on_rollback('undefine VM', self.undefine_vm, vm)
+            tx.on_rollback(
+                'delete VM', self.delete_vm, vm, keep_storage=True
+            )
 
     def _check_committed(self, vm):
         """Check that the given VM has no uncommitted changes"""
@@ -277,27 +279,22 @@ class Hypervisor(Host):
         """Changes disk size of a VM."""
         if new_size_gib < vm.server_obj['disk_size_gib']:
             raise NotImplementedError('Cannot shrink the disk.')
+        domain = self._get_domain(vm)
         with self.fabric_settings():
-            lvresize(self.vm_disk_path(vm), new_size_gib)
+            lvresize(self.vm_disk_path(domain.name()), new_size_gib)
 
         self._vm_set_disk_size_gib(vm, new_size_gib)
 
     def create_vm_storage(self, vm, tx=None):
         """Allocate storage for a VM. Returns the disk path."""
-        assert vm not in self._disk_path, 'Disk already created?'
-
-        self._disk_path[vm] = create_storage(self, vm)
+        create_storage(self, vm)
         if tx:
-            tx.on_rollback('destroy storage', self.destroy_vm_storage, vm)
-        return self._disk_path[vm]
-
-    def rename_vm_storage(self, vm, new_name):
-        with self.fabric_settings():
-            lvrename(self.vm_disk_path(vm), new_name)
+            tx.on_rollback(
+                'destroy storage', lvremove, self, self.vm_disk_path(vm.fqdn)
+            )
 
     def format_vm_storage(self, vm, tx=None):
         """Create new filesystem for VM and mount it. Returns mount path."""
-        assert vm not in self._mount_path, 'Filesystem is already mounted'
 
         if self.vm_defined(vm):
             raise InvalidStateError(
@@ -305,7 +302,7 @@ class Hypervisor(Host):
                 .format(vm.fqdn)
             )
 
-        format_storage(self, self.vm_disk_path(vm))
+        format_storage(self, self.vm_disk_path(vm.fqdn))
         return self.mount_vm_storage(vm, tx)
 
     def mount_vm_storage(self, vm, tx=None):
@@ -319,7 +316,7 @@ class Hypervisor(Host):
             )
 
         self._mount_path[vm] = mount_temp(
-            self, self.vm_disk_path(vm), suffix=('-' + vm.fqdn)
+            self, self.vm_disk_path(vm.fqdn), suffix=('-' + vm.fqdn)
         )
         if tx:
             tx.on_rollback('unmount storage', self.umount_vm_storage, vm)
@@ -333,16 +330,6 @@ class Hypervisor(Host):
         remove_temp(self, self._mount_path[vm])
         del self._mount_path[vm]
 
-    def destroy_vm_storage(self, vm):
-        """Delete logical volume of a VM."""
-        if self.vm_defined(vm):
-            raise InvalidStateError(
-                'Refusing to delete storage of defined VM "{}".'
-                .format(vm.fqdn)
-            )
-        remove_logical_volume(self, self.vm_disk_path(vm))
-        del self._disk_path[vm]
-
     def vm_sync_from_hypervisor(self, vm):
         """Synchronizes serveradmin information from the actual data on
         the hypervisor. Returns a dict with all collected values."""
@@ -352,9 +339,6 @@ class Hypervisor(Host):
         domain = self._get_domain(vm)
         for lv in lvs:
             if lv['name'] == domain.name():
-                assert self._disk_path.get(vm, lv['path']) == lv['path'], \
-                    'Inconsistent LV path'
-                self._disk_path[vm] = lv['path']
                 result['disk_size_gib'] = int(math.ceil(lv['size_MiB'] / 1024))
                 break
         else:
@@ -427,10 +411,24 @@ class Hypervisor(Host):
                 'configuration (different VLAN).'
             )
 
-    def vm_migrate_online(self, vm, hypervisor):
-        """Online-migrate a VM to the given destination hypervisor"""
-        self.check_migration(vm, hypervisor, offline=False)
-        migrate_live(self, hypervisor, vm, self._get_domain(vm))
+    def migrate_vm(self, vm, target_hypervisor, offline, tx):
+        """Migrate a VM to the given destination hypervisor"""
+        self.check_migration(vm, target_hypervisor, offline)
+        if offline:
+            domain = self._get_domain(vm)
+            nc_listener = netcat_to_device(
+                target_hypervisor, self.vm_disk_path(vm.fqdn), tx
+            )
+            device_to_netcat(
+                self,
+                self.vm_disk_path(domain.name()),
+                vm.server_obj['disk_size_gib'] * 1024**3,
+                nc_listener,
+                tx,
+            )
+            target_hypervisor.define_vm(vm, tx)
+        else:
+            migrate_live(self, target_hypervisor, vm, self._get_domain(vm))
 
     def total_vm_memory(self):
         """Get amount of memory in MiB available to hypervisor"""
@@ -469,18 +467,11 @@ class Hypervisor(Host):
         domain = self._get_domain(vm)
         self.run(
             'virsh blockresize --path {} --size {}GiB {}'
-            .format(self.vm_disk_path(vm), disk_size_gib, domain.name())
+            .format(
+                self.vm_disk_path(domain.name()), disk_size_gib, domain.name()
+            )
         )
         vm.run('xfs_growfs /')
-
-    def _define_vm(self, vm, tx):
-        domain_xml = generate_domain_xml(self, vm)
-        self.conn.defineXML(domain_xml)
-
-        # Refresh storage pools to register the vm image
-        for pool_name in self.conn.listStoragePools():
-            pool = self.conn.storagePoolLookupByName(pool_name)
-            pool.refresh(0)
 
     def start_vm(self, vm):
         log.info('Starting "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
@@ -514,21 +505,33 @@ class Hypervisor(Host):
                 'Unable to force-stop "{}".'.format(vm.fqdn)
             )
 
-    def redefine_vm(self, vm):
-        domain = self._get_domain(vm)
-        self.undefine_vm(vm)
-        if domain.name() != vm.fqdn:
-            self.rename_vm_storage(vm, vm.fqdn)
-        self.define_vm(vm)
-
-    def undefine_vm(self, vm):
+    def delete_vm(self, vm, keep_storage=False):
         if self.vm_running(vm):
             raise InvalidStateError(
                 'Refusing to undefine running VM "{}"'.format(vm.fqdn)
             )
         log.info('Undefining "{}" on "{}"'.format(vm.fqdn, self.fqdn))
-        if self._get_domain(vm).undefine() != 0:
+        domain = self._get_domain(vm)
+        if domain.undefine() != 0:
             raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
+        if not keep_storage:
+            lvremove(self, self.vm_disk_path(domain.name()))
+
+    def redefine_vm(self, vm):
+        domain = self._get_domain(vm)
+        self.delete_vm(vm, keep_storage=True)
+        if domain.name() != vm.fqdn:
+            with self.fabric_settings():
+                lvrename(self.vm_disk_path(domain.name()), vm.fqdn)
+        self.define_vm(vm)
+
+    def rename_vm(self, vm, new_fqdn):
+        domain = self._get_domain(vm)
+        self.delete_vm(vm, keep_storage=True)
+        with self.fabric_settings():
+            lvrename(self.vm_disk_path(domain.name()), new_fqdn)
+        vm.fqdn = new_fqdn
+        self.define_vm(vm)
 
     def _vm_sync_from_hypervisor(self, vm, result):
         vm_info = self._get_domain(vm).info()

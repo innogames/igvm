@@ -154,13 +154,6 @@ class VM(Host):
     def is_running(self):
         return self.hypervisor.vm_running(self)
 
-    def undefine(self):
-        log.debug(
-            'Undefining "{}" on "{}"...'
-            .format(self.fqdn, self.hypervisor.fqdn)
-        )
-        self.hypervisor.undefine_vm(self)
-
     def wait_for_running(self, running=True, timeout=60):
         """
         Waits for the VM to enter the given running state.
@@ -324,12 +317,9 @@ class VM(Host):
         self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
 
         self.shutdown(tx=tx)
-        self.hypervisor.undefine_vm(self)
-        self.hypervisor.rename_vm_storage(self, new_fqdn)
+        self.hypervisor.rename_vm(self, new_hostname)
 
         self.server_obj['hostname'] = new_hostname
         self.server_obj.commit()
 
-        new = VM(new_hostname)
-        new.hypervisor.define_vm(new, tx=tx)
-        new.start(tx=tx)
+        self.start(tx=tx)
