@@ -6,12 +6,10 @@ import math
 from fabric.api import run
 
 from igvm.exceptions import StorageError
+from igvm.settings import VG_NAME, RESERVED_DISK
 from igvm.utils import cmd
 
 log = logging.getLogger(__name__)
-
-VG_NAME = 'xen-data'
-RESERVED_DISK = 5.0
 
 
 def get_logical_volumes(host):
@@ -32,22 +30,7 @@ def get_logical_volumes(host):
     return lvolumes
 
 
-def get_vm_volume(hypervisor, vm):
-    """Return the path of the LV belonging to the given VM"""
-    for lv in get_logical_volumes(hypervisor):
-        if lv['name'] == vm.hostname:
-            disk_size = vm.server_obj['disk_size_gib']
-            if disk_size != int(math.ceil(lv['size_MiB'] / 1024)):
-                raise StorageError(
-                    "Server disk_size_gib {0} on Serveradmin doesn't "
-                    'match the volume size {1} MiB.'
-                    .format(disk_size, lv['size_MiB'])
-                )
-            return lv['path']
-    raise StorageError('Unable to find source LV of {}'.format(vm.hostname))
-
-
-def remove_logical_volume(host, lv):
+def lvremove(host, lv):
     host.run(cmd('lvremove -f {0}', lv))
 
 
@@ -82,10 +65,9 @@ def create_storage(hypervisor, vm):
     hypervisor.run(cmd(
         'lvcreate -L {0}g -n {1} {2}',
         disk_size_gib,
-        vm.hostname,
+        vm.fqdn,
         VG_NAME,
     ))
-    return '/dev/{}/{}'.format(VG_NAME, vm.hostname)
 
 
 def mount_temp(host, device, suffix=''):
@@ -138,7 +120,7 @@ def netcat_to_device(host, device, tx=None):
     )
     if tx:
         tx.on_rollback('kill netcat', _kill_netcat, host, port)
-    return (host.hostname, port)
+    return host.fqdn, port
 
 
 def device_to_netcat(host, device, size, listener, tx=None):

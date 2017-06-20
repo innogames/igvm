@@ -5,7 +5,12 @@ import uuid
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
 
-import libvirt
+from libvirt import (
+    VIR_DOMAIN_VCPU_MAXIMUM,
+    VIR_DOMAIN_AFFECT_LIVE,
+    VIR_DOMAIN_AFFECT_CONFIG,
+    libvirtError,
+)
 
 from igvm.exceptions import (
     HypervisorError,
@@ -15,6 +20,7 @@ from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
     MAC_ADDRESS_PREFIX,
+    VG_NAME,
 )
 from igvm.utils.units import parse_size
 
@@ -101,7 +107,7 @@ class DomainProperties(object):
         self.uuid = domain.UUIDString()
         self.hugepages = tree.find('memoryBacking/hugepages') is not None
         self.num_nodes = max(len(tree.findall('cpu/numa/cell')), 1)
-        self.max_cpus = domain.vcpusFlags(libvirt.VIR_DOMAIN_VCPU_MAXIMUM)
+        self.max_cpus = domain.vcpusFlags(VIR_DOMAIN_VCPU_MAXIMUM)
         self.mem_hotplug = tree.find('maxMemory') is not None
 
         memballoon = tree.find('devices/memballoon')
@@ -130,7 +136,10 @@ class DomainProperties(object):
         elif all(all(p for p in pcpus) for pcpus in domain.vcpuPinInfo()):
             self.numa_mode = self.NUMA_UNBOUND
         else:
-            log.warning('KVM: Cannot determine NUMA of {}'.format(vm.hostname))
+            log.warning(
+                'Cannot determine NUMA of "{}" for KVM.'
+                .format(vm.fqdn)
+            )
             self.numa_node = self.NUMA_UNKNOWN
         return self
 
@@ -155,11 +164,9 @@ def set_vcpus(hypervisor, vm, domain, num_cpu):
 
     try:
         domain.setVcpusFlags(
-            num_cpu,
-            libvirt.VIR_DOMAIN_AFFECT_LIVE |
-            libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+            num_cpu, VIR_DOMAIN_AFFECT_LIVE | VIR_DOMAIN_AFFECT_CONFIG
         )
-    except libvirt.libvirtError as e:
+    except libvirtError as e:
         raise HypervisorError('setVcpus failed: {}'.format(e))
 
     # Properly pin all new VCPUs
@@ -219,7 +226,7 @@ def migrate_live(source, destination, vm, domain):
         ' --change-protection'
         # Force convergence, # otherwise migrations never end
         ' --auto-converge'
-        ' --domain {vm_hostname}'
+        ' --domain {domain}'
         # Don't tolerate soft errors
         ' --abort-on-error'
         # We need SSH agent forwarding
@@ -238,15 +245,14 @@ def migrate_live(source, destination, vm, domain):
         min(source.num_cpus, destination.num_cpus),
     )
 
-    source.accept_ssh_hostkey(destination)
     source.run(migrate_cmd.format(
-        vm_hostname=vm.hostname,
-        destination=destination.hostname,
+        domain=domain.name(),
+        destination=destination.fqdn,
         timeout=timeout,
     ))
 
     # And pin again, in case we migrated to a host with more physical cores
-    domain = destination._domain(vm)
+    domain = destination._get_domain(vm)
     _live_repin_cpus(domain, props, destination.num_cpus)
 
 
@@ -259,11 +265,10 @@ def set_memory(hypervisor, vm, domain, memory_mib):
         try:
             domain.setMemoryFlags(
                 memory_mib * 1024,
-                libvirt.VIR_DOMAIN_AFFECT_LIVE |
-                libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+                VIR_DOMAIN_AFFECT_LIVE | VIR_DOMAIN_AFFECT_CONFIG,
             )
             return
-        except libvirt.libvirtError:
+        except libvirtError:
             log.info(
                 'virsh setmem failed, falling back to hotplug'
             )
@@ -279,9 +284,9 @@ def set_memory(hypervisor, vm, domain, memory_mib):
         return
 
     raise HypervisorError(
-        '{} does not support any known memory extension strategy. '
+        '"{}" does not support any known memory extension strategy. '
         'You will have to power off the machine and do it offline.'
-        .format(vm.hostname)
+        .format(vm.fqdn)
     )
 
 
@@ -303,8 +308,7 @@ def _attach_memory_dimms(vm, domain, props, memory_mib):
         )
 
         domain.attachDeviceFlags(
-            xml,
-            libvirt.VIR_DOMAIN_AFFECT_LIVE | libvirt.VIR_DOMAIN_AFFECT_CONFIG,
+            xml, VIR_DOMAIN_AFFECT_LIVE | VIR_DOMAIN_AFFECT_CONFIG
         )
 
     log.info(
@@ -336,8 +340,10 @@ def generate_domain_xml(hypervisor, vm):
     props = DomainProperties(hypervisor, vm)
 
     config = {
-        'disk_device': hypervisor.vm_disk_path(vm),
-        'serveradmin': vm.server_obj,
+        'disk_device': '/dev/{}/{}'.format(VG_NAME, vm.fqdn),
+        'fqdn': vm.fqdn,
+        'memory': vm.server_obj['memory'],
+        'num_cpu': vm.server_obj['num_cpu'],
         'props': props,
         'vlan_tag': hypervisor.vlan_for_vm(vm),
     }

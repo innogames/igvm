@@ -40,7 +40,7 @@ class InconsistentAttributeError(IGVMError):
     """An attribute on the VM differs from the excepted value from
     Serveradmin."""
     def __init__(self, vm, attribute, actual_value):
-        self.hostname = vm.hostname
+        self.fqdn = vm.fqdn
         self.attribute = attribute
         self.actual_value = actual_value
         self.config_value = vm.server_obj[attribute]
@@ -48,11 +48,11 @@ class InconsistentAttributeError(IGVMError):
 
     def __str__(self):
         return (
-            'Attribute "{}" on {} is out of sync: '
+            'Attribute "{}" on "{}" is out of sync: '
             '{} (config) != {} (actual)'
             .format(
                 self.attribute,
-                self.hostname,
+                self.fqdn,
                 self.config_value,
                 self.actual_value,
             )

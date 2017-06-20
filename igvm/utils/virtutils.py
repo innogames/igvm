@@ -1,25 +1,21 @@
-import libvirt
+from libvirt import open as libvirt_open, libvirtError
+
 
 _conns = {}
 
 
-def get_virtconn(host, hypervisor):
-    if hypervisor != 'kvm':
-        raise ValueError('Only kvm is supported for now')
-
-    index = (hypervisor, host)
-    if index not in _conns:
-        url = 'qemu+ssh://{0}/system'.format(host)
-        _conns[index] = libvirt.open(url)
-
-    return _conns[index]
+def get_virtconn(fqdn):
+    if fqdn not in _conns:
+        url = 'qemu+ssh://{}/system'.format(fqdn)
+        _conns[fqdn] = libvirt_open(url)
+    return _conns[fqdn]
 
 
 def close_virtconns():
-    print "Here I'd kill the connection to Hypervisor, but I will not."
-    print "Ask Henning why do we do it and why it fails on Basti's scripts."
-#    for conn in _conns.values():
-#        try:
-#            conn.close()
-#        except libvirt.libvirtError:
-#            pass
+    for fqdn in _conns.keys():
+        conn = _conns[fqdn]
+        try:
+            conn.close()
+        except libvirtError:
+            pass
+        del _conns[fqdn]

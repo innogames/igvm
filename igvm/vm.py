@@ -32,11 +32,12 @@ class VM(Host):
     """VM interface."""
     servertype = 'vm'
 
-    def __init__(self, vm_server_obj, hypervisor=None, ignore_reserved=False):
-        super(VM, self).__init__(vm_server_obj)
+    def __init__(self, server_name_or_obj, ignore_reserved=False,
+                 hypervisor=None):
+        super(VM, self).__init__(server_name_or_obj, ignore_reserved)
 
         if not hypervisor:
-            hypervisor = Hypervisor.get(
+            hypervisor = Hypervisor(
                 self.server_obj['xen_host'], ignore_reserved
             )
         else:
@@ -54,15 +55,15 @@ class VM(Host):
         self.network_config = get_network_config(self.server_obj)
 
         if old_ip != new_ip:
-            log.info((
-                '{0} networking changed: '
-                'IP address {1}, VLAN {2} ({3})')
+            log.info(
+                '"{0}" networking changed to IP address {1}, VLAN {2} ({3}).'
                 .format(
-                    self.hostname,
+                    self.fqdn,
                     new_ip,
                     self.network_config['vlan_name'],
                     self.network_config['vlan_tag'],
-            ))
+                )
+            )
 
     def set_state(self, new_state, tx=None):
         """Changes state of VM for LB and Nagios downtimes"""
@@ -146,18 +147,12 @@ class VM(Host):
         self.hypervisor.stop_vm(self)
         if not self.wait_for_running(running=False):
             self.hypervisor.stop_vm_force(self)
-        self.disconnect()
 
         if tx:
             tx.on_rollback('start VM', self.start)
 
     def is_running(self):
         return self.hypervisor.vm_running(self)
-
-    def undefine(self):
-        log.debug('Undefining {} on {}'.format(
-            self.hostname, self.hypervisor.hostname))
-        self.hypervisor.undefine_vm(self)
 
     def wait_for_running(self, running=True, timeout=60):
         """
@@ -166,8 +161,10 @@ class VM(Host):
         """
         action = 'boot' if running else 'shutdown'
         for i in range(timeout, 1, -1):
-            print("Waiting for VM {} to {}... {}s".format(
-                self.hostname, action, i))
+            print(
+                'Waiting for VM "{}" to {}... {} s'
+                .format(self.fqdn, action, i)
+            )
             if self.hypervisor.vm_running(self) == running:
                 return True
             time.sleep(1)
@@ -179,7 +176,7 @@ class VM(Host):
         result = {}
         for line in contents.splitlines():
             try:
-                (key, value) = [tok.strip() for tok in line.split(':')]
+                key, value = [tok.strip() for tok in line.split(':')]
             except IndexError:
                 continue
             result[key] = value
@@ -210,7 +207,7 @@ class VM(Host):
 
     def info(self):
         result = {
-            'hypervisor': self.hypervisor.hostname,
+            'hypervisor': self.hypervisor.fqdn,
             'intern_ip': self.server_obj['intern_ip'],
             'num_cpu': self.server_obj['num_cpu'],
             'memory': self.server_obj['memory'],
@@ -293,7 +290,7 @@ class VM(Host):
             self.run('/buildvm-postboot')
             self.run('rm -f /buildvm-postboot')
 
-        log.info('{} successfully built.'.format(self.hostname))
+        log.info('"{}" is successfully built.'.format(self.fqdn))
 
     @run_in_transaction
     def rename(self, new_hostname, tx=None):
@@ -320,12 +317,9 @@ class VM(Host):
         self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
 
         self.shutdown(tx=tx)
-        self.hypervisor.undefine_vm(self)
-        self.hypervisor.rename_vm_storage(self, new_hostname)
+        self.hypervisor.rename_vm(self, new_hostname)
 
         self.server_obj['hostname'] = new_hostname
         self.server_obj.commit()
 
-        new = VM(new_hostname)
-        new.hypervisor.define_vm(new, tx=tx)
-        new.start(tx=tx)
+        self.start(tx=tx)

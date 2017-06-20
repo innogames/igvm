@@ -73,27 +73,21 @@ def _reset_vm(**kwargs):
     vm.server_obj.update(kwargs)
     vm.server_obj.commit()
     # Might have changed!
-    vm.hypervisor = Hypervisor.get(vm.server_obj['xen_host'])
+    vm.hypervisor = Hypervisor(vm.server_obj['xen_host'])
     return vm
 
 
-def _clean_vm(hv, hostname):
-    if hv.server_obj['hypervisor'] == 'kvm':
-        hv.run(
-            'virsh destroy {vm}; '
-            'virsh undefine {vm}'
-            .format(vm=hostname),
-            warn_only=True,
-        )
-    else:
-        raise NotImplementedError(
-            'Not sure how to clean {} HV'
-            .format(hv.server_obj['hypervisor'])
-        )
+def _clean_vm(hv, fqdn):
+    hv.run(
+        'virsh destroy {vm}; '
+        'virsh undefine {vm}'
+        .format(vm=fqdn),
+        warn_only=True,
+    )
     hv.run(
         'umount /dev/xen-data/{vm}; '
         'lvremove -f /dev/xen-data/{vm}'
-        .format(vm=hostname),
+        .format(vm=fqdn),
         warn_only=True,
     )
 
@@ -110,9 +104,7 @@ class IGVMTest(unittest.TestCase):
 
     def _check_absent(self, hv, vm):
         self.assertEqual(hv.vm_defined(vm), False)
-        with self.assertRaises(IGVMError):
-            hv.vm_disk_path(vm)
-        hv.run('test ! -b /dev/xen-data/{}'.format(vm.hostname))
+        hv.run('test ! -b /dev/xen-data/{}'.format(vm.fqdn))
 
 
 class BuildTest(object):
@@ -121,18 +113,19 @@ class BuildTest(object):
         _check_environment()
 
     def tearDown(self):
-        _clean_vm(self.hv, self.vm.hostname)
+        _clean_vm(self.hv, self.vm.fqdn)
 
     def test_simple(self):
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
-        self.assertEqual(self.vm.hypervisor.hostname, self.hv.hostname)
+        self.assertEqual(self.vm.hypervisor.fqdn, self.hv.fqdn)
         self._check_vm(self.hv, self.vm)
 
     def test_local_image(self):
-        buildvm(self.vm.hostname, localimage='/root/jessie-localimage.tar.gz')
+        buildvm(self.vm.server_obj['hostname'],
+                localimage='/root/jessie-localimage.tar.gz')
 
-        self.assertEqual(self.vm.hypervisor.hostname, self.hv.hostname)
+        self.assertEqual(self.vm.hypervisor.fqdn, self.hv.fqdn)
         self._check_vm(self.hv, self.vm)
 
         # The file is to be created by `echo 42 > /root/local_image_canary`
@@ -144,22 +137,22 @@ class BuildTest(object):
             f.write('echo hello > /root/postboot_result')
             f.flush()
 
-            buildvm(self.vm.hostname, postboot=f.name)
-            self.assertEqual(self.vm.hypervisor.hostname, self.hv.hostname)
+            buildvm(self.vm.server_obj['hostname'], postboot=f.name)
+            self.assertEqual(self.vm.hypervisor.fqdn, self.hv.fqdn)
             self._check_vm(self.hv, self.vm)
 
             output = self.vm.run('cat /root/postboot_result')
             self.assertIn('hello', output)
 
     def test_delete(self):
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
         # Fails while VM is powered on
         with self.assertRaises(IGVMError):
-            vm_delete(self.vm.hostname)
+            vm_delete(self.vm.server_obj['hostname'])
 
         self.vm.shutdown()
-        vm_delete(self.vm.hostname)
+        vm_delete(self.vm.server_obj['hostname'])
 
         self._check_absent(self.hv, self.vm)
 
@@ -168,7 +161,7 @@ class BuildTest(object):
         self.vm.server_obj.commit()
 
         with self.assertRaises(IGVMError):
-            buildvm(self.vm.hostname)
+            buildvm(self.vm.server_obj['hostname'])
 
         # Have we cleaned up?
         self._check_absent(self.hv, self.vm)
@@ -181,18 +174,18 @@ class BuildTest(object):
             cmd('dd if=/dev/urandom of={} bs=1M count=10 seek=5', image)
         )
 
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
     def test_image_missing(self):
         image = '{}-base.tar.gz'.format(self.vm.server_obj['os'])
         self.hv.run(cmd('rm -f {}', image))
 
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
     def test_rebuild(self):
         # Not yet built.
         with self.assertRaises(IGVMError):
-            vm_rebuild(self.vm.hostname)
+            vm_rebuild(self.vm.server_obj['hostname'])
 
         self.vm.build()
 
@@ -201,11 +194,11 @@ class BuildTest(object):
 
         # Fails while online
         with self.assertRaises(IGVMError):
-            vm_rebuild(self.vm.hostname)
+            vm_rebuild(self.vm.server_obj['hostname'])
 
         self.vm.shutdown()
 
-        vm_rebuild(self.vm.hostname)
+        vm_rebuild(self.vm.server_obj['hostname'])
         self.vm.reload()
         self._check_vm(self.hv, self.vm)
 
@@ -217,9 +210,9 @@ class BuildTest(object):
 class KVMBuildTest(IGVMTest, BuildTest):
     def setUp(self):
         BuildTest.setUp(self)
-        self.hv = Hypervisor.get(HV1)
+        self.hv = Hypervisor(HV1)
         self.vm = _reset_vm()
-        _clean_vm(self.hv, self.vm.hostname)
+        _clean_vm(self.hv, self.vm.fqdn)
 
 
 class CommandTest(object):
@@ -228,33 +221,33 @@ class CommandTest(object):
         _check_environment()
 
     def tearDown(self):
-        _clean_vm(self.hv, self.vm.hostname)
+        _clean_vm(self.hv, self.vm.fqdn)
 
     def test_start_stop(self):
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
         # Doesn't fail, but should print a message
-        vm_start(self.vm.hostname)
+        vm_start(self.vm.server_obj['hostname'])
         self._check_vm(self.hv, self.vm)
 
-        vm_restart(self.vm.hostname)
+        vm_restart(self.vm.server_obj['hostname'])
         self._check_vm(self.hv, self.vm)
 
-        vm_stop(self.vm.hostname)
+        vm_stop(self.vm.server_obj['hostname'])
         self.assertEqual(self.vm.is_running(), False)
 
-        vm_start(self.vm.hostname)
+        vm_start(self.vm.server_obj['hostname'])
         self.assertEqual(self.vm.is_running(), True)
 
-        vm_stop(self.vm.hostname, force=True)
+        vm_stop(self.vm.server_obj['hostname'], force=True)
         self.assertEqual(self.vm.is_running(), False)
-        vm_start(self.vm.hostname)
+        vm_start(self.vm.server_obj['hostname'])
 
-        vm_restart(self.vm.hostname, force=True)
+        vm_restart(self.vm.server_obj['hostname'], force=True)
         self._check_vm(self.hv, self.vm)
 
     def test_disk_set(self):
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
         def _get_hv():
             return self.hv.vm_sync_from_hypervisor(self.vm)['disk_size_gib']
@@ -267,14 +260,14 @@ class CommandTest(object):
         self.assertEqual(_get_hv(), 6)
         self.assertEqual(_get_vm(), 6)
 
-        disk_set(self.vm.hostname, '+1')
+        disk_set(self.vm.server_obj['hostname'], '+1')
         self.vm.reload()
 
         self.assertEqual(self.vm.server_obj['disk_size_gib'], 7)
         self.assertEqual(_get_hv(), 7)
         self.assertEqual(_get_vm(), 7)
 
-        disk_set(self.vm.hostname, '8GB')
+        disk_set(self.vm.server_obj['hostname'], '8GB')
         self.vm.reload()
 
         self.assertEqual(self.vm.server_obj['disk_size_gib'], 8)
@@ -282,16 +275,16 @@ class CommandTest(object):
         self.assertEqual(_get_vm(), 8)
 
         with self.assertRaises(Warning):
-            disk_set(self.vm.hostname, '8GB')
+            disk_set(self.vm.server_obj['hostname'], '8GB')
 
         with self.assertRaises(NotImplementedError):
-            disk_set(self.vm.hostname, '7GB')
+            disk_set(self.vm.server_obj['hostname'], '7GB')
 
         with self.assertRaises(NotImplementedError):
-            disk_set(self.vm.hostname, '-1')
+            disk_set(self.vm.server_obj['hostname'], '-1')
 
     def test_mem_set(self):
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
         def _get_mem_hv():
             # Xen does not provide values when VM is powered off
@@ -306,25 +299,25 @@ class CommandTest(object):
         # Online
         self.assertEqual(_get_mem_hv(), 2048)
         vm_mem = _get_mem_vm()
-        mem_set(self.vm.hostname, '+1G')
+        mem_set(self.vm.server_obj['hostname'], '+1G')
         self.vm.reload()
         self.assertEqual(_get_mem_hv(), 3072)
         self.assertEqual(_get_mem_vm() - vm_mem, 1024)
 
         with self.assertRaises(Warning):
-            mem_set(self.vm.hostname, '3G')
+            mem_set(self.vm.server_obj['hostname'], '3G')
 
         if self.hv.server_obj['hypervisor'] == 'kvm':
             with self.assertRaises(InvalidStateError):
-                mem_set(self.vm.hostname, '2G')
+                mem_set(self.vm.server_obj['hostname'], '2G')
 
         with self.assertRaises(IGVMError):
-            mem_set(self.vm.hostname, '200G')
+            mem_set(self.vm.server_obj['hostname'], '200G')
 
         if self.hv.server_obj['hypervisor'] == 'kvm':
             # Not dividable
             with self.assertRaises(IGVMError):
-                mem_set(self.vm.hostname, '4097M')
+                mem_set(self.vm.server_obj['hostname'], '4097M')
 
         self.vm.reload()
         self.assertEqual(_get_mem_hv(), 3072)
@@ -332,20 +325,20 @@ class CommandTest(object):
         self.vm.shutdown()
 
         with self.assertRaises(IGVMError):
-            mem_set(self.vm.hostname, '200G')
+            mem_set(self.vm.server_obj['hostname'], '200G')
 
-        mem_set(self.vm.hostname, '1024M')
+        mem_set(self.vm.server_obj['hostname'], '1024M')
         self.vm.reload()
         self.assertEqual(_get_mem_hv(), 1024)
 
-        mem_set(self.vm.hostname, '2G')
+        mem_set(self.vm.server_obj['hostname'], '2G')
         self.vm.reload()
         self.assertEqual(_get_mem_hv(), 2048)
         self.vm.start()
         self.assertEqual(_get_mem_vm() - vm_mem, -1024)
 
     def test_vcpu_set(self):
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
         def _get_hv():
             # Xen does not provide values when VM is powered off
@@ -361,7 +354,7 @@ class CommandTest(object):
         self.assertEqual(_get_hv(), 2)
         self.assertEqual(_get_vm(), 2)
         self.assertEqual(self.vm.server_obj['num_cpu'], 2)
-        vcpu_set(self.vm.hostname, 3)
+        vcpu_set(self.vm.server_obj['hostname'], 3)
         self.assertEqual(_get_hv(), 3)
         self.assertEqual(_get_vm(), 3)
 
@@ -369,33 +362,33 @@ class CommandTest(object):
         self.assertEqual(self.vm.server_obj['num_cpu'], 3)
 
         with self.assertRaises(Warning):
-            vcpu_set(self.vm.hostname, 3)
+            vcpu_set(self.vm.server_obj['hostname'], 3)
 
         # Online reduce not implemented yet on KVM
         if self.hv.server_obj['hypervisor'] == 'kvm':
             with self.assertRaises(IGVMError):
-                vcpu_set(self.vm.hostname, 2)
+                vcpu_set(self.vm.server_obj['hostname'], 2)
 
         # Offline
-        vcpu_set(self.vm.hostname, 2, offline=True)
+        vcpu_set(self.vm.server_obj['hostname'], 2, offline=True)
         self.assertEqual(_get_hv(), 2)
         self.assertEqual(_get_vm(), 2)
 
         # Impossible amount
         with self.assertRaises(IGVMError):
-            vcpu_set(self.vm.hostname, 9001)
+            vcpu_set(self.vm.server_obj['hostname'], 9001)
 
         with self.assertRaises(IGVMError):
-            vcpu_set(self.vm.hostname, 0, offline=True)
+            vcpu_set(self.vm.server_obj['hostname'], 0, offline=True)
 
         with self.assertRaises(IGVMError):
-            vcpu_set(self.vm.hostname, -5)
+            vcpu_set(self.vm.server_obj['hostname'], -5)
 
         with self.assertRaises(IGVMError):
-            vcpu_set(self.vm.hostname, -5, offline=True)
+            vcpu_set(self.vm.server_obj['hostname'], -5, offline=True)
 
     def test_sync(self):
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
         expected_disk_size = self.vm.server_obj['disk_size_gib']
         self.vm.server_obj['disk_size_gib'] += 10
@@ -407,7 +400,7 @@ class CommandTest(object):
         self.vm.reload()
         self.assertEqual(self.vm.server_obj['memory'], expected_memory + 1024)
 
-        vm_sync(self.vm.hostname)
+        vm_sync(self.vm.server_obj['hostname'])
         self.vm.reload()
 
         self.assertEqual(self.vm.server_obj['memory'], expected_memory)
@@ -417,33 +410,33 @@ class CommandTest(object):
         )
 
         # Shouldn't do anything, but also shouldn't fail
-        vm_sync(self.vm.hostname)
+        vm_sync(self.vm.server_obj['hostname'])
         self.vm.reload()
 
     def test_info(self):
         # Not built
-        host_info(self.vm.hostname)
+        host_info(self.vm.server_obj['hostname'])
 
-        buildvm(self.vm.hostname)
-        host_info(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
+        host_info(self.vm.server_obj['hostname'])
 
         self.vm.shutdown()
-        host_info(self.vm.hostname)
+        host_info(self.vm.server_obj['hostname'])
 
     def test_redefine(self):
         # Not built
         with self.assertRaises(IGVMError):
-            vm_redefine(self.vm.hostname)
+            vm_redefine(self.vm.server_obj['hostname'])
 
-        buildvm(self.vm.hostname)
+        buildvm(self.vm.server_obj['hostname'])
 
         # Running
-        vm_redefine(self.vm.hostname)
+        vm_redefine(self.vm.server_obj['hostname'])
         self._check_vm(self.hv, self.vm)
 
         # Stopped
-        vm_stop(self.vm.hostname)
-        vm_redefine(self.vm.hostname)
+        vm_stop(self.vm.server_obj['hostname'])
+        vm_redefine(self.vm.server_obj['hostname'])
 
         self.assertEqual(self.vm.is_running(), False)
 
@@ -451,9 +444,9 @@ class CommandTest(object):
 class KVMCommandTest(IGVMTest, CommandTest):
     def setUp(self):
         CommandTest.setUp(self)
-        self.hv = Hypervisor.get(HV1)
+        self.hv = Hypervisor(HV1)
         self.vm = _reset_vm()
-        _clean_vm(self.hv, self.vm.hostname)
+        _clean_vm(self.hv, self.vm.fqdn)
 
 
 class MigrationTest(IGVMTest):
@@ -462,18 +455,18 @@ class MigrationTest(IGVMTest):
         adminapi.auth()
         _check_environment()
 
-        cls.hv1 = Hypervisor.get(HV1)
-        cls.hv2 = Hypervisor.get(HV2)
+        cls.hv1 = Hypervisor(HV1)
+        cls.hv2 = Hypervisor(HV2)
         cls.vm = _reset_vm()
 
-        _clean_vm(cls.hv1, cls.vm.hostname)
-        _clean_vm(cls.hv2, cls.vm.hostname)
-        buildvm(cls.vm.hostname)
+        _clean_vm(cls.hv1, cls.vm.fqdn)
+        _clean_vm(cls.hv2, cls.vm.fqdn)
+        buildvm(cls.vm.server_obj['hostname'])
 
     @classmethod
     def tearDownClass(cls):
-        _clean_vm(cls.hv1, cls.vm.hostname)
-        _clean_vm(cls.hv2, cls.vm.hostname)
+        _clean_vm(cls.hv1, cls.vm.fqdn)
+        _clean_vm(cls.hv2, cls.vm.fqdn)
 
     def setUp(self):
         # Make sure we have a clean initial state
@@ -485,25 +478,25 @@ class MigrationTest(IGVMTest):
         self._check_absent(self.hv2, self.vm)
 
     def test_online_migration(self):
-        migratevm(self.vm.hostname, HV2)
+        migratevm(self.vm.server_obj['hostname'], HV2)
         self.vm.reload()
         self._check_vm(self.hv2, self.vm)
         self._check_absent(self.hv1, self.vm)
 
         # And back again
-        migratevm(self.vm.hostname, HV1)
+        migratevm(self.vm.server_obj['hostname'], HV1)
         self.vm.reload()
         self._check_vm(self.hv1, self.vm)
         self._check_absent(self.hv2, self.vm)
 
     def test_offline_migration(self):
-        migratevm(self.vm.hostname, HV2, offline=True)
+        migratevm(self.vm.server_obj['hostname'], HV2, offline=True)
         self.vm.reload()
         self._check_vm(self.hv2, self.vm)
         self._check_absent(self.hv1, self.vm)
 
         # And back again
-        migratevm(self.vm.hostname, HV1, offline=True)
+        migratevm(self.vm.server_obj['hostname'], HV1, offline=True)
         self.vm.reload()
         self._check_vm(self.hv1, self.vm)
         self._check_absent(self.hv2, self.vm)
@@ -513,20 +506,21 @@ class MigrationTest(IGVMTest):
         self.vm.server_obj.commit()
 
         with self.assertRaises(InconsistentAttributeError):
-            migratevm(self.vm.hostname, HV2)
+            migratevm(self.vm.server_obj['hostname'], HV2)
 
     def test_reject_online_with_new_ip(self):
         with self.assertRaises(IGVMError):
-            migratevm(self.vm.hostname, HV2, newip=IP2)
+            migratevm(self.vm.server_obj['hostname'], HV2, newip=IP2)
 
     def test_reject_new_ip_without_puppet(self):
         with self.assertRaises(IGVMError):
-            migratevm(self.vm.hostname, HV2, offline=True, newip=IP2)
+            migratevm(self.vm.server_obj['hostname'], HV2, offline=True,
+                      newip=IP2)
 
     @unittest.skip("depends on automatic regeneration of ig.local domain")
     def test_new_ip(self):
         migratevm(
-            self.vm.hostname,
+            self.vm.server_obj['hostname'],
             HV2,
             offline=True,
             newip=IP2,
@@ -541,7 +535,7 @@ class MigrationTest(IGVMTest):
 
         # And back again
         migratevm(
-            self.vm.hostname,
+            self.vm.server_obj['hostname'],
             HV1,
             offline=True,
             newip=IP1,
@@ -556,14 +550,15 @@ class MigrationTest(IGVMTest):
 
     def test_reject_online_with_puppet(self):
         with self.assertRaises(IGVMError):
-            migratevm(self.vm.hostname, HV2, runpuppet=True)
+            migratevm(self.vm.server_obj['hostname'], HV2, runpuppet=True)
 
     def test_rollback(self):
         self.vm.server_obj['puppet_environment'] = 'doesnotexist'
         self.vm.server_obj.commit()
 
         with self.assertRaises(IGVMError):
-            migratevm(self.vm.hostname, HV2, offline=True, runpuppet=True)
+            migratevm(self.vm.server_obj['hostname'], HV2, offline=True,
+                      runpuppet=True)
 
         # Have we cleaned up?
         self.vm.reload()

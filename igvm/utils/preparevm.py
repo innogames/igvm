@@ -129,7 +129,7 @@ def run_puppet(hypervisor, vm, clear_cert, tx):
             'chroot . /usr/bin/puppet agent -v --fqdn={}'
             ' --server {} --ca_server {} --no-report'
             ' --waitforcert=60 --onetime --no-daemonize'
-            ' --tags=network,puppet --skip_tags=nrpe'
+            ' --tags=network,puppet,check_logfiles --skip_tags=nrpe'
             .format(
                 vm.fqdn,
                 vm.server_obj['puppet_master'],

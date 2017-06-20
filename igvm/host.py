@@ -1,12 +1,12 @@
 from StringIO import StringIO
 
-from adminapi.dataset import query, ServerObject
+from adminapi.dataset import query, filters, ServerObject
 
 import fabric.api
 import fabric.state
 
 from paramiko import transport
-from igvm.exceptions import ConfigError, RemoteCommandError
+from igvm.exceptions import ConfigError, RemoteCommandError, InvalidStateError
 from igvm.settings import COMMON_FABRIC_SETTINGS
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.network import get_network_config
@@ -15,20 +15,32 @@ from igvm.utils.network import get_network_config
 def get_server(hostname, servertype):
     """Get a server from Serveradmin by hostname and servertype
 
-    It returns the Serveradmin object.
+    The function is accepting hostnames in any length as long as it resolves
+    to a single server on Serveradmin.  It returns the adminapi Server object.
     """
 
-    # We want to return the server only, if matches with some conditions,
-    # but we are not using those conditions on the query to give better errors.
-    servers = tuple(query(hostname=hostname))
+    # We want to return the server, only if it matches with some conditions,
+    # but we are not using those conditions on the query to be able to give
+    # better errors.
+    servers = list(query(hostname=filters.Startswith(hostname)))
 
     if not servers:
-        raise ConfigError('Server "{0}" not found.'.format(hostname))
+        raise ConfigError(
+            'Server with hostname "{}" is not found.'.format(hostname)
+        )
 
-    # Hostnames are unique on the serveradmin.  The query cannot return more
-    # than one server.
-    assert len(servers) == 1
     server = servers[0]
+    for other_server in servers[1:]:
+        if other_server['servertype'] != servertype:
+            continue
+        if server['servertype'] != servertype:
+            server = other_server
+            continue
+
+        raise ConfigError(
+            'Hostname "{}" matches with multiple servers "{}" and "{}".'
+            .format(hostname, server['hostname'], other_server['hostname'])
+        )
 
     if server['servertype'] != servertype:
         raise ConfigError(
@@ -51,17 +63,24 @@ def with_fabric_settings(fn):
 class Host(object):
     """A remote host on which commands can be executed."""
 
-    def __init__(self, server_object):
-        # Support passing hostname or Serveradmin object
-        if not isinstance(server_object, ServerObject):
-            server_object = get_server(server_object, self.servertype)
-
-        self.hostname = server_object['hostname']
-        self.server_obj = server_object
-        if self.hostname.endswith('.ig.local'):
-            self.fqdn = self.hostname
+    def __init__(self, server_name_or_obj, ignore_reserved=False):
+        if isinstance(server_name_or_obj, ServerObject):
+            self.server_obj = server_name_or_obj
         else:
-            self.fqdn = self.hostname + '.ig.local'
+            self.server_obj = get_server(server_name_or_obj, self.servertype)
+
+        if self.server_obj['hostname'].endswith('.ig.local'):
+            self.fqdn = self.server_obj['hostname']
+        else:
+            self.fqdn = self.server_obj['hostname'] + '.ig.local'
+
+        if (
+            not ignore_reserved and
+            self.server_obj['state'] == 'online_reserved'
+        ):
+            raise InvalidStateError(
+                'Server "{0}" is online_reserved.'.format(self.fqdn)
+            )
 
     def fabric_settings(self, *args, **kwargs):
         """Builds a fabric context manager to run commands on this host."""
@@ -106,18 +125,15 @@ class Host(object):
             fabric.api.get(path, fd)
             return fd.getvalue()
 
-    def disconnect(self):
-        """Disconnect active Fabric sessions."""
-        if self.hostname in fabric.state.connections:
-            fabric.state.connections[self.hostname].get_transport().close()
-
     def reload(self):
         """Reloads the server object from serveradmin."""
         if self.server_obj.is_dirty():
             raise ConfigError(
                 'Serveradmin object must be committed before reloading'
             )
-        self.server_obj = get_server(self.hostname, self.servertype)
+        self.server_obj = get_server(
+            self.server_obj['hostname'], self.servertype
+        )
 
     @lazy_property  # Requires fabric call on hypervisor, evaluate lazily.
     def network_config(self):
@@ -135,9 +151,8 @@ class Host(object):
     def accept_ssh_hostkey(self, host):
         """Scans and accepts the SSH remote host key of a given host.
         NO VERIFICATION IS PERFORMED, THIS IS INSECURE!"""
-        self.run('touch .ssh/known_hosts'.format(host.hostname))
-        self.run('ssh-keygen -R {0}'.format(host.hostname))
+        self.run('ssh-keygen -R {}'.format(host.fqdn))
         self.run(
-            'ssh-keyscan -t rsa {0} >> .ssh/known_hosts'
-            .format(host.hostname)
+            'ssh-keyscan -t rsa {} >> .ssh/known_hosts'
+            .format(host.fqdn)
         )
