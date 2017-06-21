@@ -255,7 +255,7 @@ class VM(Host):
             ))
 
         # Perform operations on the hypervisor
-        self.hypervisor.create_vm_storage(self, tx)
+        self.hypervisor.create_vm_storage(self, self.fqdn, tx)
         mount_path = self.hypervisor.format_vm_storage(self, tx)
 
         with hypervisor.fabric_settings():

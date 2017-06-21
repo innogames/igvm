@@ -285,12 +285,12 @@ class Hypervisor(Host):
 
         self._vm_set_disk_size_gib(vm, new_size_gib)
 
-    def create_vm_storage(self, vm, tx=None):
+    def create_vm_storage(self, vm, name, tx=None):
         """Allocate storage for a VM. Returns the disk path."""
-        create_storage(self, vm)
+        create_storage(self, name, vm.server_obj['disk_size_gib'])
         if tx:
             tx.on_rollback(
-                'destroy storage', lvremove, self, self.vm_disk_path(vm.fqdn)
+                'destroy storage', lvremove, self, self.vm_disk_path(name)
             )
 
     def format_vm_storage(self, vm, tx=None):
@@ -414,8 +414,9 @@ class Hypervisor(Host):
     def migrate_vm(self, vm, target_hypervisor, offline, tx):
         """Migrate a VM to the given destination hypervisor"""
         self.check_migration(vm, target_hypervisor, offline)
+        domain = self._get_domain(vm)
         if offline:
-            domain = self._get_domain(vm)
+            target_hypervisor.create_vm_storage(vm, vm.fqdn, tx)
             nc_listener = netcat_to_device(
                 target_hypervisor, self.vm_disk_path(vm.fqdn), tx
             )
@@ -428,6 +429,7 @@ class Hypervisor(Host):
             )
             target_hypervisor.define_vm(vm, tx)
         else:
+            target_hypervisor.create_vm_storage(vm, domain.name(), tx)
             migrate_live(self, target_hypervisor, vm, self._get_domain(vm))
 
     def total_vm_memory(self):

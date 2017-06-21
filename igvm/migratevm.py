@@ -52,9 +52,6 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
     # setting new IP!)
     hypervisor.check_vm(vm)
 
-    # Setup destination Hypervisor
-    hypervisor.create_vm_storage(vm, tx)
-
     # Commit previously changed IP address.
     if newip:
         # TODO: This commit is not rolled back.

@@ -60,12 +60,11 @@ def get_free_disk_size_gib(hypervisor, safe=True):
     return vg_size_gib
 
 
-def create_storage(hypervisor, vm):
-    disk_size_gib = vm.server_obj['disk_size_gib']
+def create_storage(hypervisor, name, disk_size_gib):
     hypervisor.run(cmd(
         'lvcreate -L {0}g -n {1} {2}',
         disk_size_gib,
-        vm.fqdn,
+        name,
         VG_NAME,
     ))
 
