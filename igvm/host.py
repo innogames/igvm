@@ -22,7 +22,10 @@ def get_server(hostname, servertype):
     # We want to return the server, only if it matches with some conditions,
     # but we are not using those conditions on the query to be able to give
     # better errors.
-    servers = list(query(hostname=filters.Startswith(hostname)))
+    servers = list(query(hostname=filters.Or(
+        filters.ExactMatch(hostname),
+        filters.Startswith(hostname + '.'),
+    )))
 
     if not servers:
         raise ConfigError(
