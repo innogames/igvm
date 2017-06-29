@@ -154,6 +154,7 @@ class Host(object):
     def accept_ssh_hostkey(self, host):
         """Scans and accepts the SSH remote host key of a given host.
         NO VERIFICATION IS PERFORMED, THIS IS INSECURE!"""
+        self.run('touch .ssh/known_hosts')
         self.run('ssh-keygen -R {}'.format(host.fqdn))
         self.run(
             'ssh-keyscan -t rsa {} >> .ssh/known_hosts'
