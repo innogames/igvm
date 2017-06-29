@@ -18,7 +18,7 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
     """Migrate a VM to a new hypervisor."""
     assert tx is not None, 'tx populated by run_in_transaction'
 
-    vm = VM(vm_hostname)
+    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
     hypervisor = Hypervisor(
         hypervisor_hostname, ignore_reserved=ignore_reserved
     )
