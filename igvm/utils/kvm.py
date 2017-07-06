@@ -88,6 +88,20 @@ class DomainProperties(object):
         self.mem_hotplug = (self.qemu_version >= (2, 3))
         self.mem_balloon = False
         self.mac_address = _generate_mac_address(vm.server_obj['intern_ip'])
+        if vm.server_obj['os'] in ['wheezy', 'jessie']:
+            self.boot_type = 'debian'
+            self.kernel_image = '/vmlinuz'
+            self.initrd_image = '/initrd.img'
+        if vm.server_obj['os'] in ['stretch']:
+            self.boot_type = 'debian'
+            self.kernel_image = (
+                '/var/lib/libvirt/boot/' + vm.fqdn + '_vmlinuz'
+            )
+            self.initrd_image = (
+                '/var/lib/libvirt/boot/' + vm.fqdn + '_initrd.img'
+            )
+        elif vm.server_obj['os'] in ['freebsd10', 'freebsd11']:
+            self.boot_type = 'freebsd'
 
     def info(self):
         """Returns a dictionary with user-exposable information."""
