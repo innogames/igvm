@@ -83,7 +83,7 @@ def prepare_vm(hypervisor, vm):
         _create_interfaces(vm.network_config)
         _create_ssh_keys(vm.server_obj['os'])
         vm.server_obj['ssh_pubkey'] = _get_ssh_public_key('rsa')
-        vm.server_obj['ssh_ecdsa_sig'] = sha256(b64decode(
+        vm.server_obj['ssh_ecdsa_fp'] = sha256(b64decode(
             _get_ssh_public_key('ecdsa')
         )).hexdigest()
 
