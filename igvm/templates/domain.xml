@@ -19,9 +19,11 @@
 
   <os>
     <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>
-    <kernel>/vmlinuz</kernel>
-    <initrd>/initrd.img</initrd>
+{% if props.boot_type == 'debian' %}
+    <kernel>{{ props.kernel_image }}</kernel>
+    <initrd>{{ props.initrd_image }}</initrd>
     <cmdline>root=/dev/vda ro 2 console=ttyS0 init=/sbin/init rootflags=allocsize=64k elevator=noop</cmdline>
+{% endif %}
     <boot dev='hd'/>
   </os>
   <features>
