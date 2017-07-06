@@ -67,6 +67,7 @@ def _reset_vm(**kwargs):
         'memory': 2048,
         'num_cpu': 2,
         'ssh_users': {'root:control-test'},
+        'os': 'wheezy',
     })
     if 'puppet_environment' in vm.server_obj:
         del vm.server_obj['puppet_environment']
@@ -116,6 +117,16 @@ class BuildTest(object):
         _clean_vm(self.hv, self.vm.fqdn)
 
     def test_simple(self):
+        buildvm(self.vm.server_obj['hostname'])
+
+        self.assertEqual(self.vm.hypervisor.fqdn, self.hv.fqdn)
+        self._check_vm(self.hv, self.vm)
+
+    def test_simple_stretch(self):
+        self.vm.server_obj.update({
+            'os': 'stretch',
+        })
+        self.vm.server_obj.commit()
         buildvm(self.vm.server_obj['hostname'])
 
         self.assertEqual(self.vm.hypervisor.fqdn, self.hv.fqdn)
