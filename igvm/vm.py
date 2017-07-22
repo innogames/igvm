@@ -303,6 +303,9 @@ class VM(Host):
             else new_hostname + '.ig.local'
         )
 
+        if new_fqdn == self.fqdn:
+            raise ConfigError('The VM already named as "{}"'.format(self.fqdn))
+
         self.run('echo {0} > /etc/hostname'.format(new_fqdn))
         self.run('echo {0} > /etc/mailname'.format(new_fqdn))
 
