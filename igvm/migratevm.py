@@ -58,12 +58,6 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
         vm.server_obj.commit()
         tx.on_rollback('newip warning', log.info, '--newip is not rolled back')
 
-    # The source hypervisor need to connect to the destination hypervisor
-    # via SSH for the migration.  We need to ensure the source has the host
-    # public key of the destination.  TODO: Get rid of this when we have
-    # a usable host key distribution mechanism
-    vm.hypervisor.accept_ssh_hostkey(hypervisor)
-
     if maintenance or offline:
         vm.set_state('maintenance', tx=tx)
 
