@@ -57,21 +57,18 @@ def _check_environment():
     _ensure_ip_unused(IP2)
 
 
-def _reset_vm(**kwargs):
+def _reset_vm():
     vm = VM(VM1)
-    vm.server_obj.update({
-        'xen_host': HV1,
-        'intern_ip': IP1,
-        'state': 'online',
-        'disk_size_gib': 6,
-        'memory': 2048,
-        'num_cpu': 2,
-        'ssh_users': {'root:control-test'},
-        'os': 'wheezy',
-    })
+    vm.server_obj['xen_host'] = HV1
+    vm.server_obj['intern_ip'] = IP1
+    vm.server_obj['state'] = 'online'
+    vm.server_obj['disk_size_gib'] = 6
+    vm.server_obj['memory'] = 2048
+    vm.server_obj['num_cpu'] = 2
+    vm.server_obj['ssh_users'] = {'root:control-test'}
+    vm.server_obj['os'] = 'wheezy'
     if 'puppet_environment' in vm.server_obj:
         del vm.server_obj['puppet_environment']
-    vm.server_obj.update(kwargs)
     vm.server_obj.commit()
     # Might have changed!
     vm.hypervisor = Hypervisor(vm.server_obj['xen_host'])
