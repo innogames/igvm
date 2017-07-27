@@ -38,14 +38,13 @@ env.update(COMMON_FABRIC_SETTINGS)
 # Configuration of staging environment
 IP1 = IPv4Address('10.20.10.42')    # aw21.igvm
 IP2 = IPv4Address('10.20.10.43')    # aw21.igvm
-VM1 = 'igvm-integration.test'
-HV1 = 'aw-hv-053'  # KVM
-HV2 = 'aw-hv-082'  # KVM
+VM1 = 'igvm-integration.test.ig.local'
+HV1 = 'aw-hv-053.ig.local'
+HV2 = 'aw-hv-082.ig.local'
 
 
 def _reset_vm():
     vm = VM(VM1)
-    vm.server_obj['xen_host'] = HV1
     vm.server_obj['intern_ip'] = IP1
     vm.server_obj['state'] = 'online'
     vm.server_obj['disk_size_gib'] = 6

@@ -1,6 +1,7 @@
 from StringIO import StringIO
 
-from adminapi.dataset import query, filters, ServerObject
+from adminapi.dataset import query, ServerObject
+from adminapi.dataset.filters import Startswith, Or
 
 import fabric.api
 import fabric.state
@@ -19,13 +20,16 @@ def get_server(hostname, servertype):
     to a single server on Serveradmin.  It returns the adminapi Server object.
     """
 
-    # We want to return the server, only if it matches with some conditions,
-    # but we are not using those conditions on the query to be able to give
+    conditions = [hostname]
+    if hostname.endswith('.ig.local'):
+        conditions.append(hostname[:-len('.ig.local')])
+    else:
+        conditions.append(Startswith(hostname + '.'))
+
+    # We want to return the server, only if it has the correct servertype,
+    # but we are not using it as a condition on the query to be able to give
     # better errors.
-    servers = list(query(hostname=filters.Or(
-        filters.ExactMatch(hostname),
-        filters.Startswith(hostname + '.'),
-    )))
+    servers = list(query(hostname=Or(*conditions)))
 
     if not servers:
         raise ConfigError(
