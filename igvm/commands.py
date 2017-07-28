@@ -138,12 +138,9 @@ def vm_rebuild(vm_hostname, force=False):
 
     if vm.is_running():
         if force:
-            vm.shutdown()
+            vm.hypervisor.stop_vm_force(vm)
         else:
-            raise InvalidStateError(
-                '"{}" is still running.  Please stop it first or pass --force.'
-                .format(vm.fqdn)
-            )
+            raise InvalidStateError('"{}" is still running.'.format(vm.fqdn))
 
     vm.hypervisor.delete_vm(vm)
     vm.build()
@@ -215,13 +212,12 @@ def vm_delete(vm_hostname, force=False):
     vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
-    if force and vm.is_running():
-        vm.shutdown()
-
     if vm.is_running():
-        raise InvalidStateError(
-            '"{}" is still running.  Please stop it first.'.format(vm.fqdn)
-        )
+        if force:
+            vm.hypervisor.stop_vm_force(vm)
+        else:
+            raise InvalidStateError('"{}" is still running.'.format(vm.fqdn))
+
     vm.hypervisor.delete_vm(vm)
 
     if force:
