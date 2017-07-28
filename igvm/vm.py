@@ -119,10 +119,10 @@ class VM(Host):
 
         host_up = wait_until(
             str(self.server_obj['intern_ip']),
-            waitmsg='Waiting for SSH server',
+            waitmsg='Waiting for SSH to respond',
         )
         if not host_up:
-            raise VMError('SSH server is not reachable via TCP')
+            raise VMError('The server is not reachable with SSH')
 
         # Wait until we can login
         log.info('Trying SSH login')
