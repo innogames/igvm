@@ -261,7 +261,7 @@ def parse_args():
         help='Do not wait for guest to shutdown gracefully',
     )
     subparser.add_argument(
-        '--noredefine',
+        '--no-redefine',
         action='store_true',
         help='Do not redefine the domain to use latest hypervisor settings',
     )

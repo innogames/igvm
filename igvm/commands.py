@@ -178,7 +178,7 @@ def vm_stop(vm_hostname, force=False):
 
 
 @with_fabric_settings
-def vm_restart(vm_hostname, force=False, noredefine=False):
+def vm_restart(vm_hostname, force=False, no_redefine=False):
     """Restart a VM
 
     The VM is shut down and recreated, using the existing disk. This can be
@@ -196,7 +196,7 @@ def vm_restart(vm_hostname, force=False, noredefine=False):
     else:
         vm.shutdown()
 
-    if not noredefine:
+    if not no_redefine:
         vm.hypervisor.redefine_vm(vm)
 
     vm.start()
