@@ -14,7 +14,6 @@ from igvm.commands import (
     vcpu_set,
     vm_delete,
     vm_rebuild,
-    vm_redefine,
     vm_restart,
     vm_start,
     vm_stop,
@@ -406,23 +405,6 @@ class CommandTest(object):
 
         self.vm.shutdown()
         host_info(self.vm.server_obj['hostname'])
-
-    def test_redefine(self):
-        # Not built
-        with self.assertRaises(IGVMError):
-            vm_redefine(self.vm.server_obj['hostname'])
-
-        buildvm(self.vm.server_obj['hostname'])
-
-        # Running
-        vm_redefine(self.vm.server_obj['hostname'])
-        self._check_vm(self.hv, self.vm)
-
-        # Stopped
-        vm_stop(self.vm.server_obj['hostname'])
-        vm_redefine(self.vm.server_obj['hostname'])
-
-        self.assertEqual(self.vm.is_running(), False)
 
 
 class KVMCommandTest(IGVMTest, CommandTest):

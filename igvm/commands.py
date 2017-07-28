@@ -179,7 +179,12 @@ def vm_stop(vm_hostname, force=False):
 
 @with_fabric_settings
 def vm_restart(vm_hostname, force=False, noredefine=False):
-    """Restart a VM"""
+    """Restart a VM
+
+    The VM is shut down and recreated, using the existing disk. This can be
+    useful to discard temporary changes or adapt new hypervisor optimizations.
+    No data will be lost.
+    """
     vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
@@ -266,27 +271,6 @@ def vm_sync(vm_hostname):
         log.info(
             '"{}" is already synchronized on Serveradmin.'.format(vm.fqdn)
         )
-
-
-@with_fabric_settings
-def vm_redefine(vm_hostname):
-    """Redefine a VM on the hypervisor to use latest domain configuration
-
-    The VM is shut down and recreated, using the existing disk. This can be
-    useful to discard temporary changes or adapt new hypervisor optimizations.
-    No data will be lost."""
-
-    vm = VM(vm_hostname, ignore_reserved=True)
-    _check_defined(vm)
-
-    was_running = vm.is_running()
-    if was_running:
-        vm.shutdown()
-
-    vm.hypervisor.redefine_vm(vm)
-
-    if was_running:
-        vm.start()
 
 
 @with_fabric_settings

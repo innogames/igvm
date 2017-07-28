@@ -23,7 +23,6 @@ from igvm.commands import (
     vm_start,
     vm_stop,
     vm_rebuild,
-    vm_redefine,
     vm_restart,
     vm_delete,
     vm_sync,
@@ -297,16 +296,6 @@ def parse_args():
         description=vm_sync.__doc__,
     )
     subparser.set_defaults(func=vm_sync)
-    subparser.add_argument(
-        'vm_hostname',
-        help='Hostname of the guest system',
-    )
-
-    subparser = subparsers.add_parser(
-        'redefine',
-        description=vm_redefine.__doc__,
-    )
-    subparser.set_defaults(func=vm_redefine)
     subparser.add_argument(
         'vm_hostname',
         help='Hostname of the guest system',
