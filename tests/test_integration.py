@@ -140,7 +140,7 @@ class BuildTest(object):
             vm_delete(self.vm.server_obj['hostname'])
 
         self.vm.shutdown()
-        vm_delete(self.vm.server_obj['hostname'])
+        vm_delete(self.vm.server_obj['hostname'], retire=True)
 
         self._check_absent(self.hv, self.vm)
 

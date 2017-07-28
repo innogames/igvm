@@ -278,7 +278,12 @@ def parse_args():
     subparser.add_argument(
         '--force',
         action='store_true',
-        help='shutdown VM if running and delete serveradmin object',
+        help='Shutdown VM if running',
+    )
+    subparser.add_argument(
+        '--retire',
+        action='store_true',
+        help='Set VM state to "retired" on Serveradmin instead of deleting',
     )
 
     subparser = subparsers.add_parser(

@@ -201,14 +201,12 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
 
 
 @with_fabric_settings
-def vm_delete(vm_hostname, force=False):
+def vm_delete(vm_hostname, force=False, retire=False):
     """Delete a VM
 
-    The VM is undefined on the hypervisor, destroys the disk volume, and sets
-    the VM to "retired" state. The serveradmin object is not deleted.
-
-    If force is set, the VM is shutdown automatically and deleted from
-    Serveradmin."""
+    The VM is undefined on the hypervisor, destroys the disk volume, and
+    deletes the VM or sets its state to "retired" on Serveradmin.
+    """
     vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
@@ -220,20 +218,20 @@ def vm_delete(vm_hostname, force=False):
 
     vm.hypervisor.delete_vm(vm)
 
-    if force:
-        vm.server_obj.delete()
-    else:
+    if retire:
         vm.server_obj['state'] = 'retired'
+    else:
+        vm.server_obj.delete()
 
     vm.server_obj.commit()
-    if force:
+    if retire:
         log.info(
-            '"{}" is destroyed and deleted from Serveradmin'
+            '"{}" is destroyed and set to "retired" state.'
             .format(vm.fqdn)
         )
     else:
         log.info(
-            '"{}" is destroyed and set to "retired" state.'
+            '"{}" is destroyed and deleted from Serveradmin'
             .format(vm.fqdn)
         )
 
