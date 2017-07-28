@@ -330,7 +330,7 @@ def parse_args():
         help='New hostname',
     )
     subparser.add_argument(
-        '--force',
+        '--offline',
         action='store_true',
         help='Shutdown VM, if running',
     )

@@ -379,7 +379,7 @@ def host_info(vm_hostname):
 
 
 @with_fabric_settings
-def vm_rename(vm_hostname, new_hostname, force=False):
+def vm_rename(vm_hostname, new_hostname, offline=False):
     """Redefine the VM on the same hypervisor with a different name
 
     We can only do this operation offline.  If the VM is online, it needs
@@ -389,9 +389,9 @@ def vm_rename(vm_hostname, new_hostname, force=False):
     vm = VM(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
-    if not force:
+    if not offline:
         raise NotImplementedError(
-            'Rename command only works with --force at the moment.'
+            'Rename command only works with --offline at the moment.'
         )
     if not vm.is_running():
         raise NotImplementedError(
