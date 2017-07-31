@@ -21,10 +21,9 @@ def _create_ssh_keys(os):
     # overwrite.
     run('rm -f etc/ssh/ssh_host_*_key*')
 
-    if os == 'wheezy':
-        key_types = ('dsa', 'rsa', 'ecdsa')
-    else:
-        key_types = ('dsa', 'rsa', 'ecdsa', 'ed25519')
+    key_types = ['rsa', 'ecdsa']
+    if os != 'wheezy':
+        key_types.append('ed25519')
 
     # This will also create the public key files.
     for key_type in key_types:
