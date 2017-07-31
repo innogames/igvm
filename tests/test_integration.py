@@ -4,9 +4,6 @@ import logging
 import tempfile
 import unittest
 
-import adminapi
-from adminapi.dataset import query, filters
-
 from fabric.api import env
 
 from igvm.buildvm import buildvm
@@ -44,17 +41,6 @@ IP2 = IPv4Address('10.20.10.43')    # aw21.igvm
 VM1 = 'igvm-integration.test'
 HV1 = 'aw-hv-053'  # KVM
 HV2 = 'aw-hv-082'  # KVM
-
-
-def _ensure_ip_unused(ip):
-    servers = tuple(query(intern_ip=ip, hostname=filters.Not(VM1)))
-    if servers:
-        raise AssertionError('IP {} is already used by {}'.format(ip, servers))
-
-
-def _check_environment():
-    _ensure_ip_unused(IP1)
-    _ensure_ip_unused(IP2)
 
 
 def _reset_vm():
@@ -106,10 +92,6 @@ class IGVMTest(unittest.TestCase):
 
 
 class BuildTest(object):
-    def setUp(self):
-        adminapi.auth()
-        _check_environment()
-
     def tearDown(self):
         _clean_vm(self.hv, self.vm.fqdn)
 
@@ -217,17 +199,12 @@ class BuildTest(object):
 
 class KVMBuildTest(IGVMTest, BuildTest):
     def setUp(self):
-        BuildTest.setUp(self)
         self.hv = Hypervisor(HV1)
         self.vm = _reset_vm()
         _clean_vm(self.hv, self.vm.fqdn)
 
 
 class CommandTest(object):
-    def setUp(self):
-        adminapi.auth()
-        _check_environment()
-
     def tearDown(self):
         _clean_vm(self.hv, self.vm.fqdn)
 
@@ -451,7 +428,6 @@ class CommandTest(object):
 
 class KVMCommandTest(IGVMTest, CommandTest):
     def setUp(self):
-        CommandTest.setUp(self)
         self.hv = Hypervisor(HV1)
         self.vm = _reset_vm()
         _clean_vm(self.hv, self.vm.fqdn)
@@ -460,9 +436,6 @@ class KVMCommandTest(IGVMTest, CommandTest):
 class MigrationTest(IGVMTest):
     @classmethod
     def setUpClass(cls):
-        adminapi.auth()
-        _check_environment()
-
         cls.hv1 = Hypervisor(HV1)
         cls.hv2 = Hypervisor(HV2)
         cls.vm = _reset_vm()
