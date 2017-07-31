@@ -1,5 +1,5 @@
 from base64 import b64decode
-from hashlib import sha256
+from hashlib import sha1, sha256
 import logging
 import os
 from StringIO import StringIO
@@ -15,32 +15,33 @@ from igvm.utils import cmd
 log = logging.getLogger(__name__)
 
 
-def _create_ssh_keys(os):
+def _create_ssh_keys(vm):
 
     # If we wouldn't do remove those, ssh-keygen would ask us confirm
     # overwrite.
     run('rm -f etc/ssh/ssh_host_*_key*')
 
-    if os == 'wheezy':
-        key_types = ('dsa', 'rsa', 'ecdsa')
-    else:
-        key_types = ('dsa', 'rsa', 'ecdsa', 'ed25519')
+    vm.server_obj['sshfp'] = set()
+    key_types = [(1, 'rsa'), (3, 'ecdsa')]
+    if vm.server_obj['os'] != 'wheezy':
+        key_types.append((4, 'ed25519'))
+    fp_types = [(1, sha1), (2, sha256)]
 
     # This will also create the public key files.
-    for key_type in key_types:
+    for key_id, key_type in key_types:
         run(
             # Use ssh-keygen from chroot in case hypervisor OS is too old
             'chroot . ssh-keygen -q -t {0} -N "" -f etc/ssh/ssh_host_{0}_key'
             .format(key_type)
         )
 
-
-def _get_ssh_public_key(key_type):
-    fd = StringIO()
-    get('etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)
-    key_split = fd.getvalue().split()
-
-    return key_split[1]
+        fd = StringIO()
+        get('etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)
+        pub_key = b64decode(fd.getvalue().split(None, 2)[1])
+        for fp_id, fp_type in fp_types:
+            vm.server_obj['sshfp'].add('{} {} {}'.format(
+                key_id, fp_id, fp_type(pub_key).hexdigest()
+            ))
 
 
 def _generate_swap(swap_path, size_MiB):
@@ -81,10 +82,7 @@ def prepare_vm(hypervisor, vm):
         run(cmd('echo {0} > etc/mailname', vm.fqdn))
 
         _create_interfaces(vm.network_config)
-        _create_ssh_keys(vm.server_obj['os'])
-        vm.server_obj['ssh_ecdsa_fp'] = sha256(b64decode(
-            _get_ssh_public_key('ecdsa')
-        )).hexdigest()
+        _create_ssh_keys(vm)
 
         upload_template('etc/fstab', 'etc/fstab', {
             'blk_dev': hypervisor.vm_block_device_name(),
