@@ -24,6 +24,9 @@
     <initrd>{{ props.initrd_image }}</initrd>
     <cmdline>root=/dev/vda ro 2 console=ttyS0 init=/sbin/init rootflags=allocsize=64k elevator=noop</cmdline>
 {% endif %}
+{% if props.boot_type == 'grub' %}
+    <kernel>{{ props.kernel_image }}</kernel>
+{% endif %}
     <boot dev='hd'/>
   </os>
   <features>

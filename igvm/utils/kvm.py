@@ -93,13 +93,8 @@ class DomainProperties(object):
             self.kernel_image = '/vmlinuz'
             self.initrd_image = '/initrd.img'
         if vm.server_obj['os'] in ['stretch']:
-            self.boot_type = 'debian'
-            self.kernel_image = (
-                '/var/lib/libvirt/boot/' + vm.fqdn + '_vmlinuz'
-            )
-            self.initrd_image = (
-                '/var/lib/libvirt/boot/' + vm.fqdn + '_initrd.img'
-            )
+            self.boot_type = 'grub'
+            self.kernel_image = '/var/lib/libvirt/boot/grub2.img'
         elif vm.server_obj['os'] in ['freebsd10', 'freebsd11']:
             self.boot_type = 'freebsd'
 
