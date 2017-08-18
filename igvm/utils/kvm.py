@@ -131,8 +131,8 @@ class DomainProperties(object):
         else:
             self.max_mem = parse_size(
                 tree.find('maxMemory').text +
-                tree.find('memory').attrib.get('unit', 'KiB'),
-                'M'
+                tree.find('maxMemory').attrib['unit'],
+                'M',
             )
 
         self.mac_address = tree.find('devices/interface/mac').attrib['address']
