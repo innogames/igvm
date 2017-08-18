@@ -309,13 +309,6 @@ def _attach_memory_dimms(vm, domain, props, memory_mib):
         .format(props.num_nodes, dimm_size)
     )
 
-    # Now activate all DIMMs in the guest
-    log.info('KVM: Activating new DIMMs in guest')
-    vm.run(
-        'for i in `grep -l offline /sys/devices/system/memory/memory*/state`; '
-        'do echo online > $i; done'
-    )
-
 
 def _generate_mac_address(ip):
     assert ip.version == 4, 'intern_ip is IPv4 address'
