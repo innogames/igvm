@@ -372,12 +372,13 @@ class Hypervisor(Host):
         # We are not using lookupByName(), because it prints ugly messages to
         # the console.
         for domain in self.conn.listAllDomains():
-            if not vm.fqdn.startswith(domain.name()):
+            name = domain.name()
+            if not (vm.fqdn == name or vm.fqdn.startswith(name + '.')):
                 continue
             if found is not None:
                 raise HypervisorError(
                     'Same VM is defined multiple times as "{}" and "{}".'
-                    .format(found.name(), domain.name())
+                    .format(found.name(), name)
                 )
             found = domain
         return found
