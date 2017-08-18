@@ -12,10 +12,7 @@ from libvirt import (
     libvirtError,
 )
 
-from igvm.exceptions import (
-    HypervisorError,
-    IGVMError,
-)
+from igvm.exceptions import HypervisorError
 from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
@@ -55,15 +52,6 @@ def _find_or_create(parent, name):
     return ET.SubElement(parent, name)
 
 
-def _num_numa_nodes(host):
-    """Returns the number of NUMA nodes on a host."""
-    # TODO: Is there an API way to query number of NUMA nodes via libvirt?
-    return int(host.run(
-        'cat /sys/devices/system/node/node*/cpulist | wc -l',
-        silent=True,
-    ))
-
-
 class DomainProperties(object):
     """Helper class to hold properties of a libvirt VM.
     Several build attributes (NUMA placement, huge pages, ...) can be extracted
@@ -80,7 +68,7 @@ class DomainProperties(object):
         self.uuid = uuid.uuid1()
         self.qemu_version = _get_qemu_version(hypervisor)
         self.hugepages = False
-        self.num_nodes = _num_numa_nodes(hypervisor)
+        self.num_nodes = hypervisor.num_numa_nodes()
         self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.server_obj['num_cpu'])
         self.max_cpus = min(self.max_cpus, hypervisor.num_cpus)
         self.max_mem = hypervisor.vm_max_memory(vm)
@@ -135,6 +123,10 @@ class DomainProperties(object):
                 'M',
             )
 
+        self.current_memory = parse_size(
+            tree.find('memory').text + tree.find('memory').attrib['unit'],
+            'M',
+        )
         self.mac_address = tree.find('devices/interface/mac').attrib['address']
 
         if self.num_nodes > 1:
@@ -265,7 +257,7 @@ def migrate_live(source, destination, vm, domain):
     _live_repin_cpus(domain, props, destination.num_cpus)
 
 
-def set_memory(hypervisor, vm, domain, memory_mib):
+def set_memory(hypervisor, vm, domain):
     """Changes the amount of memory of a VM."""
     props = DomainProperties.from_running(hypervisor, vm, domain)
 
@@ -273,7 +265,7 @@ def set_memory(hypervisor, vm, domain, memory_mib):
         log.info('Attempting to increase memory with ballooning')
         try:
             domain.setMemoryFlags(
-                memory_mib * 1024,
+                vm.server_obj['memory'] * 1024,
                 VIR_DOMAIN_AFFECT_LIVE | VIR_DOMAIN_AFFECT_CONFIG,
             )
             return
@@ -283,12 +275,9 @@ def set_memory(hypervisor, vm, domain, memory_mib):
             )
 
     if props.mem_hotplug:
-        if memory_mib % 128:
-            raise IGVMError(
-                'Configured memory is not a multiple of 128 MiB'
-            )
-        add_memory = memory_mib - vm.server_obj['memory']
+        add_memory = vm.server_obj['memory'] - props.current_memory
         assert add_memory > 0
+        assert add_memory % (128 * props.num_nodes) == 0
         _attach_memory_dimms(vm, domain, props, add_memory)
         return
 
@@ -301,11 +290,6 @@ def set_memory(hypervisor, vm, domain, memory_mib):
 
 def _attach_memory_dimms(vm, domain, props, memory_mib):
     """Attaches memory DIMMs of the given size."""
-    # https://medium.com/@juergen_thomann/memory-hotplug-with-qemu-kvm-and-libvirt-558f1c635972#.sytig6o9h
-    if memory_mib % (128 * props.num_nodes):
-        raise IGVMError(
-            'Added memory must be multiple of 128 MiB * <number of NUMA nodes>'
-        )
 
     dimm_size = int(memory_mib / props.num_nodes)
     for i in range(0, props.num_nodes):

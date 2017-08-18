@@ -237,10 +237,15 @@ class Hypervisor(Host):
 
     def vm_set_memory(self, vm, memory):
         self._check_committed(vm)
+        vm.check_serveradmin_config()
         self._check_attribute_synced(vm, 'memory')
 
         running = self.vm_running(vm)
 
+        if running and memory < vm.server_obj['memory']:
+            raise InvalidStateError(
+                'Cannot shrink memory while VM is running'
+            )
         if self.free_vm_memory() < memory - vm.server_obj['memory']:
             raise HypervisorError('Not enough free memory on hypervisor.')
 
@@ -249,14 +254,16 @@ class Hypervisor(Host):
             .format(vm.fqdn, self.fqdn, vm.server_obj['memory'], memory)
         )
 
+        vm.server_obj['memory'] = memory
+        vm.check_serveradmin_config()
+
         # If VM is offline, we can just rebuild the domain
         if not running:
             log.info('VM is offline, rebuilding domain with new settings')
-            vm.server_obj['memory'] = memory
             self.redefine_vm(vm)
         else:
             old_total = vm.meminfo()['MemTotal']
-            self._vm_set_memory(vm, memory)
+            set_memory(self, vm, self._get_domain(vm))
             # Hypervisor might take some time to propagate memory changes,
             # wait until MemTotal changes.
             retry_wait_backoff(
@@ -272,7 +279,6 @@ class Hypervisor(Host):
                 'changes will not be committed.'
             )
 
-        vm.server_obj['memory'] = memory
         vm.server_obj.commit()
 
     def vm_set_disk_size_gib(self, vm, new_size_gib):
@@ -361,6 +367,10 @@ class Hypervisor(Host):
                 .format(self.fqdn)
             )
         return conn
+
+    def num_numa_nodes(self):
+        """Return the number of NUMA nodes"""
+        return self.conn.getInfo()[4]
 
     def _find_domain(self, vm):
         """Search and return the domain on hypervisor
@@ -457,13 +467,6 @@ class Hypervisor(Host):
 
     def _vm_set_num_cpu(self, vm, num_cpu):
         set_vcpus(self, vm, self._get_domain(vm), num_cpu)
-
-    def _vm_set_memory(self, vm, memory_mib):
-        if self.vm_running(vm) and memory_mib < vm.server_obj['memory']:
-            raise InvalidStateError(
-                'Cannot shrink memory while VM is running'
-            )
-        set_memory(self, vm, self._get_domain(vm), memory_mib)
 
     def _vm_set_disk_size_gib(self, vm, disk_size_gib):
         # TODO: Use libvirt
