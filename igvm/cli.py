@@ -48,22 +48,22 @@ class IGVMArgumentParser(ArgumentParser):
 
         subparsers_actions = [
             action for action in self._actions
-            if isinstance(action, _SubParsersAction)]
-        # there will probably only be one subparser_action,
-        # but better save than sorry
+            if isinstance(action, _SubParsersAction)
+        ]
+
+        # There will probably only be one subparser_action, but better safe
+        # than sorry.
         for subparsers_action in subparsers_actions:
-            # get all subparsers and print help
+            # Get all subparsers and print help
             for choice, subparser in subparsers_action.choices.items():
-                out.append(
-                    '{}'
-                    .format(white(choice, bold=True), subparser.description),
-                )
+                out.append(white(choice, bold=True))
                 if subparser.get_default('func').__doc__:
                     out.append('\n'.join(
                         '\t{}'.format(l.strip()) for l in subparser
                         .get_default('func').__doc__.strip().splitlines()
                     ))
                 out.append('\n\t{}'.format(subparser.format_usage()))
+
         return '\n'.join(out)
 
 
