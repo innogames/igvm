@@ -2,12 +2,14 @@ from __future__ import division
 
 
 _SIZE_FACTORS = {
-    'T': 1024**4,
-    'G': 1024**3,
-    'M': 1024**2,
-    'K': 1024,
-    'B': 1
+    'T': 1024 ** 4,
+    'G': 1024 ** 3,
+    'M': 1024 ** 2,
+    'K': 1024 ** 1,
+    'B': 1024 ** 0,
 }
+
+
 def parse_size(text, unit):
     """Return the size as integer in the desired unit.
 
@@ -47,4 +49,6 @@ def parse_size(text, unit):
 
 
 def convert_size(size, from_name, to_name):
-    return size / _SIZE_FACTORS[from_name.upper()] * _SIZE_FACTORS[to_name.upper()]
+    return size / (
+        _SIZE_FACTORS[from_name.upper()] * _SIZE_FACTORS[to_name.upper()]
+    )
