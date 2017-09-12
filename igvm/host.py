@@ -1,7 +1,7 @@
 from StringIO import StringIO
 
 from adminapi.dataset import query, ServerObject
-from adminapi.dataset.filters import Startswith, Or
+from adminapi.dataset.filters import ExactMatch, Startswith, Or
 
 import fabric.api
 import fabric.state
@@ -20,9 +20,9 @@ def get_server(hostname, servertype):
     to a single server on Serveradmin.  It returns the adminapi Server object.
     """
 
-    conditions = [hostname]
+    conditions = [ExactMatch(hostname)]
     if hostname.endswith('.ig.local'):
-        conditions.append(hostname[:-len('.ig.local')])
+        conditions.append(ExactMatch(hostname[:-len('.ig.local')]))
     else:
         conditions.append(Startswith(hostname + '.'))
 
