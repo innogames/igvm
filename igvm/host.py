@@ -5,6 +5,7 @@ from adminapi.dataset.filters import ExactMatch, Startswith, Or
 
 import fabric.api
 import fabric.state
+from fabric.contrib import files
 
 from paramiko import transport
 from igvm.exceptions import ConfigError, RemoteCommandError, InvalidStateError
@@ -123,6 +124,18 @@ class Host(object):
                 if host and host in fabric.state.connections:
                     fabric.state.connections[host].get_transport().close()
                 return fabric.api.sudo(*args, **kwargs)
+
+    def file_exists(self, *args, **kwargs):
+        """Run a fabric.contrib.files.exists on this host with sudo."""
+        with self.fabric_settings():
+            try:
+                return files.exists(*args, **kwargs)
+            except transport.socket.error:
+                # Retry once if connection was lost
+                host = fabric.api.env.host_string
+                if host and host in fabric.state.connections:
+                    fabric.state.connections[host].get_transport().close()
+                return files.exists(*args, **kwargs)
 
     def read_file(self, path):
         """Reads a file from the remote host and returns contents."""

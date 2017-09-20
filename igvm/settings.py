@@ -38,3 +38,5 @@ MAC_ADDRESS_PREFIX = (0xCA, 0xFE, 0x00,)
 
 FOREMAN_IMAGE_URL = 'http://aw-foreman.ig.local:8080/{image}'
 FOREMAN_IMAGE_MD5_URL = 'http://aw-foreman.ig.local:8080/{image}.md5'
+
+IMAGE_PATH = '/tmp'

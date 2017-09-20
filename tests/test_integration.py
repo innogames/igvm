@@ -26,7 +26,10 @@ from igvm.exceptions import (
 )
 from igvm.hypervisor import Hypervisor
 from igvm.migratevm import migratevm
-from igvm.settings import COMMON_FABRIC_SETTINGS
+from igvm.settings import (
+    COMMON_FABRIC_SETTINGS,
+    IMAGE_PATH,
+)
 from igvm.utils import cmd
 from igvm.utils.units import parse_size
 from igvm.vm import VM
@@ -49,8 +52,8 @@ def _reset_vm():
     vm.server_obj['disk_size_gib'] = 6
     vm.server_obj['memory'] = 2048
     vm.server_obj['num_cpu'] = 2
-    vm.server_obj['ssh_users'] = {'root:control-test'}
     vm.server_obj['os'] = 'wheezy'
+    vm.server_obj['environment'] = 'testing'
     if 'puppet_environment' in vm.server_obj:
         del vm.server_obj['puppet_environment']
     vm.server_obj.commit()
@@ -111,7 +114,7 @@ class BuildTest(object):
 
     def test_local_image(self):
         buildvm(self.vm.server_obj['hostname'],
-                localimage='/root/jessie-localimage.tar.gz')
+                localimage='/{}/jessie-localimage.tar.gz'.format(IMAGE_PATH))
 
         self.assertEqual(self.vm.hypervisor.fqdn, self.hv.fqdn)
         self._check_vm(self.hv, self.vm)
@@ -155,7 +158,9 @@ class BuildTest(object):
         self._check_absent(self.hv, self.vm)
 
     def test_image_corruption(self):
-        image = '{}-base.tar.gz'.format(self.vm.server_obj['os'])
+        image = '{}/{}-base.tar.gz'.format(
+            IMAGE_PATH, self.vm.server_obj['os']
+        )
         self.hv.run(cmd('test -f {}', image))
 
         self.hv.run(
@@ -165,7 +170,9 @@ class BuildTest(object):
         buildvm(self.vm.server_obj['hostname'])
 
     def test_image_missing(self):
-        image = '{}-base.tar.gz'.format(self.vm.server_obj['os'])
+        image = '{}/{}-base.tar.gz'.format(
+            IMAGE_PATH, self.vm.server_obj['os']
+        )
         self.hv.run(cmd('rm -f {}', image))
 
         buildvm(self.vm.server_obj['hostname'])

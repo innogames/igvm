@@ -1,5 +1,6 @@
 import logging
 import math
+import urllib2
 
 from libvirt import VIR_DOMAIN_SHUTOFF
 
@@ -10,9 +11,17 @@ from igvm.exceptions import (
     HypervisorError,
     InconsistentAttributeError,
     InvalidStateError,
+    StorageError,
 )
 from igvm.host import Host
-from igvm.settings import HOST_RESERVED_MEMORY, VG_NAME, RESERVED_DISK
+from igvm.settings import (
+    HOST_RESERVED_MEMORY,
+    VG_NAME,
+    RESERVED_DISK,
+    FOREMAN_IMAGE_URL,
+    FOREMAN_IMAGE_MD5_URL,
+    IMAGE_PATH,
+)
 from igvm.utils.backoff import retry_wait_backoff
 from igvm.utils.kvm import (
     DomainProperties,
@@ -22,20 +31,6 @@ from igvm.utils.kvm import (
     set_vcpus,
 )
 from igvm.utils.lazy_property import lazy_property
-from igvm.utils.storage import (
-    get_free_disk_size_gib,
-    create_storage,
-    format_storage,
-    get_logical_volumes,
-    lvremove,
-    lvresize,
-    lvrename,
-    mount_temp,
-    remove_temp,
-    umount_temp,
-    netcat_to_device,
-    device_to_netcat,
-)
 from igvm.utils.virtutils import get_virtconn
 
 log = logging.getLogger(__name__)
@@ -153,7 +148,7 @@ class Hypervisor(Host):
             )
 
         # Enough disk?
-        free_disk_space = get_free_disk_size_gib(self)
+        free_disk_space = self.get_free_disk_size_gib()
         vm_disk_size = float(vm.server_obj['disk_size_gib'])
         if vm_disk_size > free_disk_space:
             raise HypervisorError(
@@ -287,16 +282,16 @@ class Hypervisor(Host):
             raise NotImplementedError('Cannot shrink the disk.')
         domain = self._get_domain(vm)
         with self.fabric_settings():
-            lvresize(self.vm_disk_path(domain.name()), new_size_gib)
+            self.lvresize(self.vm_disk_path(domain.name()), new_size_gib)
 
         self._vm_set_disk_size_gib(vm, new_size_gib)
 
     def create_vm_storage(self, vm, name, tx=None):
         """Allocate storage for a VM. Returns the disk path."""
-        create_storage(self, name, vm.server_obj['disk_size_gib'])
+        self.create_storage(name, vm.server_obj['disk_size_gib'])
         if tx:
             tx.on_rollback(
-                'destroy storage', lvremove, self, self.vm_disk_path(name)
+                'destroy storage', self.lvremove, self.vm_disk_path(name)
             )
 
     def format_vm_storage(self, vm, tx=None):
@@ -308,8 +303,50 @@ class Hypervisor(Host):
                 .format(vm.fqdn)
             )
 
-        format_storage(self, self.vm_disk_path(vm.fqdn))
+        self.format_storage(self.vm_disk_path(vm.fqdn))
         return self.mount_vm_storage(vm, tx)
+
+    def validate_image_checksum(self, image):
+        """Compares the local image checksum against the checksum returned by
+        foreman."""
+        local_hash = self.run(
+            'md5sum {}/{}'.format(IMAGE_PATH, image)
+        ).split()[0]
+
+        url = FOREMAN_IMAGE_MD5_URL.format(image=image)
+        try:
+            remote_hash = urllib2.urlopen(url, timeout=2).read().split()[0]
+        except urllib2.URLError as e:
+            log.warning(
+                'Failed to fetch image checksum at {}: {}'.format(url, e)
+            )
+            return False
+
+        return local_hash == remote_hash
+
+    def download_image(self, image):
+        if (
+            self.file_exists('{}/{}'.format(IMAGE_PATH, image)) and not
+            self.validate_image_checksum(image)
+        ):
+            log.warning('Image validation failed, downloading latest version')
+            self.run('rm -f {}/{}'.format(IMAGE_PATH, image))
+
+        if not self.file_exists('{}/{}'.format(IMAGE_PATH, image)):
+            url = FOREMAN_IMAGE_URL.format(image=image)
+            self.run('wget -P {} -nv {}'.format(IMAGE_PATH, url))
+
+    def extract_image(self, image, target_dir):
+        if self.server_obj['os'] == 'squeeze':
+            self.run(
+                'tar xfz {}/{} -C {}'.format(IMAGE_PATH, image, target_dir)
+            )
+        else:
+            self.run(
+                "tar --xattrs --xattrs-include='*' -xzf {}/{} -C {}".format(
+                    IMAGE_PATH, image, target_dir
+                )
+            )
 
     def mount_vm_storage(self, vm, tx=None):
         """Mount VM filesystem on host and return mount point."""
@@ -321,27 +358,30 @@ class Hypervisor(Host):
                 'Refusing to mount VM filesystem while VM is powered on'
             )
 
-        self._mount_path[vm] = mount_temp(
-            self, self.vm_disk_path(vm.fqdn), suffix=('-' + vm.fqdn)
+        self._mount_path[vm] = self.mount_temp(
+            self.vm_disk_path(vm.fqdn), suffix=('-' + vm.fqdn)
         )
         if tx:
             tx.on_rollback('unmount storage', self.umount_vm_storage, vm)
+
+        vm.mounted = True
         return self._mount_path[vm]
 
     def umount_vm_storage(self, vm):
         """Unmount VM filesystem."""
         if vm not in self._mount_path:
             return
-        umount_temp(self, self._mount_path[vm])
-        remove_temp(self, self._mount_path[vm])
+        self.umount_temp(self._mount_path[vm])
+        self.remove_temp(self._mount_path[vm])
         del self._mount_path[vm]
+        vm.mounted = False
 
     def vm_sync_from_hypervisor(self, vm):
         """Synchronizes serveradmin information from the actual data on
         the hypervisor. Returns a dict with all collected values."""
         # Update disk size
         result = {}
-        lvs = get_logical_volumes(self)
+        lvs = self.get_logical_volumes()
         domain = self._get_domain(vm)
         for lv in lvs:
             if lv['name'] == domain.name():
@@ -354,9 +394,6 @@ class Hypervisor(Host):
 
         self._vm_sync_from_hypervisor(vm, result)
         return result
-
-    def get_free_disk_size_gib(self, safe=True):
-        return get_free_disk_size_gib(self, safe)
 
     @lazy_property
     def conn(self):
@@ -428,11 +465,10 @@ class Hypervisor(Host):
         domain = self._get_domain(vm)
         if offline:
             target_hypervisor.create_vm_storage(vm, vm.fqdn, tx)
-            nc_listener = netcat_to_device(
-                target_hypervisor, self.vm_disk_path(vm.fqdn), tx
+            nc_listener = self.netcat_to_device(
+                self.vm_disk_path(vm.fqdn), tx
             )
-            device_to_netcat(
-                self,
+            self.device_to_netcat(
                 self.vm_disk_path(domain.name()),
                 vm.server_obj['disk_size_gib'] * 1024**3,
                 nc_listener,
@@ -521,21 +557,21 @@ class Hypervisor(Host):
         if domain.undefine() != 0:
             raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
         if not keep_storage:
-            lvremove(self, self.vm_disk_path(domain.name()))
+            self.lvremove(self.vm_disk_path(domain.name()))
 
     def redefine_vm(self, vm):
         domain = self._get_domain(vm)
         self.delete_vm(vm, keep_storage=True)
         if domain.name() != vm.fqdn:
             with self.fabric_settings():
-                lvrename(self.vm_disk_path(domain.name()), vm.fqdn)
+                self.lvrename(self.vm_disk_path(domain.name()), vm.fqdn)
         self.define_vm(vm)
 
     def rename_vm(self, vm, new_fqdn):
         domain = self._get_domain(vm)
         self.delete_vm(vm, keep_storage=True)
         with self.fabric_settings():
-            lvrename(self.vm_disk_path(domain.name()), new_fqdn)
+            self.lvrename(self.vm_disk_path(domain.name()), new_fqdn)
         vm.fqdn = new_fqdn
         self.define_vm(vm)
 
@@ -554,3 +590,108 @@ class Hypervisor(Host):
         """Get runtime information about a VM"""
         props = DomainProperties.from_running(self, vm, self._get_domain(vm))
         return props.info()
+
+    def get_logical_volumes(self):
+        lvolumes = []
+        lvs = self.run(
+            'lvs --noheadings -o name,vg_name,lv_size --unit b --nosuffix'
+            ' 2>/dev/null',
+            silent=True
+        )
+        for lv_line in lvs.splitlines():
+            lv_name, vg_name, lv_size = lv_line.split()
+            lvolumes.append({
+                'path': '/dev/{}/{}'.format(vg_name, lv_name),
+                'name': lv_name,
+                'vg_name': vg_name,
+                'size_MiB': math.ceil(float(lv_size) / 1024 ** 2),
+            })
+        return lvolumes
+
+    def lvremove(self, lv):
+        self.run('lvremove -f {0}'.format(lv))
+
+    def lvresize(self, volume, size_gib):
+        """Extend the volume, return the new size"""
+
+        self.run('lvresize {0} -L {1}g'.format(volume, size_gib))
+
+    def lvrename(self, volume, newname):
+        self.run('lvrename {0} {1}'.format(volume, newname))
+
+    def get_free_disk_size_gib(self, safe=True):
+        """Return free disk space as float in GiB"""
+        vgs_line = self.run(
+            'vgs --noheadings -o vg_name,vg_free --unit g --nosuffix {0}'
+            ' 2>/dev/null'
+            .format(VG_NAME),
+            silent=True,
+        )
+        vg_name, vg_size_gib = vgs_line.split()
+        vg_size_gib = float(vg_size_gib)
+        if safe is True:
+            vg_size_gib -= RESERVED_DISK
+        assert vg_name == VG_NAME
+        return vg_size_gib
+
+    def create_storage(self, name, disk_size_gib):
+        self.run('lvcreate -L {}g -n {} {}'.format(
+            disk_size_gib,
+            name,
+            VG_NAME,
+        ))
+
+    def mount_temp(self, device, suffix=''):
+        mount_dir = self.run('mktemp -d --suffix {}'.format(suffix))
+        self.run('mount {0} {1}'.format(device, mount_dir))
+        return mount_dir
+
+    def umount_temp(self, device_or_path):
+        self.run('umount {0}'.format(device_or_path))
+
+    def remove_temp(self, mount_path):
+
+        self.run('rmdir {0}'.format(mount_path))
+
+    def format_storage(self, device):
+        self.run('mkfs.xfs -f {}'.format(device))
+
+    def check_netcat(self, port):
+        pid = self.run(
+            'pgrep -f "^/bin/nc.traditional -l -p {}"'
+            .format(port),
+            warn_only=True,
+            silent=True
+        )
+
+        if pid:
+            raise StorageError(
+                'Listening netcat already found on destination hypervisor.'
+            )
+
+    def kill_netcat(self, port):
+        self.run('pkill -f "^/bin/nc.traditional -l -p {}"'.format(port))
+
+    def netcat_to_device(self, device, tx=None):
+        dev_minor = self.run('stat -L -c "%T" {}'.format(device), silent=True)
+        dev_minor = int(dev_minor, 16)
+        port = 7000 + dev_minor
+
+        self.check_netcat(port)
+
+        # Using DD lowers load on device with big enough Block Size
+        self.run(
+            'nohup /bin/nc.traditional -l -p {0} | dd of={1} obs=1048576 &'
+            .format(port, device)
+        )
+        if tx:
+            tx.on_rollback('kill netcat', self.kill_netcat, port)
+        return self.fqdn, port
+
+    def device_to_netcat(self, device, size, listener, tx=None):
+        # Using DD lowers load on device with big enough Block Size
+        self.run(
+            'dd if={0} ibs=1048576 | pv -f -s {1} '
+            '| /bin/nc.traditional -q 1 {2} {3}'
+            .format(device, size, *listener)
+        )
