@@ -465,7 +465,7 @@ class Hypervisor(Host):
         domain = self._get_domain(vm)
         if offline:
             target_hypervisor.create_vm_storage(vm, vm.fqdn, tx)
-            nc_listener = self.netcat_to_device(
+            nc_listener = target_hypervisor.netcat_to_device(
                 self.vm_disk_path(vm.fqdn), tx
             )
             self.device_to_netcat(
