@@ -3,7 +3,6 @@ import logging
 from igvm.exceptions import IGVMError, InconsistentAttributeError
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
-from igvm.utils.preparevm import run_puppet
 from igvm.utils.transaction import run_in_transaction
 from igvm.vm import VM
 
@@ -69,7 +68,7 @@ def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
 
     if runpuppet:
         hypervisor.mount_vm_storage(vm, tx)
-        run_puppet(hypervisor, vm, clear_cert=False, tx=tx)
+        vm.run_puppet(clear_cert=False, tx=tx)
         hypervisor.umount_vm_storage(vm)
 
     existing_hypervisor = vm.hypervisor
