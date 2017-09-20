@@ -3,8 +3,7 @@ COMMON_FABRIC_SETTINGS = dict(
     use_ssh_config=True,
     always_use_pty=False,
     forward_agent=True,
-    user='root',
-    shell='/bin/bash -c',
+    shell='/bin/sh -c',
     timeout=5,
     connection_attempts=1,
 )

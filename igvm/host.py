@@ -116,12 +116,13 @@ class Host(object):
 
         with self.fabric_settings(*settings, warn_only=warn_only):
             try:
-                return fabric.api.run(*args, **kwargs)
+                return fabric.api.sudo(*args, **kwargs)
             except transport.socket.error:
+                # Retry once if connection was lost
                 host = fabric.api.env.host_string
                 if host and host in fabric.state.connections:
                     fabric.state.connections[host].get_transport().close()
-                return fabric.api.run(*args, **kwargs)
+                return fabric.api.sudo(*args, **kwargs)
 
     def read_file(self, path):
         """Reads a file from the remote host and returns contents."""

@@ -12,4 +12,5 @@ def upload_template(filename, destination, context=None):
         backup=False,
         use_jinja=True,
         template_dir=template_dir,
+        use_sudo=True,
     )

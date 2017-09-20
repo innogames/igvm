@@ -6,7 +6,7 @@ _conns = {}
 
 def get_virtconn(fqdn):
     if fqdn not in _conns:
-        url = 'qemu+ssh://root@{}/system'.format(fqdn)
+        url = 'qemu+ssh://{}/system'.format(fqdn)
         _conns[fqdn] = libvirt_open(url)
     return _conns[fqdn]
 
