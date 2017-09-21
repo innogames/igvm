@@ -106,24 +106,31 @@ class Host(object):
         :param silent: If set, no output is written for successful runs"""
         settings = []
         warn_only = kwargs.get('warn_only', False)
+        with_sudo = kwargs.get('with_sudo', True)
         if kwargs.get('silent', False):
             hide = 'everything' if warn_only else 'commands'
             settings.append(fabric.api.hide(hide))
 
         # Purge settings that should not be passed to run()
-        for setting in ['warn_only', 'silent']:
+        for setting in ['warn_only', 'silent', 'with_sudo']:
             if setting in kwargs:
                 del kwargs[setting]
 
         with self.fabric_settings(*settings, warn_only=warn_only):
             try:
-                return fabric.api.sudo(*args, **kwargs)
+                if with_sudo:
+                    return fabric.api.sudo(*args, **kwargs)
+                else:
+                    return fabric.api.run(*args, **kwargs)
             except transport.socket.error:
                 # Retry once if connection was lost
                 host = fabric.api.env.host_string
                 if host and host in fabric.state.connections:
                     fabric.state.connections[host].get_transport().close()
-                return fabric.api.sudo(*args, **kwargs)
+                if with_sudo:
+                    return fabric.api.sudo(*args, **kwargs)
+                else:
+                    return fabric.api.run(*args, **kwargs)
 
     def file_exists(self, *args, **kwargs):
         """Run a fabric.contrib.files.exists on this host with sudo."""

@@ -98,7 +98,7 @@ class VM(Host):
         else:
             return '/{}'.format(path)
 
-    def run(self, command, silent=False):
+    def run(self, command, silent=False, with_sudo=True):
         """ Same as Fabric's run() but works on mounted or running vm
 
             When running in a mounted VM image, run everything in chroot
@@ -113,6 +113,7 @@ class VM(Host):
                     ),
                     shell=False, shell_escape=True,
                     silent=silent,
+                    with_sudo=with_sudo,
                 )
             else:
                 return super(VM, self).run(command, silent=silent)
