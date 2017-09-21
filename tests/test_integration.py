@@ -49,7 +49,7 @@ def _reset_vm():
     vm = VM(VM1)
     vm.server_obj['intern_ip'] = IP1
     vm.server_obj['state'] = 'online'
-    vm.server_obj['disk_size_gib'] = 6
+    vm.server_obj['disk_size_gib'] = 3
     vm.server_obj['memory'] = 2048
     vm.server_obj['num_cpu'] = 2
     vm.server_obj['os'] = 'wheezy'
@@ -261,28 +261,32 @@ class CommandTest(object):
                 "df -h / | tail -n+2 | awk '{ print $2 }'"
             ).strip(), 'G')
 
-        self.assertEqual(_get_hv(), 6)
-        self.assertEqual(_get_vm(), 6)
+        # Initial size same as built
+        size = self.vm.server_obj['disk_size_gib']
+        self.assertEqual(_get_hv(), size)
+        self.assertEqual(_get_vm(), size)
 
+        size = size + 1
         disk_set(self.vm.server_obj['hostname'], '+1')
         self.vm.reload()
 
-        self.assertEqual(self.vm.server_obj['disk_size_gib'], 7)
-        self.assertEqual(_get_hv(), 7)
-        self.assertEqual(_get_vm(), 7)
+        self.assertEqual(self.vm.server_obj['disk_size_gib'], size)
+        self.assertEqual(_get_hv(), size)
+        self.assertEqual(_get_vm(), size)
 
-        disk_set(self.vm.server_obj['hostname'], '8GB')
+        size = 8
+        disk_set(self.vm.server_obj['hostname'], '{}GB'.format(size))
         self.vm.reload()
 
-        self.assertEqual(self.vm.server_obj['disk_size_gib'], 8)
-        self.assertEqual(_get_hv(), 8)
-        self.assertEqual(_get_vm(), 8)
+        self.assertEqual(self.vm.server_obj['disk_size_gib'], size)
+        self.assertEqual(_get_hv(), size)
+        self.assertEqual(_get_vm(), size)
 
         with self.assertRaises(Warning):
-            disk_set(self.vm.server_obj['hostname'], '8GB')
+            disk_set(self.vm.server_obj['hostname'], '{}GB'.format(size))
 
         with self.assertRaises(NotImplementedError):
-            disk_set(self.vm.server_obj['hostname'], '7GB')
+            disk_set(self.vm.server_obj['hostname'], '{}GB'.format(size - 1))
 
         with self.assertRaises(NotImplementedError):
             disk_set(self.vm.server_obj['hostname'], '-1')
