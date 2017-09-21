@@ -54,6 +54,10 @@ def _reset_vm():
     vm.server_obj['num_cpu'] = 2
     vm.server_obj['os'] = 'wheezy'
     vm.server_obj['environment'] = 'testing'
+    vm.server_obj['repositories'] = [
+        'int:basejessie:stable',
+        'int:innogames:stable jessie',
+    ]
     if 'puppet_environment' in vm.server_obj:
         del vm.server_obj['puppet_environment']
     vm.server_obj.commit()
@@ -105,6 +109,10 @@ class BuildTest(object):
     def test_simple_stretch(self):
         self.vm.server_obj.update({
             'os': 'stretch',
+            'repositories': [
+                'int:basestretch:stable',
+                'int:innogames:stable stretch',
+            ]
         })
         self.vm.server_obj.commit()
         buildvm(self.vm.server_obj['hostname'])
