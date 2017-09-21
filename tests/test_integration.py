@@ -113,13 +113,27 @@ class BuildTest(object):
         self._check_vm(self.hv, self.vm)
 
     def test_local_image(self):
-        buildvm(self.vm.server_obj['hostname'],
-                localimage='/{}/jessie-localimage.tar.gz'.format(IMAGE_PATH))
+        # First prepare a local image for testing
+        base_image = 'jessie-base.tar.gz'
+        local_image = 'jessie-localimage.tar.gz'
+        local_extract = '{}/localimage'.format(IMAGE_PATH)
+
+        self.hv.run('rm -rf {} || true'.format(local_extract))  # just in case
+        self.hv.download_image(base_image)
+        self.hv.run('mkdir {}/localimage'.format(IMAGE_PATH))
+        self.hv.extract_image(base_image, local_extract)
+        self.hv.run(
+            'echo 42 > {}/root/local_image_canary'.format(local_extract)
+        )
+        self.hv.run('tar --remove-files -zcf {}/{} -C {} .'.format(
+            IMAGE_PATH, local_image, local_extract)
+        )
+
+        buildvm(self.vm.server_obj['hostname'], localimage=local_image)
 
         self.assertEqual(self.vm.hypervisor.fqdn, self.hv.fqdn)
         self._check_vm(self.hv, self.vm)
 
-        # The file is to be created by `echo 42 > /root/local_image_canary`
         output = self.vm.run('md5sum /root/local_image_canary')
         self.assertIn('50a2fabfdd276f573ff97ace8b11c5f4', output)
 
