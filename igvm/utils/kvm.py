@@ -246,11 +246,14 @@ def migrate_live(source, destination, vm, domain):
         min(source.num_cpus, destination.num_cpus),
     )
 
-    source.run(migrate_cmd.format(
-        domain=domain.name(),
-        destination=destination.fqdn,
-        timeout=timeout,
-    ))
+    source.run(
+        migrate_cmd.format(
+            domain=domain.name(),
+            destination=destination.fqdn,
+            timeout=timeout,
+        ),
+        with_sudo=False,
+    )
 
     # And pin again, in case we migrated to a host with more physical cores
     domain = destination._get_domain(vm)

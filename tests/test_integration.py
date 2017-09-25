@@ -26,7 +26,10 @@ from igvm.exceptions import (
 )
 from igvm.hypervisor import Hypervisor
 from igvm.migratevm import migratevm
-from igvm.settings import COMMON_FABRIC_SETTINGS
+from igvm.settings import (
+    COMMON_FABRIC_SETTINGS,
+    IMAGE_PATH,
+)
 from igvm.utils import cmd
 from igvm.utils.units import parse_size
 from igvm.vm import VM
@@ -38,19 +41,23 @@ env.update(COMMON_FABRIC_SETTINGS)
 IP1 = IPv4Address('10.20.10.42')    # aw21.igvm
 IP2 = IPv4Address('10.20.10.43')    # aw21.igvm
 VM1 = 'igvm-integration.test.ig.local'
-HV1 = 'aw-hv-053.ig.local'
-HV2 = 'aw-hv-082.ig.local'
+HV1 = 'aw-hv-053.ndco.ig.local'
+HV2 = 'aw-hv-082.ndco.ig.local'
 
 
 def _reset_vm():
     vm = VM(VM1)
     vm.server_obj['intern_ip'] = IP1
     vm.server_obj['state'] = 'online'
-    vm.server_obj['disk_size_gib'] = 6
+    vm.server_obj['disk_size_gib'] = 3
     vm.server_obj['memory'] = 2048
     vm.server_obj['num_cpu'] = 2
-    vm.server_obj['ssh_users'] = {'root:control-test'}
     vm.server_obj['os'] = 'wheezy'
+    vm.server_obj['environment'] = 'testing'
+    vm.server_obj['repositories'] = [
+        'int:basejessie:stable',
+        'int:innogames:stable jessie',
+    ]
     if 'puppet_environment' in vm.server_obj:
         del vm.server_obj['puppet_environment']
     vm.server_obj.commit()
@@ -102,6 +109,10 @@ class BuildTest(object):
     def test_simple_stretch(self):
         self.vm.server_obj.update({
             'os': 'stretch',
+            'repositories': [
+                'int:basestretch:stable',
+                'int:innogames:stable stretch',
+            ]
         })
         self.vm.server_obj.commit()
         buildvm(self.vm.server_obj['hostname'])
@@ -110,13 +121,27 @@ class BuildTest(object):
         self._check_vm(self.hv, self.vm)
 
     def test_local_image(self):
-        buildvm(self.vm.server_obj['hostname'],
-                localimage='/root/jessie-localimage.tar.gz')
+        # First prepare a local image for testing
+        base_image = 'jessie-base.tar.gz'
+        local_image = 'jessie-localimage.tar.gz'
+        local_extract = '{}/localimage'.format(IMAGE_PATH)
+
+        self.hv.run('rm -rf {} || true'.format(local_extract))  # just in case
+        self.hv.download_image(base_image)
+        self.hv.run('mkdir {}/localimage'.format(IMAGE_PATH))
+        self.hv.extract_image(base_image, local_extract)
+        self.hv.run(
+            'echo 42 > {}/root/local_image_canary'.format(local_extract)
+        )
+        self.hv.run('tar --remove-files -zcf {}/{} -C {} .'.format(
+            IMAGE_PATH, local_image, local_extract)
+        )
+
+        buildvm(self.vm.server_obj['hostname'], localimage=local_image)
 
         self.assertEqual(self.vm.hypervisor.fqdn, self.hv.fqdn)
         self._check_vm(self.hv, self.vm)
 
-        # The file is to be created by `echo 42 > /root/local_image_canary`
         output = self.vm.run('md5sum /root/local_image_canary')
         self.assertIn('50a2fabfdd276f573ff97ace8b11c5f4', output)
 
@@ -155,7 +180,9 @@ class BuildTest(object):
         self._check_absent(self.hv, self.vm)
 
     def test_image_corruption(self):
-        image = '{}-base.tar.gz'.format(self.vm.server_obj['os'])
+        image = '{}/{}-base.tar.gz'.format(
+            IMAGE_PATH, self.vm.server_obj['os']
+        )
         self.hv.run(cmd('test -f {}', image))
 
         self.hv.run(
@@ -165,7 +192,9 @@ class BuildTest(object):
         buildvm(self.vm.server_obj['hostname'])
 
     def test_image_missing(self):
-        image = '{}-base.tar.gz'.format(self.vm.server_obj['os'])
+        image = '{}/{}-base.tar.gz'.format(
+            IMAGE_PATH, self.vm.server_obj['os']
+        )
         self.hv.run(cmd('rm -f {}', image))
 
         buildvm(self.vm.server_obj['hostname'])
@@ -240,28 +269,32 @@ class CommandTest(object):
                 "df -h / | tail -n+2 | awk '{ print $2 }'"
             ).strip(), 'G')
 
-        self.assertEqual(_get_hv(), 6)
-        self.assertEqual(_get_vm(), 6)
+        # Initial size same as built
+        size = self.vm.server_obj['disk_size_gib']
+        self.assertEqual(_get_hv(), size)
+        self.assertEqual(_get_vm(), size)
 
+        size = size + 1
         disk_set(self.vm.server_obj['hostname'], '+1')
         self.vm.reload()
 
-        self.assertEqual(self.vm.server_obj['disk_size_gib'], 7)
-        self.assertEqual(_get_hv(), 7)
-        self.assertEqual(_get_vm(), 7)
+        self.assertEqual(self.vm.server_obj['disk_size_gib'], size)
+        self.assertEqual(_get_hv(), size)
+        self.assertEqual(_get_vm(), size)
 
-        disk_set(self.vm.server_obj['hostname'], '8GB')
+        size = 8
+        disk_set(self.vm.server_obj['hostname'], '{}GB'.format(size))
         self.vm.reload()
 
-        self.assertEqual(self.vm.server_obj['disk_size_gib'], 8)
-        self.assertEqual(_get_hv(), 8)
-        self.assertEqual(_get_vm(), 8)
+        self.assertEqual(self.vm.server_obj['disk_size_gib'], size)
+        self.assertEqual(_get_hv(), size)
+        self.assertEqual(_get_vm(), size)
 
         with self.assertRaises(Warning):
-            disk_set(self.vm.server_obj['hostname'], '8GB')
+            disk_set(self.vm.server_obj['hostname'], '{}GB'.format(size))
 
         with self.assertRaises(NotImplementedError):
-            disk_set(self.vm.server_obj['hostname'], '7GB')
+            disk_set(self.vm.server_obj['hostname'], '{}GB'.format(size - 1))
 
         with self.assertRaises(NotImplementedError):
             disk_set(self.vm.server_obj['hostname'], '-1')

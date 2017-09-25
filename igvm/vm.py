@@ -1,6 +1,12 @@
 import logging
 import time
+
+from base64 import b64decode
+from fabric.api import cd, get, put, run, settings
+from hashlib import sha1, sha256
 from ipaddress import ip_address
+from StringIO import StringIO
+from uuid import uuid1
 
 from igvm.exceptions import (
     ConfigError,
@@ -9,15 +15,11 @@ from igvm.exceptions import (
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
 from igvm.utils.backoff import retry_wait_backoff
+from igvm.settings import DEFAULT_SWAP_SIZE
 from igvm.utils.cli import yellow
-from igvm.utils.image import download_image, extract_image
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
-from igvm.utils.preparevm import (
-    prepare_vm,
-    copy_postboot_script,
-    run_puppet,
-)
+from igvm.utils.template import upload_template
 from igvm.utils.transaction import run_in_transaction
 from igvm.utils.units import parse_size
 
@@ -50,6 +52,12 @@ class VM(Host):
             assert isinstance(hypervisor, Hypervisor)
         self.hypervisor = hypervisor
 
+        # A flag to keep state of machine consistent between VM methods.
+        # Operations on VM like run() or put() will use it to decide
+        # upon method of accessing files correctly: mounted image on HV or
+        # directly on running VM.
+        self.mounted = False
+
     def _set_ip(self, new_ip):
         """Changes the IP address and updates all related attributes.
         Internal method for VM building and migration."""
@@ -70,6 +78,71 @@ class VM(Host):
                     self.network_config['vlan_tag'],
                 )
             )
+
+    def vm_host(self):
+        """ Return correct ssh host for mounted and unmounted vm """
+
+        if self.mounted:
+            return self.hypervisor.fabric_settings()
+        else:
+            return self.fabric_settings()
+
+    def vm_path(self, path=''):
+        """ Append correct prefix to reach VM's / directory """
+
+        if self.mounted:
+            return '{}/{}'.format(
+                self.hypervisor.vm_mount_path(self),
+                path,
+            )
+        else:
+            return '/{}'.format(path)
+
+    def run(self, command, silent=False, with_sudo=True):
+        """ Same as Fabric's run() but works on mounted or running vm
+
+            When running in a mounted VM image, run everything in chroot
+            and in separate shell inside chroot. Normally Fabric runs shell
+            around commands.
+        """
+        with self.vm_host():
+            if self.mounted:
+                return self.hypervisor.run(
+                    'chroot {} /bin/sh -c \'{}\''.format(
+                        self.vm_path(''), command,
+                    ),
+                    shell=False, shell_escape=True,
+                    silent=silent,
+                    with_sudo=with_sudo,
+                )
+            else:
+                return super(VM, self).run(command, silent=silent)
+
+    def upload_template(self, filename, destination, context=None):
+        """" Same as Fabric's template() but works on mounted or running vm """
+        with self.vm_host():
+            return upload_template(
+                filename, self.vm_path(destination), context
+            )
+
+    def get(self, remote_path, local_path):
+        """" Same as Fabric's get() but works on mounted or running vm """
+        with self.vm_host():
+            return get(self.vm_path(remote_path), local_path, temp_dir='/tmp')
+
+    def put(self, remote_path, local_path, mode='0644'):
+        """ Same as Fabric's put() but works on mounted or running vm
+
+            Setting permissions on files and using sudo via Fabric's put()
+            seems broken, at least for mounted VM. This is why we run
+            extra commands here.
+        """
+        with self.vm_host():
+            tempfile = '/tmp/' + str(uuid1())
+            put(local_path, self.vm_path(tempfile))
+            self.run('mv {0} {1} ; chmod {2} {1}'.format(
+                tempfile, remote_path, mode
+            ))
 
     def set_state(self, new_state, tx=None):
         """Changes state of VM for LB and Nagios downtimes"""
@@ -271,18 +344,17 @@ class VM(Host):
         self.hypervisor.create_vm_storage(self, self.fqdn, tx)
         mount_path = self.hypervisor.format_vm_storage(self, tx)
 
-        with hypervisor.fabric_settings():
-            if not localimage:
-                download_image(image)
-            extract_image(image, mount_path, hypervisor.server_obj['os'])
+        if not localimage:
+            self.hypervisor.download_image(image)
+        self.hypervisor.extract_image(image, mount_path)
 
-        prepare_vm(hypervisor, self)
+        self.prepare_vm()
 
         if runpuppet:
-            run_puppet(hypervisor, self, clear_cert=True, tx=tx)
+            self.run_puppet(clear_cert=True, tx=tx)
 
         if postboot is not None:
-            copy_postboot_script(hypervisor, self, postboot)
+            self.copy_postboot_script(postboot)
 
         self.hypervisor.umount_vm_storage(self)
         hypervisor.define_vm(self, tx)
@@ -301,7 +373,7 @@ class VM(Host):
         # Perform operations on Virtual Machine
         if postboot is not None:
             self.run('/buildvm-postboot')
-            self.run('rm -f /buildvm-postboot')
+            self.run('rm /buildvm-postboot')
 
         log.info('"{}" is successfully built.'.format(self.fqdn))
 
@@ -319,8 +391,9 @@ class VM(Host):
         if new_fqdn == self.fqdn:
             raise ConfigError('The VM already named as "{}"'.format(self.fqdn))
 
-        self.run('echo {0} > /etc/hostname'.format(new_fqdn))
-        self.run('echo {0} > /etc/mailname'.format(new_fqdn))
+        fd = StringIO(new_fqdn)
+        self.put('/etc/hostname', fd)
+        self.put('/etc/mailname', fd)
 
         hosts_file = [
             line
@@ -339,3 +412,116 @@ class VM(Host):
         self.server_obj.commit()
 
         self.start(tx=tx)
+
+    def prepare_vm(self):
+        """Prepare the rootfs for a VM
+
+        VM storage must be mounted on the hypervisor.
+        """
+        fd = StringIO(self.fqdn)
+        self.put('/etc/hostname', fd)
+        self.put('/etc/mailname', fd)
+
+        self.upload_template('etc/fstab', 'etc/fstab', {
+            'blk_dev': self.hypervisor.vm_block_device_name(),
+            'type': 'xfs',
+            'mount_options': 'defaults'
+        })
+        self.upload_template('etc/hosts', '/etc/hosts')
+        self.upload_template('etc/inittab', '/etc/inittab')
+
+        # Copy resolv.conf from Hypervisor
+        fd = StringIO()
+        with self.hypervisor.fabric_settings(
+                cd(self.hypervisor.vm_mount_path(self))
+        ):
+            get('/etc/resolv.conf', fd)
+        self.put('/etc/resolv.conf', fd)
+
+        self.create_swap(DEFAULT_SWAP_SIZE)
+        self.create_ssh_keys()
+
+    def create_ssh_keys(self):
+        # If we wouldn't do remove those, ssh-keygen would ask us confirm
+        # overwrite.
+        self.run('rm -f /etc/ssh/ssh_host_*_key*')
+
+        self.server_obj['sshfp'] = set()
+        key_types = [(1, 'rsa'), (3, 'ecdsa')]
+        if self.server_obj['os'] != 'wheezy':
+            key_types.append((4, 'ed25519'))
+        fp_types = [(1, sha1), (2, sha256)]
+
+        # This will also create the public key files.
+        for key_id, key_type in key_types:
+            self.run(
+                'ssh-keygen -q -t {0} -N "" '
+                '-f /etc/ssh/ssh_host_{0}_key'
+                .format(key_type)
+            )
+
+            fd = StringIO()
+            self.get('/etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)
+            pub_key = b64decode(fd.getvalue().split(None, 2)[1])
+            for fp_id, fp_type in fp_types:
+                self.server_obj['sshfp'].add('{} {} {}'.format(
+                    key_id, fp_id, fp_type(pub_key).hexdigest()
+                ))
+
+    def create_swap(self, size_MiB):
+        self.run(
+            'dd if=/dev/zero of=/swap bs=1M count={}'.format(size_MiB)
+        )
+        self.run('/bin/chmod 0600 /swap')
+        self.run('/sbin/mkswap /swap')
+
+    def run_puppet(self, clear_cert, tx):
+        """Runs Puppet in chroot on the hypervisor."""
+
+        if clear_cert:
+            with settings(
+                host_string=self.server_obj['puppet_ca'],
+                user='root',
+                warn_only=True,
+            ):
+                run(
+                    '/usr/bin/puppet cert clean {}'.format(self.fqdn),
+                    shell=False,
+                )
+
+            self.block_autostart()
+
+        if tx:
+            tx.on_rollback(
+                'Kill puppet',
+                self.run,
+                'pkill -9 -f "/usr/bin/puppet agent -v --fqdn={}"'
+                .format(self.fqdn)
+            )
+            self.run(
+                '/usr/bin/puppet agent -v --fqdn={}'
+                ' --server {} --ca_server {} --no-report'
+                ' --waitforcert=60 --onetime --no-daemonize'
+                ' --skip_tags=chroot_unsafe'
+                ' && touch /tmp/puppet_success'
+                ' | tee {} ;'
+                ' test -f /tmp/puppet_success'
+                .format(
+                    self.fqdn,
+                    self.server_obj['puppet_master'],
+                    self.server_obj['puppet_ca'],
+                    '/var/log/puppetrun_igvm',
+                )
+            )
+
+        self.unblock_autostart()
+
+    def block_autostart(self):
+        fd = StringIO('#!/bin/sh\nexit 101\n')
+        self.put('/usr/sbin/policy-rc.d', fd, '0755')
+
+    def unblock_autostart(self):
+        self.run('rm /usr/sbin/policy-rc.d')
+
+    def copy_postboot_script(self, script):
+        self.put('/buildvm-postboot', script, '0755')

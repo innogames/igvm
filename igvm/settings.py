@@ -3,8 +3,7 @@ COMMON_FABRIC_SETTINGS = dict(
     use_ssh_config=True,
     always_use_pty=False,
     forward_agent=True,
-    user='root',
-    shell='/bin/bash -c',
+    shell='/bin/sh -c',
     timeout=5,
     connection_attempts=1,
 )
@@ -39,3 +38,5 @@ MAC_ADDRESS_PREFIX = (0xCA, 0xFE, 0x00,)
 
 FOREMAN_IMAGE_URL = 'http://aw-foreman.ig.local:8080/{image}'
 FOREMAN_IMAGE_MD5_URL = 'http://aw-foreman.ig.local:8080/{image}.md5'
+
+IMAGE_PATH = '/tmp'
