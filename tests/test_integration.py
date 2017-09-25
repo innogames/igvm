@@ -41,8 +41,8 @@ env.update(COMMON_FABRIC_SETTINGS)
 IP1 = IPv4Address('10.20.10.42')    # aw21.igvm
 IP2 = IPv4Address('10.20.10.43')    # aw21.igvm
 VM1 = 'igvm-integration.test.ig.local'
-HV1 = 'aw-hv-053.ig.local'
-HV2 = 'aw-hv-082.ig.local'
+HV1 = 'aw-hv-053.ndco.ig.local'
+HV2 = 'aw-hv-082.ndco.ig.local'
 
 
 def _reset_vm():
