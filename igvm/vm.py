@@ -39,9 +39,9 @@ class VM(Host):
         super(VM, self).__init__(server_name_or_obj, ignore_reserved)
 
         if not hypervisor:
-            if not self.server_obj['xen_host']:
-                log.error(
-                    'VM with hostname "{}" has no xen_host assigned.'
+            if not self.server_obj.get('xen_host'):
+                raise VMError(
+                    'VM with fqdn "{}" has no xen_host assigned.'
                     .format(self.fqdn)
                 )
 
