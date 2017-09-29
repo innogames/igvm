@@ -36,6 +36,7 @@ from igvm.vm import VM
 
 logging.basicConfig(level=logging.WARNING)
 env.update(COMMON_FABRIC_SETTINGS)
+env['user'] = 'igtesting'  # Enforce user for integration testing process
 
 # Configuration of staging environment
 IP1 = IPv4Address('10.20.10.42')    # aw21.igvm
