@@ -5,6 +5,7 @@ from base64 import b64decode
 from fabric.api import cd, get, put, run, settings
 from hashlib import sha1, sha256
 from ipaddress import ip_address
+from re import compile as re_compile
 from StringIO import StringIO
 from uuid import uuid1
 
@@ -175,23 +176,30 @@ class VM(Host):
 
         mul_numa_nodes = 128 * self.hypervisor.num_numa_nodes()
         validations = [
-            ('memory', (lambda v: v > 0, 'memory must be > 0')),
+            (
+                'hostname',
+                re_compile('\A[a-z][a-z0-9\.\-]+\Z').match,
+                'invalid hostname',
+            ),
+            ('memory', lambda v: v > 0, 'memory must be > 0'),
             # https://medium.com/@juergen_thomann/memory-hotplug-with-qemu-kvm-and-libvirt-558f1c635972#.sytig6o9h
-            ('memory', (
+            (
+                'memory',
                 lambda v: v % mul_numa_nodes == 0,
-                'memory must be multiple of {}MiB'.format(mul_numa_nodes)
-            )),
-            ('num_cpu', (lambda v: v > 0, 'num_cpu must be > 0')),
-            ('os', (lambda v: True, 'os must be set')),
+                'memory must be multiple of {}MiB'.format(mul_numa_nodes),
+            ),
+            ('num_cpu', lambda v: v > 0, 'num_cpu must be > 0'),
+            ('os', lambda v: True, 'os must be set'),
             (
                 'disk_size_gib',
-                (lambda v: v > 0, 'disk_size_gib must be > 0')
+                lambda v: v > 0,
+                'disk_size_gib must be > 0',
             ),
-            ('puppet_ca', (lambda v: True, 'puppet_ca must be set')),
-            ('puppet_master', (lambda v: True, 'puppet_master must be set')),
+            ('puppet_ca', lambda v: True, 'puppet_ca must be set'),
+            ('puppet_master', lambda v: True, 'puppet_master must be set'),
         ]
 
-        for attr, (check, err) in validations:
+        for attr, check, err in validations:
             value = self.server_obj[attr]
             if not value:
                 raise ConfigError('"{}" attribute is not set'.format(attr))
@@ -391,6 +399,9 @@ class VM(Host):
         if new_fqdn == self.fqdn:
             raise ConfigError('The VM already named as "{}"'.format(self.fqdn))
 
+        self.server_obj['hostname'] = new_hostname
+        self.check_serveradmin_config()
+
         fd = StringIO(new_fqdn)
         self.put('/etc/hostname', fd)
         self.put('/etc/mailname', fd)
@@ -408,7 +419,6 @@ class VM(Host):
         self.shutdown(tx=tx)
         self.hypervisor.rename_vm(self, new_hostname)
 
-        self.server_obj['hostname'] = new_hostname
         self.server_obj.commit()
 
         self.start(tx=tx)
