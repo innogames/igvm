@@ -6,8 +6,8 @@ to call the functions in this library.  The binary is "bin/igvm".
 The library functions can be included like this:
 
 ```python
-from managevm.buildvm import buildvm
-from managevm.migratevm import migratevm
+from igvm.commands import vm_build
+from igvm.migratevm import migratevm
 ```
 
 The functions are to be called like this:
@@ -18,7 +18,7 @@ migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, maintenance=F
 
 * Mandatory:
  * vm_hostname - string, hostname of virtual machine
- * dsthv_hostname - string, hostname of destination hypervisor
+ * hypervisor_hostname - string, hostname of destination hypervisor
 * Optional:
  * newip - string, new IP address if you migrate to different vlan
  * nopuppet - boolean, disable running chrooted puppet after VM image is extracted
