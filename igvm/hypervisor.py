@@ -620,13 +620,14 @@ class Hypervisor(Host):
     def get_free_disk_size_gib(self, safe=True):
         """Return free disk space as float in GiB"""
         vgs_line = self.run(
-            'vgs --noheadings -o vg_name,vg_free --unit g --nosuffix {0}'
+            'vgs --noheadings -o vg_name,vg_free --unit b --nosuffix {0}'
             ' 2>/dev/null'
             .format(VG_NAME),
             silent=True,
         )
         vg_name, vg_size_gib = vgs_line.split()
-        vg_size_gib = float(vg_size_gib)
+        # Floor instead of ceil because we check free instead of used space
+        vg_size_gib = math.floor(float(vg_size_gib) / 1024 ** 2)
         if safe is True:
             vg_size_gib -= RESERVED_DISK
         assert vg_name == VG_NAME
