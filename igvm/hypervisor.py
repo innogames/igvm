@@ -30,7 +30,6 @@ from igvm.utils.kvm import (
     set_memory,
     set_vcpus,
 )
-from igvm.utils.lazy_property import lazy_property
 from igvm.utils.virtutils import get_virtconn
 
 log = logging.getLogger(__name__)
@@ -166,11 +165,11 @@ class Hypervisor(Host):
         """Creates a VM on the hypervisor."""
         log.info('Defining "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
 
-        self.conn.defineXML(generate_domain_xml(self, vm))
+        self.conn().defineXML(generate_domain_xml(self, vm))
 
         # Refresh storage pools to register the vm image
-        for pool_name in self.conn.listStoragePools():
-            pool = self.conn.storagePoolLookupByName(pool_name)
+        for pool_name in self.conn().listStoragePools():
+            pool = self.conn().storagePoolLookupByName(pool_name)
             pool.refresh(0)
         if tx:
             tx.on_rollback(
@@ -395,7 +394,6 @@ class Hypervisor(Host):
         self._vm_sync_from_hypervisor(vm, result)
         return result
 
-    @lazy_property
     def conn(self):
         conn = get_virtconn(self.fqdn)
         if not conn:
@@ -407,7 +405,7 @@ class Hypervisor(Host):
 
     def num_numa_nodes(self):
         """Return the number of NUMA nodes"""
-        return self.conn.getInfo()[4]
+        return self.conn().getInfo()[4]
 
     def _find_domain(self, vm):
         """Search and return the domain on hypervisor
@@ -418,7 +416,7 @@ class Hypervisor(Host):
         found = None
         # We are not using lookupByName(), because it prints ugly messages to
         # the console.
-        for domain in self.conn.listAllDomains():
+        for domain in self.conn().listAllDomains():
             name = domain.name()
             if not (vm.fqdn == name or vm.fqdn.startswith(name + '.')):
                 continue
@@ -482,7 +480,7 @@ class Hypervisor(Host):
     def total_vm_memory(self):
         """Get amount of memory in MiB available to hypervisor"""
         # Start with what OS sees as total memory (not installed memory)
-        total_mib = self.conn.getMemoryStats(-1)['total'] / 1024
+        total_mib = self.conn().getMemoryStats(-1)['total'] / 1024
         # Always keep some extra memory free for Hypervisor
         total_mib -= HOST_RESERVED_MEMORY
         return total_mib
@@ -492,11 +490,11 @@ class Hypervisor(Host):
         total_mib = self.total_vm_memory()
 
         # Calculate memory used by other VMs.
-        # We can not trust conn.getFreeMemory(), sum up memory used by
+        # We can not trust conn().getFreeMemory(), sum up memory used by
         # each VM instead
         used_kib = 0
-        for dom_id in self.conn.listDomainsID():
-            dom = self.conn.lookupByID(dom_id)
+        for dom_id in self.conn().listDomainsID():
+            dom = self.conn().lookupByID(dom_id)
             used_kib += dom.info()[2]
         free_mib = total_mib - used_kib / 1024
         return free_mib

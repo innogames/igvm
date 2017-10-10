@@ -1,3 +1,4 @@
+import os
 import logging
 import time
 
@@ -8,6 +9,9 @@ from ipaddress import ip_address
 from re import compile as re_compile
 from StringIO import StringIO
 from uuid import uuid1
+
+from adminapi.dataset import query
+from adminapi.dataset.filters import Any
 
 from igvm.exceptions import (
     ConfigError,
@@ -23,6 +27,16 @@ from igvm.utils.portping import wait_until
 from igvm.utils.template import upload_template
 from igvm.utils.transaction import run_in_transaction
 from igvm.utils.units import parse_size
+from igvm.balance.models import VM as BalanceVM
+from igvm.balance.models import Hypervisor as BalanceHV
+from igvm.balance.utils import (
+    get_config,
+    get_constraints,
+    get_rules,
+    filter_hypervisors,
+    get_ranking,
+)
+
 
 log = logging.getLogger(__name__)
 
@@ -41,10 +55,8 @@ class VM(Host):
 
         if not hypervisor:
             if not self.server_obj.get('xen_host'):
-                raise VMError(
-                    'VM with fqdn "{}" has no xen_host assigned.'
-                    .format(self.fqdn)
-                )
+                self.server_obj.set('xen_host', self.find_hypervisor())
+                self.server_obj.commit()
 
             hypervisor = Hypervisor(
                 self.server_obj['xen_host'], ignore_reserved
@@ -535,3 +547,72 @@ class VM(Host):
 
     def copy_postboot_script(self, script):
         self.put('/buildvm-postboot', script, '0755')
+
+    def find_hypervisor(self, states=['online'], balance_ruleset=None):
+        """Find a hypervisor where VM can be migrated to
+
+        Tries to find a better hypervisor for the VM and return the hostname of
+        the new hypervisor. It returns None if no hypervisor is available.
+
+        :param: states: hypervisor states as list
+        :param: balance_ruleset: force using this balance rule set
+
+        :return: str|None
+        """
+
+        filters = {
+            'servertype': 'hypervisor',
+            'state': Any(*states),
+            'vlan_networks': self.server_obj['route_network'],
+        }
+        if 'IGVM_MODE' in os.environ and os.environ['IGVM_MODE'] == 'testing':
+            filters['environment'] = 'testing'
+
+        hvs = [
+            BalanceHV(host['hostname'])
+            for host in query(**filters).restrict('hostname')
+        ]
+        vm = BalanceVM(self.server_obj['hostname'])
+
+        logging.info('Testing {} hypervisors to find the best one'.format(
+            len(hvs)
+        ))
+
+        if balance_ruleset:
+            config = get_config(balance_ruleset)
+        else:
+            config = get_config(self.server_obj['project'])
+
+        constraints = get_constraints(config['constraints'])
+        hvs = filter_hypervisors(vm, hvs, constraints)
+
+        if not hvs:
+            return None
+
+        rules = get_rules(config['rules'])
+        ranking = get_ranking(vm, hvs, rules)
+        best_hvs = sorted(ranking, key=ranking.get, reverse=True)
+
+        for hv in best_hvs:
+            logging.debug('{}: {}'.format(hv, ranking[hv]))
+
+        hv_index = 0
+        cur_hv = None
+        if 'xen_host' in self.server_obj:
+            cur_hv = self.server_obj['xen_host']
+
+        # We check disk size of hypervisor in a quick a dirty way for know
+        # because running SSH to each host takes forever. This can return wrong
+        # values so we better check before returning the best hypervisor if it
+        # has already enough disk space free.
+        for hv in best_hvs:
+            if hv_index >= len(best_hvs):
+                return None
+
+            bhv = Hypervisor(best_hvs[hv_index]).get_free_disk_size_gib()
+            vm = float(self.server_obj['disk_size_gib'])
+
+            if bhv > vm and cur_hv != best_hvs[hv_index]:
+                return best_hvs[hv_index]
+            else:
+                hv_index += 1

@@ -364,7 +364,7 @@ def generate_domain_xml(hypervisor, vm):
 
 
 def _get_qemu_version(hypervisor):
-    version = hypervisor.conn.getVersion()
+    version = hypervisor.conn().getVersion()
     # According to documentation:
     # value is major * 1,000,000 + minor * 1,000 + release
     release = version % 1000

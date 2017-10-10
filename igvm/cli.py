@@ -30,6 +30,7 @@ from igvm.commands import (
 )
 from igvm.utils.cli import white, red
 from igvm.utils.virtutils import close_virtconns
+from igvm.balance.utils import get_config_keys
 
 
 class IGVMArgumentParser(ArgumentParser):
@@ -115,6 +116,8 @@ def parse_args():
     )
     subparser.add_argument(
         'hypervisor_hostname',
+        nargs='?',
+        default=None,
         help='Hostname of destination hypervisor',
     )
     subparser.add_argument(
@@ -143,7 +146,11 @@ def parse_args():
         action='store_true',
         help='Force migration to a Host which has the state online_reserved',
     )
-
+    subparser.add_argument(
+        '--balance-ruleset',
+        choices=get_config_keys(),
+        help='Use this igbalance ruleset instead of project default',
+    )
     subparser = subparsers.add_parser(
         'disk-set',
         description=disk_set.__doc__,

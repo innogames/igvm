@@ -11,13 +11,23 @@ log = logging.getLogger(__name__)
 
 @with_fabric_settings   # NOQA: C901
 @run_in_transaction
-def migratevm(vm_hostname, hypervisor_hostname, newip=None, runpuppet=False,
-              maintenance=False, offline=False, tx=None,
-              ignore_reserved=False):
+def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
+              runpuppet=False, maintenance=False, offline=False, tx=None,
+              ignore_reserved=False, balance_ruleset=None):
     """Migrate a VM to a new hypervisor."""
     assert tx is not None, 'tx populated by run_in_transaction'
 
     vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
+
+    # If not specified automatically find a new better hypervisor
+    if not hypervisor_hostname:
+        hypervisor_hostname = vm.find_hypervisor(
+            balance_ruleset=balance_ruleset
+        )
+        logging.info('Migrating VM to auto best {}'.format(
+            hypervisor_hostname
+        ))
+
     hypervisor = Hypervisor(
         hypervisor_hostname, ignore_reserved=ignore_reserved
     )

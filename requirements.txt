@@ -1,4 +1,4 @@
-Fabric==1.11.0
+Fabric==1.11.1
 cffi
 paramiko
 ipaddress

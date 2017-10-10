@@ -11,6 +11,16 @@ def get_virtconn(fqdn):
     return _conns[fqdn]
 
 
+def close_virtconn(fqdn):
+    if fqdn in _conns:
+        conn = _conns[fqdn]
+        try:
+            conn.close()
+        except libvirtError:
+            pass
+        del _conns[fqdn]
+
+
 def close_virtconns():
     for fqdn in _conns.keys():
         conn = _conns[fqdn]

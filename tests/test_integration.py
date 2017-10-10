@@ -1,8 +1,13 @@
 # Integration tests for user-facing igvm commands
-from ipaddress import IPv4Address
+
+import os
 import logging
 import tempfile
 import unittest
+
+from ipaddress import IPv4Address
+from adminapi.dataset import create, query, DatasetError
+from adminapi.dataset.filters import Not
 
 from fabric.api import env
 
@@ -39,15 +44,40 @@ env.update(COMMON_FABRIC_SETTINGS)
 env['user'] = 'igtesting'  # Enforce user for integration testing process
 
 # Configuration of staging environment
-IP1 = IPv4Address('10.20.10.42')    # aw21.igvm
-IP2 = IPv4Address('10.20.10.43')    # aw21.igvm
-VM1 = 'igvm-integration.test.ig.local'
+IP1 = IPv4Address(u'10.20.10.42')    # aw21.igvm
+IP2 = IPv4Address(u'10.20.10.43')    # aw21.igvm
+VM1_host = 'igvm-integration.test.ig.local'
+VM1_net = 'igvm-net-aw.test.ig.local'
 HV1 = 'aw-hv-053.ndco.ig.local'
 HV2 = 'aw-hv-082.ndco.ig.local'
+os.environ['IGVM_MODE'] = 'testing'
 
 
-def _reset_vm():
-    vm = VM(VM1)
+def _create_vm():
+
+    # Before using any functions from igvm library delete and recreate
+    # Serveradmin object.
+    vm_obj = query(servertype='vm', hostname=VM1_host)
+    try:
+        vm_obj.get()
+    except DatasetError:
+        pass
+    else:
+        vm_obj.delete()
+        vm_obj.commit()
+
+    vm_obj = create({
+        'hostname': VM1_host,
+        'project_network': VM1_net,
+        'servertype': 'vm',
+        'project': 'test',
+        'team': 'test',
+        'xen_host': HV1,
+    })
+    vm_obj.commit()
+
+    # Query for it from igvm.vm and reset to defaults
+    vm = VM(VM1_host)
     vm.server_obj['intern_ip'] = IP1
     vm.server_obj['state'] = 'online'
     vm.server_obj['disk_size_gib'] = 3
@@ -67,19 +97,20 @@ def _reset_vm():
     return vm
 
 
-def _clean_vm(hv, fqdn):
-    hv.run(
-        'virsh destroy {vm}; '
-        'virsh undefine {vm}'
-        .format(vm=fqdn),
-        warn_only=True,
-    )
-    hv.run(
-        'umount /dev/xen-data/{vm}; '
-        'lvremove -f /dev/xen-data/{vm}'
-        .format(vm=fqdn),
-        warn_only=True,
-    )
+def _clean_vm(hvs, vm):
+    for hv in hvs:
+        hv.run(
+            'virsh destroy {vm}; '
+            'virsh undefine {vm}'
+            .format(vm=vm.fqdn),
+            warn_only=True,
+        )
+        hv.run(
+            'umount /dev/xen-data/{vm}; '
+            'lvremove -f /dev/xen-data/{vm}'
+            .format(vm=vm.fqdn),
+            warn_only=True,
+        )
 
 
 class IGVMTest(unittest.TestCase):
@@ -97,14 +128,59 @@ class IGVMTest(unittest.TestCase):
         hv.run('test ! -b /dev/xen-data/{}'.format(vm.fqdn))
 
 
-class BuildTest(object):
+class BalanceBuildTest(IGVMTest):
+    """ Same as BuildTest but with tearDown and setUp cleanign *both* HVs """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.hv1 = Hypervisor(HV1)
+        cls.hv2 = Hypervisor(HV2)
+        cls.vm = _create_vm()
+
+        _clean_vm((cls.hv1, cls.hv2), cls.vm)
+
+    @classmethod
+    def tearDownClass(cls):
+        _clean_vm((cls.hv1, cls.hv2), cls.vm)
+
+    def test_buildvm_auto_find_hypervisor(self):
+        del self.vm.server_obj['xen_host']
+        self.vm.server_obj.commit()
+
+        buildvm(self.vm.server_obj['hostname'])
+
+        # Make sure we have updated objects after change.
+        self.vm.reload()
+        self.hv = Hypervisor(self.vm.server_obj['xen_host'])
+
+        self._check_vm(self.hv, self.vm)
+
+
+class BuildTest(IGVMTest):
+    def setUp(self):
+        self.hv = Hypervisor(HV1)
+        self.vm = _create_vm()
+        _clean_vm([self.hv], self.vm)
+
     def tearDown(self):
-        _clean_vm(self.hv, self.vm.fqdn)
+        _clean_vm([self.hv], self.vm)
 
     def test_simple(self):
         buildvm(self.vm.server_obj['hostname'])
 
         self.assertEqual(self.vm.hypervisor.fqdn, self.hv.fqdn)
+        self._check_vm(self.hv, self.vm)
+
+    def test_buildvm_auto_find_hypervisor(self):
+        del self.vm.server_obj['xen_host']
+        self.vm.server_obj.commit()
+
+        buildvm(self.vm.server_obj['hostname'])
+
+        # Make sure we have updated objects after change.
+        self.vm.reload()
+        self.hv = Hypervisor(self.vm.server_obj['xen_host'])
+
         self._check_vm(self.hv, self.vm)
 
     def test_simple_stretch(self):
@@ -223,13 +299,6 @@ class BuildTest(object):
         # Old contents are gone.
         with self.assertRaises(IGVMError):
             self.vm.run('test -f /root/initial_canary')
-
-
-class KVMBuildTest(IGVMTest, BuildTest):
-    def setUp(self):
-        self.hv = Hypervisor(HV1)
-        self.vm = _reset_vm()
-        _clean_vm(self.hv, self.vm.fqdn)
 
 
 class CommandTest(object):
@@ -444,8 +513,8 @@ class CommandTest(object):
 class KVMCommandTest(IGVMTest, CommandTest):
     def setUp(self):
         self.hv = Hypervisor(HV1)
-        self.vm = _reset_vm()
-        _clean_vm(self.hv, self.vm.fqdn)
+        self.vm = _create_vm()
+        _clean_vm([self.hv], self.vm)
 
 
 class MigrationTest(IGVMTest):
@@ -453,16 +522,14 @@ class MigrationTest(IGVMTest):
     def setUpClass(cls):
         cls.hv1 = Hypervisor(HV1)
         cls.hv2 = Hypervisor(HV2)
-        cls.vm = _reset_vm()
+        cls.vm = _create_vm()
 
-        _clean_vm(cls.hv1, cls.vm.fqdn)
-        _clean_vm(cls.hv2, cls.vm.fqdn)
+        _clean_vm([cls.hv1, cls.hv2], cls.vm)
         buildvm(cls.vm.server_obj['hostname'])
 
     @classmethod
     def tearDownClass(cls):
-        _clean_vm(cls.hv1, cls.vm.fqdn)
-        _clean_vm(cls.hv2, cls.vm.fqdn)
+        _clean_vm([cls.hv1, cls.hv2], cls.vm)
 
     def setUp(self):
         # Make sure we have a clean initial state
@@ -484,6 +551,36 @@ class MigrationTest(IGVMTest):
         self.vm.reload()
         self._check_vm(self.hv1, self.vm)
         self._check_absent(self.hv2, self.vm)
+
+    def test_online_migration_auto_find_hypervisor(self):
+        cur_hv = self.vm.server_obj['xen_host']
+        new_hv = query(
+            servertype='hypervisor',
+            environment='testing',
+            vlan_networks=self.vm.server_obj['route_network'],
+            hostname=Not(cur_hv)
+        ).get()['hostname']
+
+        migratevm(self.vm.server_obj['hostname'])
+
+        self.vm.reload()
+        self._check_vm(Hypervisor(new_hv), self.vm)
+        self._check_absent(Hypervisor(cur_hv), self.vm)
+
+        # And back again otherwise the tearDown will fail WTF!
+        cur_hv = self.vm.server_obj['xen_host']
+        new_hv = query(
+            servertype='hypervisor',
+            environment='testing',
+            vlan_networks=self.vm.server_obj['route_network'],
+            hostname=Not(cur_hv)
+        ).get()['hostname']
+
+        migratevm(self.vm.server_obj['hostname'])
+
+        self.vm.reload()
+        self._check_vm(Hypervisor(new_hv), self.vm)
+        self._check_absent(Hypervisor(cur_hv), self.vm)
 
     def test_offline_migration(self):
         migratevm(self.vm.server_obj['hostname'], HV2, offline=True)
