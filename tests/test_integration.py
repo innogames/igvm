@@ -129,7 +129,7 @@ class IGVMTest(unittest.TestCase):
 
 
 class BalanceBuildTest(IGVMTest):
-    """ Same as BuildTest but with tearDown and setUp cleanign *both* HVs """
+    """ Same as BuildTest but with tearDown and setUp cleaning *both* HVs """
 
     @classmethod
     def setUpClass(cls):

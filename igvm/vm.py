@@ -55,7 +55,8 @@ class VM(Host):
 
         if not hypervisor:
             if not self.server_obj.get('xen_host'):
-                self.server_obj.set('xen_host', self.find_hypervisor())
+                self.server_obj.set('xen_host', self.find_hypervisor(
+                    balance_ruleset='basic'))
                 self.server_obj.commit()
 
             hypervisor = Hypervisor(
@@ -579,6 +580,8 @@ class VM(Host):
         ))
 
         if balance_ruleset:
+            logging.info('using ruleset {} for initial setup'.format(
+                balance_ruleset))
             config = get_config(balance_ruleset)
         else:
             config = get_config(self.server_obj['project'])
