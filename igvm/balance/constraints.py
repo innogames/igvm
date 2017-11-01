@@ -141,15 +141,14 @@ class Bladecenter(Constraint):
         return False
 
 
-class GameWorldDistribution(Constraint):
-    """Game World Distribution
+class EnsureFunctionDistribution(Constraint):
+    """Game World / Function Distribution
 
-    Check if the hypervisor already contains a server related to the game and
-    world and return True if NOT.
+    Ensure that redundant servers don't reside on the same hypervisor
     """
 
     def __init__(self, *args, **kwargs):
-        super(GameWorldDistribution, self).__init__(*args, **kwargs)
+        super(EnsureFunctionDistribution, self).__init__(*args, **kwargs)
 
     def fulfilled(self, vm, hv):
         """Check if target hypervisor constrains a VM of the game (world)

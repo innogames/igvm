@@ -485,6 +485,11 @@ class VM(Host):
 
         return str(self.get_serveradmin_data()['function'])
 
+    def get_environment(self):
+        """get environment -> str"""
+
+        return str(self.get_serveradmin_data()['environment'])
+
     def get_identifier(self):
         """get game identifer for vm -> str"""
 
@@ -495,7 +500,11 @@ class VM(Host):
             world = self.get_world()
 
             identifier = domain + '-' + market + '-' + world
+        else:
+            project = self.get_game()
+            function = self.get_function()
+            environment = self.get_environment()
 
-            return identifier
+            identifier = project + '-' + function + '-' + environment
 
-        return 'unknown identifier'
+        return identifier

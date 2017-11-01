@@ -1,7 +1,6 @@
 {
     "basic": {
         "constraints": [
-            {
                 "name": "Hypervisor is in same route network",
                 "class": "RouteNetwork"
             },
@@ -15,30 +14,20 @@
                 "class": "Memory"
             },
             {
-                "name": "Don't migrate two webservers of the same world on one HV",
-                "class": "GameWorldDistribution"
-            },
-            {
-                "name": "Don't migrate two master-dbs of different markets/games on one HV",
-                "class": "GameMasterDbDistribution",
-                "db_types": ["db"]
-            },
-            {
                 "name": "Hypervisor Max 95 vCPU usage < than 45%",
                 "class": "HypervisorMaxVcpuUsage",
                 "threshold": "45.0"
+            },
+            {
+                "name": "Don't migrate two webservers of the same function on one HV",
+                "class": "EnsureFunctionDistribution"
             }
         ],
         "rules": [
             {
                 "name": "Find less loaded Hypervisor",
                 "class": "HypervisorMaxCpuUsage",
-                "weight": 1,
-                "time_range": "-1w"
-            },
-            {
-                "name": "Don't put too many hosts of one market on one HV",
-                "class": "GameMarketDistribution"
+                "weight": 1
             },
             {
                 "name": "Less overallocated (cpu) HVs first",
