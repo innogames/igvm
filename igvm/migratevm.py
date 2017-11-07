@@ -93,16 +93,16 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
 
     vm.hypervisor.migrate_vm(vm, hypervisor, offline, tx)
 
+    previous_hypervisor = vm.hypervisor
+    vm.hypervisor = hypervisor
+
     if runpuppet:
         hypervisor.mount_vm_storage(vm, tx)
         vm.run_puppet(clear_cert=False, tx=tx)
         hypervisor.umount_vm_storage(vm)
 
-    existing_hypervisor = vm.hypervisor
-    vm.hypervisor = hypervisor
-
     def _reset_hypervisor():
-        vm.hypervisor = existing_hypervisor
+        vm.hypervisor = previous_hypervisor
     tx.on_rollback('reset hypervisor', _reset_hypervisor)
 
     if offline and was_running:
@@ -117,7 +117,7 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
     # migrated one.
     tx.checkpoint()
 
-    existing_hypervisor.delete_vm(vm)
+    previous_hypervisor.delete_vm(vm)
 
 
 def check_attributes(vm):
