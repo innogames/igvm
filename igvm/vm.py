@@ -500,7 +500,7 @@ class VM(Host):
                     shell=False,
                 )
 
-            self.block_autostart()
+        self.block_autostart()
 
         if tx:
             tx.on_rollback(
