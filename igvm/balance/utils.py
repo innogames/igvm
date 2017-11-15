@@ -108,7 +108,6 @@ def filter_hypervisors(vm, hypervisors, constraints):
     """
 
     for c_module, c_config in constraints:
-        logging.info('Evaluating constraint {}'.format(c_config['class']))
 
         i_constraints = list()
         for hypervisor in hypervisors:
@@ -118,6 +117,11 @@ def filter_hypervisors(vm, hypervisors, constraints):
             c_kwargs['hv'] = hypervisor
             constraint = _get_instance(c_module, c_class, c_kwargs)
             i_constraints.append(constraint)
+        logging.info(
+            'Evaluating constraint {}, {} hypervisors'.format(
+                c_config['class'],
+                len(hypervisors)
+            ))
 
         threads_running = 0
         while i_constraints:
@@ -146,6 +150,9 @@ def filter_hypervisors(vm, hypervisors, constraints):
 
                     i_constraints.remove(i_constraint)
                     threads_running = threads_running - 1
+        logging.info(
+            'Constrain applied, {} hypervisors left'.format(len(hypervisors))
+        )
 
     return hypervisors
 

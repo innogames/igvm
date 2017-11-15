@@ -55,8 +55,12 @@ class VM(Host):
 
         if not hypervisor:
             if not self.server_obj.get('xen_host'):
-                self.server_obj.set('xen_host', self.find_hypervisor(
-                    balance_ruleset='basic'))
+                hypervisor = self.find_hypervisor(balance_ruleset='basic')
+                if not hypervisor:
+                    raise ConfigError((
+                        'No hypervisor given and not suitable '
+                        'hypervisor found!'))
+                self.server_obj.set('xen_host', hypervisor)
                 self.server_obj.commit()
 
             hypervisor = Hypervisor(

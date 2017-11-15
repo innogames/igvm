@@ -39,7 +39,7 @@ from igvm.utils import cmd
 from igvm.utils.units import parse_size
 from igvm.vm import VM
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
 env.update(COMMON_FABRIC_SETTINGS)
 env['user'] = 'igtesting'  # Enforce user for integration testing process
 
