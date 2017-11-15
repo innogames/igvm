@@ -1,6 +1,7 @@
 {
     "basic": {
         "constraints": [
+            {
                 "name": "Hypervisor is in same route network",
                 "class": "RouteNetwork"
             },
@@ -17,10 +18,6 @@
                 "name": "Hypervisor Max 95 vCPU usage < than 45%",
                 "class": "HypervisorMaxVcpuUsage",
                 "threshold": "45.0"
-            },
-            {
-                "name": "Don't migrate two webservers of the same function on one HV",
-                "class": "EnsureFunctionDistribution"
             }
         ],
         "rules": [
