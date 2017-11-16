@@ -117,12 +117,16 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
 
 @with_fabric_settings
 def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
-             ignore_reserved=False):
+             ignore_reserved=False, balance_ruleset=None):
+    print('vm_build: {}'.format(balance_ruleset))
     """Create a VM and start it
 
     Puppet in run once to configure baseline networking.
     """
-    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
+    vm = VM(
+        vm_hostname, ignore_reserved=ignore_reserved,
+        balance_ruleset=balance_ruleset,
+    )
     vm.build(
         localimage=localimage,
         runpuppet=not nopuppet,

@@ -5,13 +5,14 @@ import logging
 import tempfile
 import unittest
 
+from functools import partial
 from ipaddress import IPv4Address
 from adminapi.dataset import create, query, DatasetError
 from adminapi.dataset.filters import Not
 
 from fabric.api import env
 
-from igvm.buildvm import buildvm
+from igvm.buildvm import buildvm as real_buildvm
 from igvm.commands import (
     disk_set,
     host_info,
@@ -30,7 +31,7 @@ from igvm.exceptions import (
     InconsistentAttributeError,
 )
 from igvm.hypervisor import Hypervisor
-from igvm.migratevm import migratevm
+from igvm.migratevm import migratevm as real_migratevm
 from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
     IMAGE_PATH,
@@ -39,7 +40,8 @@ from igvm.utils import cmd
 from igvm.utils.units import parse_size
 from igvm.vm import VM
 
-logging.basicConfig(level=logging.WARNING)
+
+logging.basicConfig(level=logging.INFO)
 env.update(COMMON_FABRIC_SETTINGS)
 env['user'] = 'igtesting'  # Enforce user for integration testing process
 
@@ -111,6 +113,10 @@ def _clean_vm(hvs, vm):
             .format(vm=vm.fqdn),
             warn_only=True,
         )
+
+
+buildvm = partial(real_buildvm, balance_ruleset='test')
+migratevm = partial(real_migratevm, balance_ruleset='test')
 
 
 class IGVMTest(unittest.TestCase):
@@ -607,8 +613,9 @@ class MigrationTest(IGVMTest):
 
     def test_reject_new_ip_without_puppet(self):
         with self.assertRaises(IGVMError):
-            migratevm(self.vm.server_obj['hostname'], HV2, offline=True,
-                      newip=IP2)
+            migratevm(
+                self.vm.server_obj['hostname'], HV2, offline=True, newip=IP2
+            )
 
     @unittest.skip("depends on automatic regeneration of ig.local domain")
     def test_new_ip(self):
@@ -643,15 +650,19 @@ class MigrationTest(IGVMTest):
 
     def test_reject_online_with_puppet(self):
         with self.assertRaises(IGVMError):
-            migratevm(self.vm.server_obj['hostname'], HV2, runpuppet=True)
+            migratevm(
+                self.vm.server_obj['hostname'], HV2, runpuppet=True
+            )
 
     def test_rollback(self):
         self.vm.server_obj['puppet_environment'] = 'doesnotexist'
         self.vm.server_obj.commit()
 
         with self.assertRaises(IGVMError):
-            migratevm(self.vm.server_obj['hostname'], HV2, offline=True,
-                      runpuppet=True)
+            migratevm(
+                self.vm.server_obj['hostname'], HV2, offline=True,
+                runpuppet=True,
+            )
 
         # Have we cleaned up?
         self.vm.reload()

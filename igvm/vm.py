@@ -50,13 +50,20 @@ class VM(Host):
     servertype = 'vm'
 
     def __init__(self, server_name_or_obj, ignore_reserved=False,
-                 hypervisor=None):
+                 hypervisor=None, balance_ruleset='basic'):
+        print('VM __init__: {}'.format(balance_ruleset))
         super(VM, self).__init__(server_name_or_obj, ignore_reserved)
 
         if not hypervisor:
             if not self.server_obj.get('xen_host'):
-                self.server_obj.set('xen_host', self.find_hypervisor(
-                    balance_ruleset='basic'))
+                hypervisor = self.find_hypervisor(
+                    balance_ruleset=balance_ruleset
+                )
+                if not hypervisor:
+                    raise ConfigError((
+                        'No hypervisor given and not suitable '
+                        'hypervisor found!'))
+                self.server_obj.set('xen_host', hypervisor)
                 self.server_obj.commit()
 
             hypervisor = Hypervisor(
