@@ -399,17 +399,15 @@ class CommandTest(object):
         with self.assertRaises(Warning):
             mem_set(self.vm.server_obj['hostname'], '3G')
 
-        if self.hv.server_obj['hypervisor'] == 'kvm':
-            with self.assertRaises(InvalidStateError):
-                mem_set(self.vm.server_obj['hostname'], '2G')
+        with self.assertRaises(InvalidStateError):
+            mem_set(self.vm.server_obj['hostname'], '2G')
 
         with self.assertRaises(IGVMError):
             mem_set(self.vm.server_obj['hostname'], '200G')
 
-        if self.hv.server_obj['hypervisor'] == 'kvm':
-            # Not dividable
-            with self.assertRaises(IGVMError):
-                mem_set(self.vm.server_obj['hostname'], '4097M')
+        # Not dividable
+        with self.assertRaises(IGVMError):
+            mem_set(self.vm.server_obj['hostname'], '4097M')
 
         self.vm.reload()
         self.assertEqual(_get_mem_hv(), 3072)
@@ -457,9 +455,8 @@ class CommandTest(object):
             vcpu_set(self.vm.server_obj['hostname'], 3)
 
         # Online reduce not implemented yet on KVM
-        if self.hv.server_obj['hypervisor'] == 'kvm':
-            with self.assertRaises(IGVMError):
-                vcpu_set(self.vm.server_obj['hostname'], 2)
+        with self.assertRaises(IGVMError):
+            vcpu_set(self.vm.server_obj['hostname'], 2)
 
         # Offline
         vcpu_set(self.vm.server_obj['hostname'], 2, offline=True)
