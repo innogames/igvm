@@ -76,11 +76,8 @@ class DomainProperties(object):
         self.mem_hotplug = (self.qemu_version >= (2, 3))
         self.mem_balloon = False
         self.mac_address = _generate_mac_address(vm.server_obj['intern_ip'])
-        if vm.server_obj['os'] in ['wheezy', 'jessie']:
-            self.boot_type = 'debian'
-            self.kernel_image = '/vmlinuz'
-            self.initrd_image = '/initrd.img'
-        if vm.server_obj['os'] in ['stretch']:
+        vm.server_obj['mac'] = [self.mac_address]
+        if vm.server_obj['os'] in ['wheezy', 'jessie', 'stretch']:
             self.boot_type = 'grub'
             self.kernel_image = '/var/lib/libvirt/boot/grub2.img'
         elif vm.server_obj['os'] in ['freebsd10', 'freebsd11']:
