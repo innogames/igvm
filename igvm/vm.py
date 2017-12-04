@@ -51,7 +51,6 @@ class VM(Host):
 
     def __init__(self, server_name_or_obj, ignore_reserved=False,
                  hypervisor=None, balance_ruleset='basic'):
-        print('VM __init__: {}'.format(balance_ruleset))
         super(VM, self).__init__(server_name_or_obj, ignore_reserved)
 
         if not hypervisor:
