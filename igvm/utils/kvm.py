@@ -75,8 +75,14 @@ class DomainProperties(object):
         self.numa_mode = self.NUMA_SPREAD
         self.mem_hotplug = (self.qemu_version >= (2, 3))
         self.mem_balloon = False
-        self.mac_address = _generate_mac_address(vm.server_obj['intern_ip'])
-        vm.server_obj['mac'] = [self.mac_address]
+        if len(vm.server_obj['mac']) == 0:
+            self.mac_address = _generate_mac_address(
+                vm.server_obj['object_id']
+            )
+            vm.server_obj['mac'] = [self.mac_address]
+        else:
+            # Opportunistic algorighm: get *any* MAC from Serveradmin
+            self.mac_address = next(iter(vm.server_obj['mac']))
         if vm.server_obj['os'] in ['wheezy', 'jessie', 'stretch']:
             self.boot_type = 'grub'
             self.kernel_image = '/var/lib/libvirt/boot/grub2.img'
@@ -310,10 +316,9 @@ def _attach_memory_dimms(vm, domain, props, memory_mib):
     )
 
 
-def _generate_mac_address(ip):
-    assert ip.version == 4, 'intern_ip is IPv4 address'
-    ip_octets = tuple(int(c) for c in str(ip).split('.')[-3:])
-    mac_address = MAC_ADDRESS_PREFIX + ip_octets
+def _generate_mac_address(object_id):
+    octets = tuple(object_id >> (8 * i) & 0xff for i in range(0, 3))
+    mac_address = MAC_ADDRESS_PREFIX + octets
     assert len(mac_address) == 6
     return ':'.join(format(d, '02x') for d in mac_address)
 
