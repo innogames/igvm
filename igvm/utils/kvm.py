@@ -234,9 +234,13 @@ def migrate_live(source, destination, vm, domain):
         # Don't tolerate soft errors
         ' --abort-on-error'
         # We need SSH agent forwarding
-        ' --desturi qemu+ssh://{destination}/system'
+        ' --desturi qemu+tls://{destination}/system'
         # Force guest to suspend, if noting else helped
         ' --timeout {timeout}'
+        # Needed on Stretch for disk sync
+        ' --p2p'
+        ' --tunnelled'
+        # Show progress bar during migration
         ' --verbose'
     )
 
