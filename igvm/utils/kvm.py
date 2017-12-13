@@ -289,6 +289,13 @@ def set_memory(hypervisor, vm, domain):
         assert add_memory > 0
         assert add_memory % (128 * props.num_nodes) == 0
         _attach_memory_dimms(vm, domain, props, add_memory)
+
+        log.info('KVM: Activating new DIMMs in guest')
+        # If modules are already online, this will fail. So || true.
+        vm.run(
+            'echo online'
+            ' | tee /sys/devices/system/memory/memory*/state || true'
+        )
         return
 
     raise HypervisorError(
