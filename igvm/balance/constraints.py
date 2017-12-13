@@ -13,7 +13,7 @@ class Constraint(Thread):
 
     def __init__(self, *args, **kwargs):
         Thread.__init__(self)
-        self.started = False
+        self.result = None
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -34,7 +34,6 @@ class Constraint(Thread):
     def run(self):
         """Wrapper for threading support"""
 
-        self.started = True
         self.result = self.fulfilled(self.vm, self.hv)
 
 

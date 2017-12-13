@@ -20,7 +20,7 @@ class Rule(Thread):
 
     def __init__(self, *args, **kwargs):
         Thread.__init__(self)
-        self.started = False
+        self.result = None
 
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
@@ -50,8 +50,7 @@ class Rule(Thread):
     def run(self):
         """Wrapper for theading support"""
 
-        self.started = True
-        self.score = self.score(self.vm, self.hv)
+        self.result = self.score(self.vm, self.hv)
 
 
 class HypervisorMaxCpuUsage(Rule):

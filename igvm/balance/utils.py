@@ -132,19 +132,24 @@ def filter_hypervisors(vm, hypervisors, constraints):
             ))
             for i_constraint in i_constraints:
                 if threads_running < 32:
-                    # started ensures the thread never ran before and
-                    # is_alive() ensures that the thread is not running
-                    # currently.
+                    # Result is set with a boolean value when constraint
+                    # execution is finished and is_alive is False when thread
+                    # has not started yet or is finished so we can be sure if
+                    # result is None and is_alive returns False that the thread
+                    # has not been started yet.
                     if (
-                        not i_constraint.started and
-                        not i_constraint.is_alive()
+                        i_constraint.result is None and
+                        i_constraint.is_alive() is False
                     ):
                         threads_running = threads_running + 1
                         i_constraint.start()
 
-                # constraint was started but is not running any more so it
-                # must have finished.
-                if i_constraint.started and not i_constraint.is_alive():
+                # If result is not None anymore and is_alive returns False we
+                # can be sure that the thread has finished.
+                if (
+                    i_constraint.result is not None and
+                    i_constraint.is_alive() is False
+                ):
                     if not i_constraint.result:
                         hypervisors.remove(i_constraint.hv)
 
@@ -189,15 +194,18 @@ def get_ranking(vm, hypervisors, rules):
 
         for i_rule in i_rules:
             if threads_running < 32:
-                # started ensures the thread never ran before and is_alive()
-                # ensures that the thread is not running currently.
-                if not i_rule.started and not i_rule.is_alive():
+                # Result is set with a boolean value when constraint
+                # execution is finished and is_alive is False when thread
+                # has not started yet or is finished so we can be sure if
+                # result is None and is_alive returns False that the thread
+                # has not been started yet.
+                if i_rule.result is None and i_rule.is_alive() is False:
                     threads_running = threads_running + 1
                     i_rule.start()
 
-            # rule was started but is not running any more so it must have
-            # finished.
-            if i_rule.started and not i_rule.is_alive():
+            # If result is not None anymore and is_alive returns False we
+            # can be sure that the thread has finished.
+            if i_rule.result is not None and i_rule.is_alive() is False:
                 rulename = i_rule.__class__.__name__
                 hostname = i_rule.hv.hostname
 
@@ -206,7 +214,7 @@ def get_ranking(vm, hypervisors, rules):
 
                 # We allow to increase the importance of specific rules by
                 # setting a factor for the rule in balance.json.
-                score = float(i_rule.score)
+                score = float(i_rule.result)
                 if hasattr(i_rule, 'weight'):
                     score = score * float(i_rule.weight)
 
