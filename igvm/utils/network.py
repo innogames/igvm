@@ -1,6 +1,7 @@
 import logging
 
-from adminapi.dataset import query, filters
+from adminapi.dataset import query
+from adminapi.filters import Contains, Not
 
 log = logging.getLogger(__name__)
 
@@ -11,8 +12,8 @@ def get_network_config(server):
     # if IP address of a server was changed via --newip.
     route_network = query(
         servertype='route_network',
-        state=filters.Not('retired'),
-        intern_ip=filters.Overlap(server['intern_ip'])
+        state=Not('retired'),
+        intern_ip=Contains(server['intern_ip']),
     ).restrict(
         'hostname',
         'intern_ip',
@@ -51,7 +52,7 @@ def get_gateways(network):
 
     if network.get('default_gateway'):
         default_gateway = query(
-            state=filters.Not('retired'),
+            state=Not('retired'),
             hostname=network['default_gateway'],
         ).get()
     else:
@@ -59,7 +60,7 @@ def get_gateways(network):
 
     if network.get('internal_gateway'):
         internal_gateway = query(
-            state=filters.Not('retired'),
+            state=Not('retired'),
             hostname=network['internal_gateway'],
         ).get()
     else:
