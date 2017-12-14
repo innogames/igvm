@@ -1,9 +1,7 @@
-from threading import Thread
-
 from igvm.balance.models import GameMarket
 
 
-class Rule(Thread):
+class Rule(object):
     """Base Rule Class
 
     This class is the base rule class from which all concrete rules should
@@ -19,9 +17,6 @@ class Rule(Thread):
     """
 
     def __init__(self, *args, **kwargs):
-        Thread.__init__(self)
-        self.result = None
-
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
 
@@ -46,11 +41,6 @@ class Rule(Thread):
         """
 
         raise NotImplementedError()
-
-    def run(self):
-        """Wrapper for theading support"""
-
-        self.result = self.score(self.vm, self.hv)
 
 
 class HypervisorMaxCpuUsage(Rule):
@@ -90,7 +80,7 @@ class GameMarketDistribution(Rule):
         super(GameMarketDistribution, self).__init__(*args, **kwargs)
 
     def score(self, vm, hv):
-        gm = GameMarket(vm.get_game(), vm.get_market())
+        gm = GameMarket(vm['project'], vm['game_market'])
 
         same_hv = 0.0
         single_vm_weight = 100.0 / float(len(gm.get_vms()))
@@ -115,21 +105,21 @@ class CpuOverAllocation(Rule):
 
     def score(self, vm, hv):
         # New VM has no xen_host attribute yet.
-        if not vm.get_serveradmin_data()['xen_host']:
+        if not vm['xen_host']:
             return 100.0
 
         cur_hv_cpus = 0
         for cur_vm in vm.get_hypervisor().get_vms():
-            cur_hv_cpus += cur_vm.get_serveradmin_data()['num_cpu']
+            cur_hv_cpus += cur_vm['num_cpu']
 
-        tgt_hv_cpus = vm.get_serveradmin_data()['num_cpu']
+        tgt_hv_cpus = vm['num_cpu']
         for cur_vm in hv.get_vms():
-            tgt_hv_cpus += cur_vm.get_serveradmin_data()['num_cpu']
+            tgt_hv_cpus += cur_vm['num_cpu']
 
-        cur_hv_rl_cpus = vm.get_hypervisor().get_serveradmin_data()['num_cpu']
+        cur_hv_rl_cpus = vm.get_hypervisor()['num_cpu']
         cur_ovr_allc = float(cur_hv_cpus) / float(cur_hv_rl_cpus) * 100.0
 
-        tgt_hv_rl_cpus = hv.get_serveradmin_data()['num_cpu']
+        tgt_hv_rl_cpus = hv['num_cpu']
         tgt_ovr_allc = float(tgt_hv_cpus) / float(tgt_hv_rl_cpus) * 100.0
 
         if tgt_ovr_allc < cur_ovr_allc:

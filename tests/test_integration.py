@@ -115,8 +115,8 @@ def _clean_vm(hvs, vm):
         )
 
 
-buildvm = partial(real_buildvm, balance_ruleset='test')
-migratevm = partial(real_migratevm, balance_ruleset='test')
+buildvm = partial(real_buildvm, balance_config='test')
+migratevm = partial(real_migratevm, balance_config='test')
 
 
 class IGVMTest(unittest.TestCase):

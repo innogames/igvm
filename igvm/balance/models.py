@@ -5,6 +5,7 @@ from adminapi.dataset.filters import Any
 
 from igvm.hypervisor import Hypervisor as KVMHypervisor
 from igvm.utils.virtutils import close_virtconn
+from igvm.balance.utils import ServeradminCache as sc
 
 
 class Game(object):
@@ -74,9 +75,11 @@ class Game(object):
         """
 
         if self._hypervisors_available is None:
-            hvs = query(vlan_networks=Any(self.get_route_networks()),
-                        servertype='hypervisor',
-                        state='online')
+            hvs = query(
+                vlan_networks=Any(self.get_route_networks()),
+                servertype='hypervisor',
+                state='online'
+            )
             hvs = set([hv['hostname'] for hv in hvs])
             self._hypervisors_available = [Hypervisor(hv) for hv in hvs]
 
@@ -88,7 +91,7 @@ class Game(object):
         :return: str
         """
 
-        pns = query(project=self.shortname, servertype='project_network')
+        pns = sc.query(project=self.shortname, servertype='project_network')
         return list(set([pn['route_network'] for pn in pns]))
 
     def get_vms(self):
@@ -98,7 +101,7 @@ class Game(object):
         """
 
         if self._vms is None:
-            vms = query(servertype='vm', project=self.shortname)
+            vms = sc.query(servertype='vm', project=self.shortname)
             self._vms = [VM(vm['hostname']) for vm in vms]
 
         return self._vms
@@ -141,8 +144,11 @@ class GameMarket(Game):
 
         if self._vms is None:
             self._vms = []
-            vms = query(servertype='vm', project=self.shortname,
-                        game_market=self.market)
+            vms = sc.query(
+                servertype='vm',
+                project=self.shortname,
+                game_market=self.market
+            )
             self._vms = [VM(vm['hostname']) for vm in vms]
 
         return self._vms
@@ -180,8 +186,12 @@ class GameWorld(GameMarket):
 
         if self._vms is None:
             self._vms = []
-            vms = query(servertype='vm', project=self.shortname,
-                        game_market=self.market, game_world=self.world)
+            vms = sc.query(
+                servertype='vm',
+                project=self.shortname,
+                game_market=self.market,
+                game_world=self.world
+            )
             self._vms = [VM(vm['hostname']) for vm in vms]
 
         return self._vms
@@ -216,7 +226,9 @@ class Bladecenter(object):
 
         if self._hypervisors is None:
             self._hypervisors = []
-            qs = query(servertype='hypervisor', bladecenter=self.bladecenter)
+            qs = sc.query(
+                servertype='hypervisor', bladecenter=self.bladecenter
+            )
             for hypervisor in qs:
                 hostname = hypervisor['hostname']
                 self._hypervisors.append(Hypervisor(hostname))
@@ -233,7 +245,7 @@ class Bladecenter(object):
 
         return self._vms
 
-    def get_avg_load(self, tfrom='-1w', tuntil='now'):
+    def get_avg_load(self):
         """Get average load of hypervisors in bladecenter -> float
 
         Calculates the average load of the bladecenter for all hypervisors and
@@ -254,7 +266,6 @@ class Host(object):
     """Host"""
 
     def __init__(self, hostname):
-        super(Host, self).__init__()
         self.hostname = hostname
         self._serveradmin_data = None
 
@@ -274,28 +285,26 @@ class Host(object):
     def __repr__(self):
         return self.hostname
 
-    def get_serveradmin_data(self):
-        """get serveradmin object data -> dict"""
-
+    def __getitem__(self, key):
         if self._serveradmin_data is None:
-            self._serveradmin_data = query(hostname=self.hostname).get()
+            self._serveradmin_data = sc.get(self.hostname)
 
-        return self._serveradmin_data
+        return self._serveradmin_data[key]
 
     def get_memory(self):
         """get available or allocated memory in MiB -> int"""
 
-        return int(self.get_serveradmin_data()['memory'])
+        return int(self['memory'])
 
     def get_cpus(self):
         """get available or allocated cpus -> int"""
 
-        return int(self.get_serveradmin_data()['num_cpu'])
+        return int(self['num_cpu'])
 
     def get_disk_size(self):
         """Get allocated disk size in MiB -> int"""
 
-        return int(self.get_serveradmin_data()['disk_size_gib'] * 1024)
+        return int(self['disk_size_gib'] * 1024)
 
 
 class Hypervisor(Host):
@@ -310,13 +319,13 @@ class Hypervisor(Host):
     def get_state(self):
         """get hypervisor state -> str"""
 
-        return self.get_serveradmin_data()['state']
+        return self['state']
 
     def get_bladecenter(self):
         """get bladecenter -> Bladecenter"""
 
         if self._bladecenter is None:
-            bladecenter = self.get_serveradmin_data()['bladecenter']
+            bladecenter = self['bladecenter']
             self._bladecenter = Bladecenter(bladecenter)
 
         return self._bladecenter
@@ -326,21 +335,27 @@ class Hypervisor(Host):
 
         if self._vms is None:
             self._vms = []
-            qs = query(servertype='vm', xen_host=self.hostname)
+            qs = sc.query(
+                servertype='vm', xen_host=self.hostname
+            )
             for vm in qs:
                 self._vms.append(VM(vm['hostname']))
 
         return self._vms
 
-    def get_memory_free(self):
+    def get_memory_free(self, fast=False):
         """Get free memory for VMs in MiB -> float
 
         Get free memory in MiB from libvirt and return it or -1.0 on error.
         """
 
-        ighv = KVMHypervisor(self.hostname)
-        memory = float(ighv.free_vm_memory())
-        close_virtconn(ighv.fqdn)
+        if fast:
+            vms_memory = float(sum([vm['memory'] for vm in self.get_vms()]))
+            return float(self['memory']) - vms_memory
+        else:
+            ighv = KVMHypervisor(self.hostname)
+            memory = float(ighv.free_vm_memory())
+            close_virtconn(ighv.fqdn)
 
         return memory
 
@@ -354,17 +369,15 @@ class Hypervisor(Host):
         :return: float
         """
 
-        disk_free_mib = 0.0
-
         if fast:
             # We reserved 10 GiB for root partition and 16 for swap.
             reserved = 16.0 + 10
-            host = self.get_serveradmin_data()['disk_size_gib']
+            host = self['disk_size_gib']
             vms = float(sum(
-                [vm['disk_size_gib'] for vm in query(
+                [vm['disk_size_gib'] for vm in sc.query(
                     servertype='vm',
                     xen_host=self.hostname
-                ).restrict('disk_size_gib')]
+                )]
             ))
             disk_free_mib = (host - vms - reserved) * 1024.0
         else:
@@ -450,7 +463,7 @@ class VM(Host):
         """get hypervisor -> Hypervisor"""
 
         if self._hypervisor is None:
-            hostname = self.get_serveradmin_data()['xen_host']
+            hostname = self['xen_host']
             self._hypervisor = Hypervisor(hostname)
 
         return self._hypervisor
@@ -460,51 +473,25 @@ class VM(Host):
 
         return self.get_hypervisor().get_bladecenter()
 
-    def get_game(self):
-        """get game shortname vm is assinged to -> str"""
-
-        return self.get_serveradmin_data()['project']
-
-    def get_domain(self):
-        """get domain for game -> str"""
-
-        return self.get_serveradmin_data()['project']
-
-    def get_market(self):
-        """get market shortcode vm is assinged to -> str"""
-
-        return str(self.get_serveradmin_data()['game_market'])
-
-    def get_world(self):
-        """get world shortcode vm is assinged to -> str"""
-
-        return str(self.get_serveradmin_data()['game_world'])
-
-    def get_function(self):
-        """get game function -> str"""
-
-        return str(self.get_serveradmin_data()['function'])
-
-    def get_environment(self):
-        """get environment -> str"""
-
-        return str(self.get_serveradmin_data()['environment'])
-
     def get_identifier(self):
         """get game identifer for vm -> str"""
 
-        data = self.get_serveradmin_data()
-        if 'game_market' in data and 'game_world' in data:
-            domain = self.get_domain()
-            market = self.get_market()
-            world = self.get_world()
+        if self['game_market'] and self['game_world']:
+            identifier = '{}-{}-{}'.format(
+                self['project'],
+                self['game_market'],
+                self['game_world'],
+            )
 
-            identifier = domain + '-' + market + '-' + world
+            if self['game_type']:
+                identifier += (
+                    '-' + self['game_type']
+                )
+
+            return identifier
         else:
-            project = self.get_game()
-            function = self.get_function()
-            environment = self.get_environment()
-
-            identifier = project + '-' + function + '-' + environment
-
-        return identifier
+            return '{}-{}-{}'.format(
+                self['project'],
+                self['function'],
+                self['environment']
+            )

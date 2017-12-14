@@ -147,7 +147,7 @@ def parse_args():
         help='Force migration to a Host which has the state online_reserved',
     )
     subparser.add_argument(
-        '--balance-ruleset',
+        '--balance-config',
         choices=get_config_keys(),
         help='Use this igbalance ruleset instead of project default',
     )
