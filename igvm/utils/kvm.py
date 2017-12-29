@@ -234,13 +234,9 @@ def migrate_live(source, destination, vm, domain):
         # Don't tolerate soft errors
         ' --abort-on-error'
         # We need SSH agent forwarding
-        ' --desturi qemu+tls://{destination}/system'
+        ' --desturi qemu+ssh://{destination}/system'
         # Force guest to suspend, if noting else helped
         ' --timeout {timeout}'
-        # Needed on Stretch for disk sync
-        ' --p2p'
-        ' --tunnelled'
-        # Show progress bar during migration
         ' --verbose'
     )
 
@@ -289,13 +285,6 @@ def set_memory(hypervisor, vm, domain):
         assert add_memory > 0
         assert add_memory % (128 * props.num_nodes) == 0
         _attach_memory_dimms(vm, domain, props, add_memory)
-
-        log.info('KVM: Activating new DIMMs in guest')
-        # If modules are already online, this will fail. So || true.
-        vm.run(
-            'echo online'
-            ' | tee /sys/devices/system/memory/memory*/state || true'
-        )
         return
 
     raise HypervisorError(

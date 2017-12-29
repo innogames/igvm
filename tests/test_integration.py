@@ -85,7 +85,7 @@ def _create_vm():
     vm.server_obj['disk_size_gib'] = 3
     vm.server_obj['memory'] = 2048
     vm.server_obj['num_cpu'] = 2
-    vm.server_obj['os'] = 'jessie'
+    vm.server_obj['os'] = 'wheezy'
     vm.server_obj['environment'] = 'testing'
     vm.server_obj['repositories'] = [
         'int:basejessie:stable',
