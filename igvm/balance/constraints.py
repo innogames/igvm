@@ -1,7 +1,4 @@
-from threading import Thread
-
-
-class Constraint(Thread):
+class Constraint(object):
     """Base Constraint Class
 
     This class is the base constraints class from which all concrete
@@ -12,9 +9,6 @@ class Constraint(Thread):
     """
 
     def __init__(self, *args, **kwargs):
-        Thread.__init__(self)
-        self.started = False
-
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -30,12 +24,6 @@ class Constraint(Thread):
         """
 
         raise NotImplementedError()
-
-    def run(self):
-        """Wrapper for threading support"""
-
-        self.started = True
-        self.result = self.fulfilled(self.vm, self.hv)
 
 
 class DiskSpace(Constraint):
@@ -83,7 +71,7 @@ class Memory(Constraint):
 
         :return: bool
         """
-        hv_memory_free = hv.get_memory_free()
+        hv_memory_free = hv.get_memory_free(fast=True)
         vm_memory_needed = vm.get_memory()
 
         if hv_memory_free <= vm_memory_needed:
@@ -109,8 +97,8 @@ class RouteNetwork(Constraint):
 
         :return: bool
         """
-        vm_rn = vm.get_serveradmin_data()['route_network']
-        hv_rns = hv.get_serveradmin_data()['vlan_networks']
+        vm_rn = vm['route_network']
+        hv_rns = hv['vlan_networks']
 
         if vm_rn in hv_rns:
             return True
@@ -187,13 +175,13 @@ class GameMasterDbDistribution(Constraint):
 
         # If we don't try to migrate a master db we can safely ingore further
         # evaluation.
-        if vm.get_world() != 0 and vm.get_function() not in self.db_types:
+        if vm['game_world'] != 0 and vm['function'] not in self.db_types:
             return True
 
         for hv_vm in hv.get_vms():
             if (
-                hv_vm.get_world() == 0 and
-                hv_vm.get_function() in self.db_types
+                hv_vm['game_world'] == 0 and
+                hv_vm['function'] in self.db_types
             ):
                 return False
 
@@ -253,8 +241,8 @@ class ServeradminAttribute(Constraint):
         key = self.serveradmin_attribute
         value = self.serveradmin_value
 
-        if key in hv.get_serveradmin_data().keys():
-            if hv.get_serveradmin_data()[key] == value:
+        if key in hv.keys():
+            if hv[key] == value:
                 return True
 
         return False

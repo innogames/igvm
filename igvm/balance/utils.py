@@ -5,6 +5,41 @@ import logging
 from importlib import import_module
 
 
+class ServeradminCache(object):
+    _serveradmin_object_cache = {}
+
+    @classmethod
+    def get(cls, key):
+        if key in cls._serveradmin_object_cache:
+            return cls._serveradmin_object_cache[key]
+
+        logging.error('Cache mismatch for {}'.format(key))
+
+        return None
+
+    @classmethod
+    def set(cls, key, value):
+        cls._serveradmin_object_cache[key] = value
+
+    @classmethod
+    def query(cls, **kwargs):
+        # WARNING: This does only work if cache is filled with expected value.
+        rs = []
+
+        for entry in cls._serveradmin_object_cache.values():
+            for key, value in kwargs.items():
+                if key not in entry or entry[key] != value:
+                    break
+            else:
+                rs.append(entry)
+
+        return rs
+
+    @classmethod
+    def size(cls):
+        return len(cls._serveradmin_object_cache)
+
+
 def get_config_keys():
     """Get balance configurations available
 
@@ -108,51 +143,16 @@ def filter_hypervisors(vm, hypervisors, constraints):
     """
 
     for c_module, c_config in constraints:
-
-        i_constraints = list()
+        logging.info('Checking constraint {}'.format(c_config['class']))
+        dismiss = list()
         for hypervisor in hypervisors:
             c_kwargs = c_config.copy()
             c_class = c_kwargs.pop('class')
-            c_kwargs['vm'] = vm
-            c_kwargs['hv'] = hypervisor
             constraint = _get_instance(c_module, c_class, c_kwargs)
-            i_constraints.append(constraint)
-        logging.info(
-            'Evaluating constraint {}, {} hypervisors'.format(
-                c_config['class'],
-                len(hypervisors)
-            ))
+            if not constraint.fulfilled(vm, hypervisor):
+                dismiss.append(hypervisor)
 
-        threads_running = 0
-        while i_constraints:
-            logging.debug((
-                '{} hypervisors left, {} constraints left, {}/32 threads used'
-            ).format(
-                len(hypervisors), len(i_constraints), threads_running
-            ))
-            for i_constraint in i_constraints:
-                if threads_running < 32:
-                    # started ensures the thread never ran before and
-                    # is_alive() ensures that the thread is not running
-                    # currently.
-                    if (
-                        not i_constraint.started and
-                        not i_constraint.is_alive()
-                    ):
-                        threads_running = threads_running + 1
-                        i_constraint.start()
-
-                # constraint was started but is not running any more so it
-                # must have finished.
-                if i_constraint.started and not i_constraint.is_alive():
-                    if not i_constraint.result:
-                        hypervisors.remove(i_constraint.hv)
-
-                    i_constraints.remove(i_constraint)
-                    threads_running = threads_running - 1
-        logging.info(
-            'Constrain applied, {} hypervisors left'.format(len(hypervisors))
-        )
+        filter(lambda h: hypervisors.remove(h), dismiss)
 
     return hypervisors
 
@@ -170,51 +170,31 @@ def get_ranking(vm, hypervisors, rules):
     :return: dict
     """
 
-    i_rules = list()
+    logging.info('Getting hypervisor ranking')
+
+    rule_ranking = dict()
     for hypervisor in hypervisors:
         for r_module, r_config in rules:
             r_kwargs = r_config.copy()
             r_class = r_kwargs.pop('class')
-            r_kwargs['vm'] = vm
-            r_kwargs['hv'] = hypervisor
             rule = _get_instance(r_module, r_class, r_kwargs)
-            i_rules.append(rule)
+            score = rule.score(vm, hypervisor)
+            rulename = rule.__class__.__name__
+            hostname = hypervisor.hostname
 
-    threads_running = 0
-    rule_ranking = dict()
-    while i_rules:
-        logging.debug('{} rules left, {}/32 threads used'.format(
-            len(i_rules), threads_running)
-        )
+            if rulename not in rule_ranking:
+                rule_ranking[rulename] = {}
 
-        for i_rule in i_rules:
-            if threads_running < 32:
-                # started ensures the thread never ran before and is_alive()
-                # ensures that the thread is not running currently.
-                if not i_rule.started and not i_rule.is_alive():
-                    threads_running = threads_running + 1
-                    i_rule.start()
-
-            # rule was started but is not running any more so it must have
-            # finished.
-            if i_rule.started and not i_rule.is_alive():
-                rulename = i_rule.__class__.__name__
-                hostname = i_rule.hv.hostname
-
-                if rulename not in rule_ranking:
-                    rule_ranking[rulename] = {}
-
-                # We allow to increase the importance of specific rules by
-                # setting a factor for the rule in balance.json.
-                score = float(i_rule.score)
-                if hasattr(i_rule, 'weight'):
-                    score = score * float(i_rule.weight)
+            # We allow to increase the importance of specific rules by
+            # setting a factor for the rule in balance.json.
+            score = float(score)
+            if hasattr(rule, 'weight'):
+                score = score * float(rule.weight)
 
                 rule_ranking[rulename][hostname] = score
-                i_rules.remove(i_rule)
-                threads_running = threads_running - 1
 
     normalized_ranking = _normalize_ranking(rule_ranking)
+    logging.debug(normalized_ranking)
 
     return normalized_ranking
 

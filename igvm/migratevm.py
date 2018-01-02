@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 @run_in_transaction
 def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
               runpuppet=False, maintenance=False, offline=False, tx=None,
-              ignore_reserved=False, balance_ruleset=None):
+              ignore_reserved=False, balance_config=None):
     """Migrate a VM to a new hypervisor."""
     assert tx is not None, 'tx populated by run_in_transaction'
 
@@ -21,12 +21,10 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
 
     # If not specified automatically find a new better hypervisor
     if not hypervisor_hostname:
-        hypervisor_hostname = vm.find_hypervisor(
-            balance_ruleset=balance_ruleset
+        hypervisor_hostname = vm.get_best_hypervisor(
+            balance_config,
+            ['online', 'online_reserved'] if ignore_reserved else ['online']
         )
-        logging.info('Migrating VM to auto best {}'.format(
-            hypervisor_hostname
-        ))
 
     hypervisor = Hypervisor(
         hypervisor_hostname, ignore_reserved=ignore_reserved
