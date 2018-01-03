@@ -41,7 +41,8 @@ class Engine(object):
 
         hvs = query(
             servertype='hypervisor',
-            vlan_networks=vm['route_network']
+            vlan_networks=vm['route_network'],
+            environment=environ.get('IGVM_MODE', 'production')
         )
         for hv in hvs:
             ServeradminCache.set(hv['hostname'], hv)
