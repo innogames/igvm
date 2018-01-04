@@ -41,13 +41,10 @@ class VM(Host):
                  hypervisor=None):
         super(VM, self).__init__(server_name_or_obj, ignore_reserved)
 
-        if not hypervisor:
-            if not self.server_obj['xen_host']:
-                self.set_best_hypervisor()
-            hypervisor = Hypervisor(self.server_obj['xen_host'])
-
-        assert isinstance(hypervisor, Hypervisor)
-        self.hypervisor = hypervisor
+        if not hypervisor and self.server_obj['xen_host']:
+            self.hypervisor = Hypervisor(self.server_obj['xen_host'])
+        else:
+            self.hypervisor = hypervisor
 
         # A flag to keep state of machine consistent between VM methods.
         # Operations on VM like run() or put() will use it to decide
@@ -574,5 +571,6 @@ class VM(Host):
 
         hv = self.get_best_hypervisor(balance_config, hv_states)
         logging.info('Setting hypervisor to {}'.format(hv))
+        self.hypervisor = Hypervisor(hv)
         self.server_obj['xen_host'] = hv
         self.server_obj.commit()

@@ -124,6 +124,14 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
     """
 
     vm = VM(vm_hostname)
+
+    # Could also have been set in serveradmin already.
+    if not vm.hypervisor:
+        vm.set_best_hypervisor(
+            balance_config,
+            ['online', 'online_reserved'] if ignore_reserved else ['online']
+        )
+
     vm.build(
         localimage=localimage,
         runpuppet=not nopuppet,
