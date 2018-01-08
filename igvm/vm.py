@@ -42,7 +42,10 @@ class VM(Host):
         super(VM, self).__init__(server_name_or_obj, ignore_reserved)
 
         if not hypervisor and self.server_obj['xen_host']:
-            self.hypervisor = Hypervisor(self.server_obj['xen_host'])
+            self.hypervisor = Hypervisor(
+                self.server_obj['xen_host'],
+                ignore_reserved=True
+            )
         else:
             self.hypervisor = hypervisor
 
@@ -571,6 +574,6 @@ class VM(Host):
 
         hv = self.get_best_hypervisor(balance_config, hv_states)
         logging.info('Setting hypervisor to {}'.format(hv))
-        self.hypervisor = Hypervisor(hv)
+        self.hypervisor = Hypervisor(hv, ignore_reserved=True)
         self.server_obj['xen_host'] = hv
         self.server_obj.commit()
