@@ -634,7 +634,7 @@ class Hypervisor(Host):
         return vg_size_gib
 
     def create_storage(self, name, disk_size_gib):
-        self.run('lvcreate -L {}g -n {} {}'.format(
+        self.run('lvcreate -y -L {}g -n {} {}'.format(
             disk_size_gib,
             name,
             VG_NAME,
