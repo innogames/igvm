@@ -627,7 +627,7 @@ class Hypervisor(Host):
         )
         vg_name, vg_size_gib = vgs_line.split()
         # Floor instead of ceil because we check free instead of used space
-        vg_size_gib = math.floor(float(vg_size_gib) / 1024 ** 2)
+        vg_size_gib = math.floor(float(vg_size_gib) / 1024 ** 3)
         if safe is True:
             vg_size_gib -= RESERVED_DISK
         assert vg_name == VG_NAME
