@@ -95,7 +95,7 @@ def _create_vm():
         'int:innogames:stable jessie',
     ]
     if 'puppet_environment' in vm.server_obj:
-        del vm.server_obj['puppet_environment']
+        vm.server_obj['puppet_environment'] = None
     vm.server_obj.commit()
     # Might have changed!
     vm.hypervisor = Hypervisor(vm.server_obj['xen_host'])
@@ -153,7 +153,7 @@ class BalanceBuildTest(IGVMTest):
         _clean_vm((cls.hv1, cls.hv2), cls.vm)
 
     def test_buildvm_auto_find_hypervisor(self):
-        del self.vm.server_obj['xen_host']
+        self.vm.server_obj['xen_host'] = None
         self.vm.server_obj.commit()
 
         buildvm(self.vm.server_obj['hostname'])
