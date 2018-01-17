@@ -1,4 +1,7 @@
-# Integration tests for user-facing igvm commands
+"""igvm - Integration Tests
+
+Copyright (c) 2018, InnoGames GmbH
+"""
 
 import os
 import logging
