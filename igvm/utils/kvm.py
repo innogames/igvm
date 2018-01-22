@@ -18,6 +18,7 @@ from igvm.settings import (
     KVM_HWMODEL_TO_CPUMODEL,
     MAC_ADDRESS_PREFIX,
     VG_NAME,
+    MIGRATE_COMMANDS,
 )
 from igvm.utils.units import parse_size
 
@@ -228,20 +229,22 @@ def migrate_live(source, destination, vm, domain):
         ' --persistent'
         # Don't let the VM configuration to be changed
         ' --change-protection'
-        # Force convergence, # otherwise migrations never end
+        # Force convergence, otherwise migrations never end
         ' --auto-converge'
         ' --domain {domain}'
         # Don't tolerate soft errors
         ' --abort-on-error'
-        # We need SSH agent forwarding
-        ' --desturi qemu+tls://{destination}/system'
-        # Force guest to suspend, if noting else helped
-        ' --timeout {timeout}'
-        # Needed on Stretch for disk sync
-        ' --p2p'
-        ' --tunnelled'
         # Show progress bar during migration
         ' --verbose'
+        # Force guest to suspend, if noting else helped
+        ' --timeout {timeout}'
+    )
+
+    # Append OS-specific migration commands.
+    # They might not exist for some combinations but this should have
+    # been already tested in migratevm.py.
+    migrate_cmd += MIGRATE_COMMANDS.get(
+        (source.server_obj['os'], destination.server_obj['os'])
     )
 
     # Reduce CPU pinning to minimum number of available cores on both

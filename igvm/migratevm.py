@@ -5,6 +5,7 @@ from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.utils.transaction import run_in_transaction
 from igvm.vm import VM
+from igvm.settings import MIGRATE_COMMANDS
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +45,19 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
     if not runpuppet and newip:
         raise IGVMError(
             'Changing IP requires a Puppet run, pass --runpuppet.'
+        )
+
+    source_hv_os = vm.hypervisor.server_obj['os']
+    destination_hv_os = hypervisor.server_obj['os']
+    if (
+        not offline and
+        (source_hv_os, destination_hv_os) not in MIGRATE_COMMANDS
+    ):
+        raise IGVMError(
+            'Online migration from {} to {} is not supported!'.format(
+                source_hv_os,
+                destination_hv_os,
+            )
         )
 
     # Require VM to be in sync with serveradmin
