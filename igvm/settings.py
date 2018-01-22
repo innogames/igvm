@@ -32,6 +32,30 @@ KVM_HWMODEL_TO_CPUMODEL = {
 }
 
 
+# There are various combinations of source and target HVs which come
+# with their own bugs and must be addressed separately.
+MIGRATE_COMMANDS = {
+    ('jessie', 'jessie'):
+        # Using p2p migrations on Jessie causes qemu process to allocate
+        # as much memory as disk size on source HV.
+        ' --desturi qemu+ssh://{destination}/system',
+    ('stretch', 'stretch'): (
+        # Live migration works only via p2p on Stretch. See Debian bug #796122.
+        ' --desturi qemu+tls://{destination}/system'
+        ' --p2p'
+        ' --tunnelled'
+    ),
+    ('stretch', 'jessie'): (
+        # Jessie can still correctly *receive* p2p migration.
+        ' --desturi qemu+tls://{destination}/system'
+        ' --p2p'
+        ' --tunnelled'
+    ),
+    # Jessie to Stretch is unsupported because VM after migration looses
+    # access to disk. After kernel reboots (not by panic, maybe by watchdog?)
+    # it works fine again.
+}
+
 # Arbitrarily chosen MAC address prefix with U/L bit set
 # It will be padded with the last three octets of the internal IP address.
 MAC_ADDRESS_PREFIX = (0xCA, 0xFE, 0x01)
