@@ -40,7 +40,7 @@ class Game(object):
         return self.shortname
 
     def __repr__(self):
-        return self.shortname
+        return '<balance.models.Game {}>'.format(self.shortname)
 
     def get_bladecenter(self):
         """Get all Bladecenter where at least one VM of game is in
@@ -134,7 +134,8 @@ class GameMarket(Game):
         return self.shortname + self.market
 
     def __repr__(self):
-        return self.shortname + self.market
+        return '<balance.models.GameMarket {}{}>'.format(
+            self.shortname, self.market)
 
     def get_vms(self):
         """Get VMs of game market
@@ -176,7 +177,8 @@ class GameWorld(GameMarket):
         return self.shortname + self.market + self.world
 
     def __repr__(self):
-        return self.shortname + self.market + self.world
+        return '<balance.models.GameWorld {}{}{}>'.format(
+            self.shortname, self.market, self.world)
 
     def get_vms(self):
         """Get VMs of game market
@@ -219,7 +221,7 @@ class Bladecenter(object):
         return self.bladecenter
 
     def __repr__(self):
-        return self.bladecenter
+        return '<balance.models.Bladecenter {}>'.format(self.bladecenter)
 
     def get_hypervisors(self):
         """get hypervisors -> []"""
@@ -283,7 +285,7 @@ class Host(object):
         return self.hostname
 
     def __repr__(self):
-        return self.hostname
+        return '<balance.models.Host {}>'.format(self.hostname)
 
     def __getitem__(self, key):
         if self._serveradmin_data is None:
@@ -315,6 +317,12 @@ class Hypervisor(Host):
         self._graphite_data = None
         self._bladecenter = None
         self._vms = None
+
+    def __str__(self):
+        return self.hostname
+
+    def __repr__(self):
+        return '<balance.models.Hypervisor {}>'.format(self.hostname)
 
     def get_state(self):
         """get hypervisor state -> str"""
