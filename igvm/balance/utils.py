@@ -191,7 +191,7 @@ def get_ranking(vm, hypervisors, rules):
             if hasattr(rule, 'weight'):
                 score = score * float(rule.weight)
 
-                rule_ranking[rulename][hostname] = score
+            rule_ranking[rulename][hostname] = score
 
     normalized_ranking = _normalize_ranking(rule_ranking)
     logging.debug(normalized_ranking)
