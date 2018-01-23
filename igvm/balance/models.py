@@ -288,10 +288,16 @@ class Host(object):
         return '<balance.models.Host {}>'.format(self.hostname)
 
     def __getitem__(self, key):
+        self._fetch_serveradmin_data()
+        return self._serveradmin_data[key]
+
+    def keys(self):
+        self._fetch_serveradmin_data()
+        return self._serveradmin_data.keys()
+
+    def _fetch_serveradmin_data(self):
         if self._serveradmin_data is None:
             self._serveradmin_data = sc.get(self.hostname)
-
-        return self._serveradmin_data[key]
 
     def get_memory(self):
         """get available or allocated memory in MiB -> int"""
