@@ -18,12 +18,21 @@ from igvm.vm import VM
 log = logging.getLogger(__name__)
 
 
-def _check_defined(vm):
-    if not vm.hypervisor.vm_defined(vm):
-        raise InvalidStateError(
-            '"{}" is not built yet or is not running on "{}"'
-            .format(vm.fqdn, vm.hypervisor.fqdn)
-        )
+def _check_defined(vm, fail_hard=True):
+    error = None
+
+    if not vm.hypervisor:
+        error = ('"{}" has no hypervisor defined. Use --force to ignore this'
+                 .format(vm.fqdn))
+    elif not vm.hypervisor.vm_defined(vm):
+        error = ('"{}" is not built yet or is not running on "{}"'
+                 .format(vm.fqdn, vm.hypervisor.fqdn))
+
+    if error:
+        if fail_hard:
+            raise InvalidStateError(error)
+        else:
+            log.info(error)
 
 
 @with_fabric_settings
@@ -211,34 +220,46 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
 
 @with_fabric_settings
 def vm_delete(vm_hostname, force=False, retire=False):
-    """Delete a VM
+    """Delete the VM from the hypervisor and from serveradmin
 
-    The VM is undefined on the hypervisor, destroys the disk volume, and
-    deletes the VM or sets its state to "retired" on Serveradmin.
+    If force is True the VM will be deleted even though it is still running on
+    its hypervisor. Furthermore force will delete the serveradmin object, even
+    if the VM doesn't have a hypervisor set in serveradmin or it has not yet
+    been created on the defined hypervisor.
+
+    If retire is True the VM will not be deleted from serveradmin but it's
+    state will be updated to 'retired'.
     """
-    vm = VM(vm_hostname, ignore_reserved=True)
-    _check_defined(vm)
 
-    if vm.is_running():
+    vm = VM(vm_hostname, ignore_reserved=True)
+    # Make sure the VM has a hypervisor and that it is defined on it.
+    # Abort if the VM has not been defined and force is not True.
+    _check_defined(vm, fail_hard=not force)
+
+    # Make sure the VM is shut down.
+    # Abort if the VM is not shut down and force is not True.
+    if vm.hypervisor and vm.hypervisor.vm_defined(vm) and vm.is_running():
         if force:
             vm.hypervisor.stop_vm_force(vm)
         else:
             raise InvalidStateError('"{}" is still running.'.format(vm.fqdn))
 
-    vm.hypervisor.delete_vm(vm)
+    # Delete the VM from its hypervisor if required.
+    if vm.hypervisor and vm.hypervisor.vm_defined(vm):
+        vm.hypervisor.delete_vm(vm)
 
+    # Delete the serveradmin object of this VM
+    # or update its state to 'retired' if retire is True.
     if retire:
         vm.server_obj['state'] = 'retired'
-    else:
-        vm.server_obj.delete()
-
-    vm.server_obj.commit()
-    if retire:
+        vm.server_obj.commit()
         log.info(
             '"{}" is destroyed and set to "retired" state.'
             .format(vm.fqdn)
         )
     else:
+        vm.server_obj.delete()
+        vm.server_obj.commit()
         log.info(
             '"{}" is destroyed and deleted from Serveradmin'
             .format(vm.fqdn)
