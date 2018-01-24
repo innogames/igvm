@@ -1,6 +1,6 @@
 from StringIO import StringIO
 
-from adminapi.dataset import query, ServerObject
+from adminapi.dataset import query
 from adminapi.dataset.filters import ExactMatch, Startswith, Or
 
 import fabric.api
@@ -71,11 +71,11 @@ def with_fabric_settings(fn):
 class Host(object):
     """A remote host on which commands can be executed."""
 
-    def __init__(self, server_name_or_obj, ignore_reserved=False):
-        if isinstance(server_name_or_obj, ServerObject):
-            self.server_obj = server_name_or_obj
+    def __init__(self, name_or_obj, ignore_reserved=False):
+        if isinstance(name_or_obj, (str, unicode)):
+            self.server_obj = get_server(name_or_obj, self.servertype)
         else:
-            self.server_obj = get_server(server_name_or_obj, self.servertype)
+            self.server_obj = name_or_obj
 
         if self.server_obj['hostname'].endswith('.ig.local'):
             self.fqdn = self.server_obj['hostname']
