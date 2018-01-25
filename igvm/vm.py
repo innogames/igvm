@@ -37,9 +37,9 @@ class VM(Host):
     """VM interface."""
     servertype = 'vm'
 
-    def __init__(self, server_name_or_obj, ignore_reserved=False,
+    def __init__(self, name_or_obj, ignore_reserved=False,
                  hypervisor=None):
-        super(VM, self).__init__(server_name_or_obj, ignore_reserved)
+        super(VM, self).__init__(name_or_obj, ignore_reserved)
 
         if not hypervisor and self.server_obj['xen_host']:
             self.hypervisor = Hypervisor(
@@ -560,6 +560,8 @@ class VM(Host):
                     memory_free = bhv.get_memory_free()
                     if memory_free > float(self.server_obj['memory']):
                         return hv
+
+        raise VMError('Cannot find a hypervisor')
 
     def set_best_hypervisor(self, balance_config=None, hv_states=['online']):
         """Set best hypervisor
