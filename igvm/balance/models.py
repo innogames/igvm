@@ -3,8 +3,6 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
-import adminapi.api
-
 from adminapi.dataset import query
 from adminapi.dataset.filters import Any
 
@@ -325,7 +323,6 @@ class Hypervisor(Host):
 
     def __init__(self, hostname):
         super(Hypervisor, self).__init__(hostname)
-        self._graphite_data = None
         self._bladecenter = None
         self._vms = None
 
@@ -407,18 +404,6 @@ class Hypervisor(Host):
 
         return disk_free_mib
 
-    def get_graphite_data(self):
-        """Get graphite numeric cache data from serveradmin
-
-        :return: dict
-        """
-
-        if self._graphite_data is None:
-            api = adminapi.api.get('graphite')
-            self._graphite_data = api.get_numeric_cache(self.hostname)
-
-        return self._graphite_data
-
     def get_max_vcpu_usage(self):
         """Get last 24h maximum vCPU usage of 95 percentile for hypervisor
 
@@ -427,14 +412,7 @@ class Hypervisor(Host):
 
         :return: float
         """
-
-        alias = 'Max vCPU Week'
-        cache = (t for t in self.get_graphite_data() if t['template'] == alias)
-
-        try:
-            return float(cache.next()['value'])
-        except StopIteration:
-            return 0.0
+        return self['cpu_util_vm_percent_max_week']
 
     def get_max_cpu_usage(self):
         """Get last 24h maximum CPU usage of 95 percentile for hypervisor
@@ -444,14 +422,7 @@ class Hypervisor(Host):
 
         :return: float
         """
-
-        alias = 'Max95 CPU Day'
-        cache = (t for t in self.get_graphite_data() if t['template'] == alias)
-
-        try:
-            return float(cache.next()['value'])
-        except StopIteration:
-            return 0.0
+        return self['cpu_util_percent_max95_day']
 
     def get_max_load(self):
         """Get maximum load average of last 24h for hypervisor
@@ -461,14 +432,7 @@ class Hypervisor(Host):
 
         :return: float
         """
-
-        alias = 'Load AVG Day'
-        cache = (t for t in self.get_graphite_data() if t['template'] == alias)
-
-        try:
-            return float(cache.next()['value'])
-        except StopIteration:
-            return 0.0
+        return self['load_avg_day']
 
 
 class VM(Host):
