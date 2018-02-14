@@ -53,6 +53,8 @@ def lvresize(volume, size_gib):
 
     run('lvresize {0} -L {1}g'.format(volume, size_gib))
 
+def lvrename(volume, newname):
+    run('lvrename {0} {1}'.format(volume, newname))
 
 def create_storage(hv, vm):
     # Do not search only for the given LV.

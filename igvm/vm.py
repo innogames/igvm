@@ -279,11 +279,6 @@ class VM(Host):
         """Rename the VM"""
         assert tx is not None, 'tx populated by run_in_transaction'
 
-        tx.on_rollback('revert', self.rename, self.hostname)
-
-        self.admintool['hostname'] = new_hostname
-        self.admintool.commit()
-
         new_fqdn = (
             new_hostname
             if new_hostname.endswith('.ig.local')
@@ -303,6 +298,13 @@ class VM(Host):
         ))
         self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
 
-        # TODO Make the rest
-        if new_hostname != self.hostname:
-            raise NotImplementedError('The rest is not implemented.')
+        self.shutdown(tx=tx)
+        self.hypervisor.undefine_vm(self)
+        self.hypervisor.rename_vm_storage(self, new_hostname)
+
+        self.admintool['hostname'] = new_hostname
+        self.admintool.commit()
+
+        new = VM(new_hostname)
+        new.hypervisor.define_vm(new, tx=tx)
+        new.start(tx=tx)

@@ -34,6 +34,7 @@ from igvm.utils.storage import (
     get_logical_volumes,
     get_vm_volume,
     lvresize,
+    lvrename,
     mount_temp,
     remove_logical_volume,
     remove_temp,
@@ -344,6 +345,10 @@ class Hypervisor(Host):
         if tx:
             tx.on_rollback('destroy storage', self.destroy_vm_storage, vm)
         return self._disk_path[vm]
+
+    def rename_vm_storage(self, vm, new_name):
+        with self.fabric_settings():
+            lvrename(self.vm_disk_path(vm), new_name)
 
     def format_vm_storage(self, vm, tx=None):
         """Create new filesystem for VM and mount it. Returns mount path."""

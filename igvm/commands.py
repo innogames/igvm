@@ -405,9 +405,13 @@ def vm_rename(vm_hostname, new_hostname, force=False):
     vm = VM(vm_hostname)
     _check_defined(vm)
 
-    if not vm.is_running() or not force:
+    if not force:
         raise NotImplementedError(
             'Rename command only works with --force at the moment.'
+        )
+    if not vm.is_running():
+        raise NotImplementedError(
+            'Rename command only works online at the moment.'
         )
 
     vm.rename(new_hostname)
