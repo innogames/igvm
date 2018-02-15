@@ -12,7 +12,6 @@ from igvm import VERSION
 setup(
     name='igvm',
     version='.'.join(str(v) for v in VERSION),
-    url='https://gitlab.innogames.de/sysadmins/igvm',
     packages=['igvm', 'igvm.utils', 'igvm.balance'],
     entry_points={
         'console_scripts': [
@@ -35,4 +34,5 @@ setup(
     license='MIT',
     platforms='POSIX',
     description='InnoGames VM Provisioning Tool',
+    url='https://github.com/innogames/igvm',
 )
