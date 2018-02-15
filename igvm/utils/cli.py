@@ -1,3 +1,8 @@
+"""igvm - CLI Utilities
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import fabric.colors
 import sys
 

@@ -1,3 +1,8 @@
+"""igvm - Network Utilities
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import logging
 
 from adminapi.dataset import query

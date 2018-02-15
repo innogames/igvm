@@ -1,3 +1,9 @@
+"""igvm - Exceptions
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
+
 class IGVMError(Exception):
     pass
 

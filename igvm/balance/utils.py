@@ -1,3 +1,8 @@
+"""igvm - Balancing Utilities
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import os
 import json
 import logging

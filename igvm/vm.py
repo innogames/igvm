@@ -1,3 +1,8 @@
+"""igvm - VM Model
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import logging
 import time
 

@@ -1,3 +1,8 @@
+"""igvm - Hypervisor Model
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import logging
 import math
 import urllib2

@@ -1,3 +1,8 @@
+"""igvm - Balancing Engine
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import logging
 
 from os import environ

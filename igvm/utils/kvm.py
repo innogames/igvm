@@ -1,3 +1,8 @@
+"""igvm - KVM Utilities
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import logging
 import re
 import time

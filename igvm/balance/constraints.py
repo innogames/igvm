@@ -1,3 +1,9 @@
+"""igvm - Balancing Constraints
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
+
 class Constraint(object):
     """Base Constraint Class
 

@@ -1,3 +1,8 @@
+"""igvm - migratevm
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import logging
 
 from igvm.exceptions import IGVMError, InconsistentAttributeError

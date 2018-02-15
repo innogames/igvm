@@ -1,3 +1,8 @@
+"""igvm - Templating Utility
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import os
 from fabric.contrib.files import upload_template as _upload_template
 

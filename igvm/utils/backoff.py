@@ -1,3 +1,8 @@
+"""igvm - Backoff Utility
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import logging
 import time
 

@@ -1,3 +1,8 @@
+"""igvm - Balancing Rules
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 from igvm.balance.models import GameMarket
 
 

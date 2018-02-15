@@ -1,10 +1,8 @@
-#
-# igvm - InnoGames VM Management Tool
-#
-# Copyright (c) 2016, InnoGames GmbH
-#
+"""igvm - Command Routines
 
-"""IGVM command routines"""
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import logging
 
 from fabric.colors import green, red, white, yellow

@@ -1,3 +1,8 @@
+"""igvm - Transaction System
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 import logging
 
 log = logging.getLogger(__name__)

@@ -1,3 +1,8 @@
+"""igvm - Settings
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 COMMON_FABRIC_SETTINGS = dict(
     disable_known_hosts=True,
     use_ssh_config=True,

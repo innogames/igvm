@@ -1,3 +1,8 @@
+"""igvm - Host Model
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 from StringIO import StringIO
 
 from adminapi.dataset import query

@@ -1,3 +1,9 @@
+"""igvm - Lazy Property Utility
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
+
 class lazy_property(object):
     """Decorator to lazily evaluate a property.
     The first time it is accessed, it will replace the property field

@@ -1,3 +1,8 @@
+"""igvm - libvirt
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 from libvirt import open as libvirt_open, libvirtError
 
 from fabric.api import env
