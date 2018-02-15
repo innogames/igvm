@@ -29,4 +29,7 @@ setup(
     },
     author='InnoGames System Administration',
     author_email='it@innogames.com',
+    license='MIT',
+    platforms='POSIX',
+    description='InnoGames VM Provisioning Tool',
 )

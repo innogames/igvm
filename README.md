@@ -52,3 +52,10 @@ buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None, ignore_rese
 6. Jenkins notifies the change after a minute or so and builds .deb package
    and puts it into repositories. Version is always 1.0-${BUILD_NUMBER}.
 7. Wait for puppet to upgrade package on control servers or do it manually
+
+# License
+
+The project is released under the MIT License.  The MIT License is registered
+with and approved by the Open Source Initiative [1].
+
+[1] https://opensource.org/licenses/MIT
