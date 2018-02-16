@@ -53,7 +53,7 @@ IP1 = IPv4Address(u'10.20.10.42')    # aw21.igvm
 IP2 = IPv4Address(u'10.20.10.43')    # aw21.igvm
 VM1_host = 'igvm-integration.test.ig.local'
 VM1_net = 'igvm-net-aw.test.ig.local'
-HV1 = 'aw-hv-053.ndco.ig.local'
+HV1 = 'aw-hv-058.ndco.ig.local'
 HV2 = 'aw-hv-082.ndco.ig.local'
 os.environ['IGVM_MODE'] = 'testing'
 
