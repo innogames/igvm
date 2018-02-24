@@ -96,14 +96,14 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
     previous_hypervisor = vm.hypervisor
     vm.hypervisor = hypervisor
 
+    def _reset_hypervisor():
+        vm.hypervisor = previous_hypervisor
+    tx.on_rollback('reset hypervisor', _reset_hypervisor)
+
     if runpuppet:
         hypervisor.mount_vm_storage(vm, tx)
         vm.run_puppet(clear_cert=False, tx=tx)
         hypervisor.umount_vm_storage(vm)
-
-    def _reset_hypervisor():
-        vm.hypervisor = previous_hypervisor
-    tx.on_rollback('reset hypervisor', _reset_hypervisor)
 
     if offline and was_running:
         vm.start(tx=tx)
