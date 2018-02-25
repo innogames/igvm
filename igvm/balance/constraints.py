@@ -155,7 +155,7 @@ class GameMasterDbDistribution(Constraint):
 
         # If we don't try to migrate a master db we can safely ingore further
         # evaluation.
-        if vm['game_world'] != 0 and vm['function'] not in self.db_types:
+        if vm['game_world'] != 0 or vm['function'] not in self.db_types:
             return True
 
         for hv_vm in hv.get_vms():
