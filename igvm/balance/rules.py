@@ -58,16 +58,7 @@ class HypervisorMaxCpuUsage(Rule):
         super(HypervisorMaxCpuUsage, self).__init__(*args, **kwargs)
 
     def score(self, vm, hv):
-        max_usage = hv.get_max_cpu_usage()
-
-        # Should not be possible but lets better be sure since graphite
-        # sometimes returns weird data.
-        if max_usage < 0 or max_usage > 100:
-            return 0.0
-
-        score = 100.0 - max_usage
-
-        return score
+        return 100.0 - (hv.get_max_cpu_usage() or 100.0)
 
 
 class CpuOverAllocation(Rule):
@@ -87,25 +78,16 @@ class CpuOverAllocation(Rule):
         if not vm['xen_host']:
             return 100.0
 
-        cur_hv_cpus = 0
-        for cur_vm in vm.get_hypervisor().get_vms():
-            cur_hv_cpus += cur_vm['num_cpu']
-
-        tgt_hv_cpus = vm['num_cpu']
-        for cur_vm in hv.get_vms():
-            tgt_hv_cpus += cur_vm['num_cpu']
-
+        cur_hv_cpus = sum(v['num_cpu'] for v in vm.get_hypervisor().get_vms())
         cur_hv_rl_cpus = vm.get_hypervisor()['num_cpu']
-        cur_ovr_allc = float(cur_hv_cpus) / float(cur_hv_rl_cpus) * 100.0
+        cur_ovr_allc = float(cur_hv_cpus) / float(cur_hv_rl_cpus)
 
+        tgt_hv_cpus = vm['num_cpu'] + sum(v['num_cpu'] for v in hv.get_vms())
         tgt_hv_rl_cpus = hv['num_cpu']
-        tgt_ovr_allc = float(tgt_hv_cpus) / float(tgt_hv_rl_cpus) * 100.0
+        tgt_ovr_allc = float(tgt_hv_cpus) / float(tgt_hv_rl_cpus)
 
         if tgt_ovr_allc < cur_ovr_allc:
-            score = 100.0
-        elif tgt_ovr_allc == cur_ovr_allc:
-            score = 50.0
-        else:
-            score = 0.0
-
-        return score
+            return 100.0
+        if tgt_ovr_allc == cur_ovr_allc:
+            return 50.0
+        return 0.0

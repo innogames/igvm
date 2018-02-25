@@ -43,21 +43,7 @@ class DiskSpace(Constraint):
         super(DiskSpace, self).__init__(*args, **kwargs)
 
     def fulfilled(self, vm, hv):
-        """Check if enough disk space is available on target hypervisor
-
-        :param vm: igvm.balance.models.VM object
-        :param hv: igvm.balance.models.Hypervisor object
-
-        :return: bool
-        """
-
-        hv_disk_free = hv.get_disk_free(fast=True)
-        vm_disk_size = vm.get_disk_size()
-
-        if hv_disk_free - self.reserved <= vm_disk_size:
-            return False
-
-        return True
+        return hv.get_disk_free(fast=True) - self.reserved > vm.get_disk_size()
 
 
 class Memory(Constraint):
@@ -70,20 +56,7 @@ class Memory(Constraint):
         super(Memory, self).__init__(*args, **kwargs)
 
     def fulfilled(self, vm, hv):
-        """Check if enough memory is available on target hypervisor
-
-        :param vm: igvm.balance.models.VM object
-        :param hv: igvm.balance.models.Hypervisor object
-
-        :return: bool
-        """
-        hv_memory_free = hv.get_memory_free(fast=True)
-        vm_memory_needed = vm.get_memory()
-
-        if hv_memory_free <= vm_memory_needed:
-            return False
-
-        return True
+        return hv.get_memory_free(fast=True) > vm.get_memory()
 
 
 class EnsureFunctionDistribution(Constraint):
@@ -96,18 +69,11 @@ class EnsureFunctionDistribution(Constraint):
         super(EnsureFunctionDistribution, self).__init__(*args, **kwargs)
 
     def fulfilled(self, vm, hv):
-        """Check if target hypervisor constrains a VM of the game (world)
-
-        :param vm: igvm.balance.models.VM object
-        :param hv: igvm.balance.models.Hypervisor object
-
-        :return: bool
-        """
         for hv_vm in hv.get_vms():
+            if hv_vm.hostname == vm.hostname:
+                continue
             if hv_vm.get_identifier() == vm.get_identifier():
-                if hv_vm.hostname != vm.hostname:
-                    return False
-
+                return False
         return True
 
 
@@ -123,20 +89,4 @@ class HypervisorMaxVcpuUsage(Constraint):
         super(HypervisorMaxVcpuUsage, self).__init__(*args, **kwargs)
 
     def fulfilled(self, vm, hv):
-        """Check if 95% of hypervisor CPU usage is above threshold
-
-        :param vm: igvm.balance.models.VM object
-        :param hv: igvm.balance.models.Hypervisor object
-
-        :return: bool
-        """
-
-        max_usage = hv.get_max_vcpu_usage()
-
-        if max_usage == -1.0:
-            return False
-
-        if max_usage >= self.threshold:
-            return False
-
-        return True
+        return hv.get_max_vcpu_usage() < self.threshold
