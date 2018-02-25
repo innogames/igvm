@@ -28,7 +28,6 @@ from igvm.utils.template import upload_template
 from igvm.utils.transaction import run_in_transaction
 from igvm.utils.units import parse_size
 from igvm.balance.engine import Engine
-from igvm.balance.models import Hypervisor as BHypervisor
 
 log = logging.getLogger(__name__)
 
@@ -539,22 +538,25 @@ class VM(Host):
 
         :return:
         """
-        ranking = Engine(self.dataset_obj['hostname'], hv_states).run()
+        for hypervisor in Engine(
+            self.dataset_obj['hostname'], hv_states
+        ).run():
+            if self.dataset_obj['xen_host'] == hypervisor['hostname']:
+                continue
 
-        for hv in sorted(ranking, key=ranking.get, reverse=True):
+            # The actual free disk size and memory are not checked during
+            # hypervisor ranking for performance.  We need to validate
+            # the hypervisor using the actual values before start using it.
+            # TODO: Call a shared function for this
             if (
-                not self.dataset_obj['xen_host'] or
-                self.dataset_obj['xen_host'] != hv
+                hypervisor.get_disk_free() / 1024.0 <
+                self.dataset_obj['disk_size_gib']
             ):
-                # Free disk size and memory are done in fast mode which might
-                # return wrong or orphaned values so to be sure we really have
-                # enough we check them here again.
-                bhv = BHypervisor(hv)
-                disk_free = bhv.get_disk_free() / 1024.0
-                if float(disk_free) > float(self.dataset_obj['disk_size_gib']):
-                    memory_free = bhv.get_memory_free()
-                    if memory_free > float(self.dataset_obj['memory']):
-                        return hv
+                continue
+            if hypervisor.get_memory_free() < self.dataset_obj['memory']:
+                continue
+
+            return hypervisor['hostname']
 
         raise VMError('Cannot find a hypervisor')
 

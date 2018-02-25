@@ -3,17 +3,16 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
+from adminapi.dataset import Query
+
 from igvm.hypervisor import Hypervisor as KVMHypervisor
 from igvm.utils.virtutils import close_virtconn
-from igvm.balance.utils import ServeradminCache as sc
 
 
 class Host(object):
-    """Host"""
-
-    def __init__(self, hostname):
-        self.hostname = hostname
-        self._serveradmin_data = None
+    def __init__(self, obj):
+        self.hostname = obj['hostname']
+        self._serveradmin_data = obj
 
     def __eq__(self, other):
         if isinstance(other, Host):
@@ -32,16 +31,10 @@ class Host(object):
         return '<balance.models.Host {}>'.format(self.hostname)
 
     def __getitem__(self, key):
-        self._fetch_serveradmin_data()
         return self._serveradmin_data[key]
 
     def keys(self):
-        self._fetch_serveradmin_data()
         return self._serveradmin_data.keys()
-
-    def _fetch_serveradmin_data(self):
-        if self._serveradmin_data is None:
-            self._serveradmin_data = sc.get(self.hostname)
 
     def get_memory(self):
         """get available or allocated memory in MiB -> int"""
@@ -60,10 +53,8 @@ class Host(object):
 
 
 class Hypervisor(Host):
-    """Hypervisor"""
-
-    def __init__(self, hostname):
-        super(Hypervisor, self).__init__(hostname)
+    def __init__(self, obj):
+        super(Hypervisor, self).__init__(obj)
         self._vms = None
 
     def __str__(self):
@@ -78,15 +69,11 @@ class Hypervisor(Host):
         return self['state']
 
     def get_vms(self):
-        """get vms -> []"""
-
         if self._vms is None:
-            self._vms = []
-            qs = sc.query(
-                servertype='vm', xen_host=self.hostname
-            )
-            for vm in qs:
-                self._vms.append(VM(vm['hostname']))
+            self._vms = [VM(o, self) for o in Query({
+                'servertype': 'vm',
+                'xen_host': self.hostname,
+            })]
 
         return self._vms
 
@@ -120,12 +107,7 @@ class Hypervisor(Host):
             # We reserved 10 GiB for root partition and 16 for swap.
             reserved = 16.0 + 10
             host = self['disk_size_gib']
-            vms = float(sum(
-                [vm['disk_size_gib'] for vm in sc.query(
-                    servertype='vm',
-                    xen_host=self.hostname
-                )]
-            ))
+            vms = float(sum(vm['disk_size_gib'] for vm in self.get_vms()))
             disk_free_mib = (host - vms - reserved) * 1024.0
         else:
             ighv = KVMHypervisor(self.hostname)
@@ -167,20 +149,9 @@ class Hypervisor(Host):
 
 
 class VM(Host):
-    """VM"""
-
-    def __init__(self, hostname):
-        super(VM, self).__init__(hostname)
-        self._hypervisor = None
-
-    def get_hypervisor(self):
-        """get hypervisor -> Hypervisor"""
-
-        if self._hypervisor is None:
-            hostname = self['xen_host']
-            self._hypervisor = Hypervisor(hostname)
-
-        return self._hypervisor
+    def __init__(self, obj, hypervisor=None):
+        super(VM, self).__init__(obj)
+        self.hypervisor = hypervisor
 
     def get_identifier(self):
         """get game identifer for vm -> str"""

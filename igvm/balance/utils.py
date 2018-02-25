@@ -6,41 +6,6 @@ Copyright (c) 2018, InnoGames GmbH
 import logging
 
 
-class ServeradminCache(object):
-    _serveradmin_object_cache = {}
-
-    @classmethod
-    def get(cls, key):
-        if key in cls._serveradmin_object_cache:
-            return cls._serveradmin_object_cache[key]
-
-        logging.error('Cache mismatch for {}'.format(key))
-
-        return None
-
-    @classmethod
-    def set(cls, key, value):
-        cls._serveradmin_object_cache[key] = value
-
-    @classmethod
-    def query(cls, **kwargs):
-        # WARNING: This does only work if cache is filled with expected value.
-        rs = []
-
-        for entry in cls._serveradmin_object_cache.values():
-            for key, value in kwargs.items():
-                if key not in entry or entry[key] != value:
-                    break
-            else:
-                rs.append(entry)
-
-        return rs
-
-    @classmethod
-    def size(cls):
-        return len(cls._serveradmin_object_cache)
-
-
 def filter_hypervisors(vm, hypervisors, constraints):
     """Get hypervisors which fulfill the constraints
 

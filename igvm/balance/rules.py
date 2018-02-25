@@ -32,8 +32,8 @@ class CpuOverAllocation(object):
         if not vm['xen_host']:
             return 100.0
 
-        cur_hv_cpus = sum(v['num_cpu'] for v in vm.get_hypervisor().get_vms())
-        cur_hv_rl_cpus = vm.get_hypervisor()['num_cpu']
+        cur_hv_cpus = sum(v['num_cpu'] for v in vm.hypervisor.get_vms())
+        cur_hv_rl_cpus = vm.hypervisor['num_cpu']
         cur_ovr_allc = float(cur_hv_cpus) / float(cur_hv_rl_cpus)
 
         tgt_hv_cpus = vm['num_cpu'] + sum(v['num_cpu'] for v in hv.get_vms())
