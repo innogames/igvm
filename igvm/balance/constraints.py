@@ -134,40 +134,6 @@ class EnsureFunctionDistribution(Constraint):
         return True
 
 
-class GameMasterDbDistribution(Constraint):
-    """Game Master DB Distribution
-
-    Check if there is already a game master from the same game or another on
-    the hypervisor and return True if NOT.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(GameMasterDbDistribution, self).__init__(*args, **kwargs)
-
-    def fulfilled(self, vm, hv):
-        """Check if target hypervisor contains a master db of that game
-
-        :param vm: igvm.balance.models.VM object
-        :param hv: igvm.balance.models.Hypervisor object
-
-        :return: bool
-        """
-
-        # If we don't try to migrate a master db we can safely ingore further
-        # evaluation.
-        if vm['game_world'] != 0 or vm['function'] not in self.db_types:
-            return True
-
-        for hv_vm in hv.get_vms():
-            if (
-                hv_vm['game_world'] == 0 and
-                hv_vm['function'] in self.db_types
-            ):
-                return False
-
-        return True
-
-
 class HypervisorMaxVcpuUsage(Constraint):
     """Hypervisor Max vCPU usage
 
