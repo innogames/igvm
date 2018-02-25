@@ -10,6 +10,8 @@ import unittest
 
 from functools import partial
 from ipaddress import IPv4Address
+from pipes import quote
+
 from adminapi.dataset import create, query, DatasetError
 from adminapi.dataset.filters import Not
 
@@ -39,7 +41,6 @@ from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
     IMAGE_PATH,
 )
-from igvm.utils import cmd
 from igvm.utils.units import parse_size
 from igvm.vm import VM
 
@@ -56,6 +57,16 @@ VM1_net = 'igvm-net-aw.test.ig.local'
 HV1 = 'aw-hv-053.ndco.ig.local'
 HV2 = 'aw-hv-082.ndco.ig.local'
 os.environ['IGVM_MODE'] = 'testing'
+
+
+def cmd(cmd, *args, **kwargs):
+    escaped_args = [quote(str(arg)) for arg in args]
+
+    escaped_kwargs = {}
+    for key, value in kwargs.iteritems():
+        escaped_kwargs[key] = quote(str(value))
+
+    return cmd.format(*escaped_args, **escaped_kwargs)
 
 
 def _create_vm():
