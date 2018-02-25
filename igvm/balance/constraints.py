@@ -86,32 +86,6 @@ class Memory(Constraint):
         return True
 
 
-class RouteNetwork(Constraint):
-    """Route Network
-
-    Check if target hypervisor is in same route_network
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(RouteNetwork, self).__init__(*args, **kwargs)
-
-    def fulfilled(self, vm, hv):
-        """Check if target hypervisor support route network
-
-        :param vm: igvm.balance.models.VM object
-        :param hv: igvm.balance.models.Hypervisor object
-
-        :return: bool
-        """
-        vm_rn = vm['route_network']
-        hv_rns = hv['vlan_networks']
-
-        if vm_rn in hv_rns:
-            return True
-
-        return False
-
-
 class Bladecenter(Constraint):
     """Bladecenter
 

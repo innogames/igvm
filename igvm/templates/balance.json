@@ -2,10 +2,6 @@
     "basic": {
         "constraints": [
             {
-                "name": "Hypervisor is in same route network",
-                "class": "RouteNetwork"
-            },
-            {
                 "name": "Hypervisor has enough disk space",
                 "class": "DiskSpace",
                 "reserved": 5192.0
