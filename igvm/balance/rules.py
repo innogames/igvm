@@ -17,7 +17,7 @@ class HypervisorMaxCpuUsage(object):
 
     Evaluates the maximum CPU usage of the last 24h and returns a score for it.
     """
-    def score(self, vm, hv):
+    def __call__(self, vm, hv):
         return 100.0 - (hv.get_max_cpu_usage() or 100.0)
 
 
@@ -27,7 +27,7 @@ class CpuOverAllocation(object):
     Rate the CPU over allocation of the target hypervisor and if it better or
     worse than the current one.
     """
-    def score(self, vm, hv):
+    def __call__(self, vm, hv):
         # New VM has no xen_host attribute yet.
         if not vm['xen_host']:
             return 100.0

@@ -15,7 +15,7 @@ class DiskSpace(object):
     def __init__(self, reserved):
         self.reserved = reserved
 
-    def fulfilled(self, vm, hv):
+    def __call__(self, vm, hv):
         return hv.get_disk_free(fast=True) - self.reserved > vm.get_disk_size()
 
 
@@ -24,7 +24,7 @@ class Memory(object):
 
     Check if hypervisor has enough memory free to move desired vm there
     """
-    def fulfilled(self, vm, hv):
+    def __call__(self, vm, hv):
         return hv.get_memory_free(fast=True) > vm.get_memory()
 
 
@@ -33,7 +33,7 @@ class EnsureFunctionDistribution(object):
 
     Ensure that redundant servers don't reside on the same hypervisor
     """
-    def fulfilled(self, vm, hv):
+    def __call__(self, vm, hv):
         for hv_vm in hv.get_vms():
             if hv_vm.hostname == vm.hostname:
                 continue
@@ -52,5 +52,5 @@ class HypervisorMaxVcpuUsage(object):
     def __init__(self, threshold):
         self.threshold = threshold
 
-    def fulfilled(self, vm, hv):
+    def __call__(self, vm, hv):
         return hv.get_max_vcpu_usage() < self.threshold

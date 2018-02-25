@@ -60,7 +60,7 @@ def filter_hypervisors(vm, hypervisors, constraints):
         )
         dismiss = list()
         for hypervisor in hypervisors:
-            if not constraint.fulfilled(vm, hypervisor):
+            if not constraint(vm, hypervisor):
                 dismiss.append(hypervisor)
 
         filter(lambda h: hypervisors.remove(h), dismiss)
@@ -86,7 +86,7 @@ def get_ranking(vm, hypervisors, rules):
     rule_ranking = dict()
     for hypervisor in hypervisors:
         for rule in rules:
-            score = rule.score(vm, hypervisor)
+            score = rule(vm, hypervisor)
             rulename = rule.__class__.__name__
             hostname = hypervisor.hostname
 
