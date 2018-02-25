@@ -47,7 +47,7 @@ class Hypervisor(Host):
     def __init__(self, *args, **kwargs):
         super(Hypervisor, self).__init__(*args, **kwargs)
 
-        if self.server_obj['state'] == 'retired':
+        if self.dataset_obj['state'] == 'retired':
             raise InvalidStateError(
                 'Hypervisor "{0}" is retired.'.format(self.fqdn)
             )
@@ -73,9 +73,9 @@ class Hypervisor(Host):
         """Returns the VLAN number a VM should use on this hypervisor.
         None for untagged."""
         vlans = []
-        if self.server_obj.get('vlan_networks'):
+        if self.dataset_obj.get('vlan_networks'):
             for vlan_network in query(
-                hostname=filters.Any(*self.server_obj['vlan_networks']),
+                hostname=filters.Any(*self.dataset_obj['vlan_networks']),
                 vlan_tag=filters.Not(filters.Empty()),
             ).restrict('vlan_tag'):
                 vlans.append(vlan_network['vlan_tag'])
@@ -98,7 +98,7 @@ class Hypervisor(Host):
         # happen if VLAN is removed on Serveradmin so that nobody creates
         # new VMs on given hypervisor, but the existing ones must be moved out.
         if (
-            vm.server_obj['xen_host'] != self.server_obj['hostname'] and
+            vm.dataset_obj['xen_host'] != self.dataset_obj['hostname'] and
             vm_vlan not in vlans
         ):
             raise HypervisorError(
@@ -109,7 +109,7 @@ class Hypervisor(Host):
 
     def vm_max_memory(self, vm):
         """Calculates the max amount of memory in MiB the VM may receive."""
-        mem = vm.server_obj['memory']
+        mem = vm.dataset_obj['memory']
         if mem > 12 * 1024:
             max_mem = mem + 10 * 1024
         else:
@@ -122,10 +122,10 @@ class Hypervisor(Host):
 
     def check_vm(self, vm):
         """Check whether a VM can run on this hypervisor"""
-        if self.server_obj['state'] not in ['online', 'online_reserved']:
+        if self.dataset_obj['state'] not in ['online', 'online_reserved']:
             raise InvalidStateError(
                 'Hypervisor "{}" is not in online state ({}).'
-                .format(self.fqdn, self.server_obj['state'])
+                .format(self.fqdn, self.dataset_obj['state'])
             )
 
         if self.vm_defined(vm):
@@ -135,25 +135,25 @@ class Hypervisor(Host):
             )
 
         # Enough CPUs?
-        if vm.server_obj['num_cpu'] > self.num_cpus:
+        if vm.dataset_obj['num_cpu'] > self.num_cpus:
             raise HypervisorError(
                 'Not enough CPUs. Destination Hypervisor has {0}, '
                 'but VM requires {1}.'
-                .format(self.num_cpus, vm.server_obj['num_cpu'])
+                .format(self.num_cpus, vm.dataset_obj['num_cpu'])
             )
 
         # Enough memory?
         free_mib = self.free_vm_memory()
-        if vm.server_obj['memory'] > free_mib:
+        if vm.dataset_obj['memory'] > free_mib:
             raise HypervisorError(
                 'Not enough memory.  Destination Hypervisor has {} MiB but VM '
                 'requires {} MiB '
-                .format(free_mib, vm.server_obj['memory'])
+                .format(free_mib, vm.dataset_obj['memory'])
             )
 
         # Enough disk?
         free_disk_space = self.get_free_disk_size_gib()
-        vm_disk_size = float(vm.server_obj['disk_size_gib'])
+        vm_disk_size = float(vm.dataset_obj['disk_size_gib'])
         if vm_disk_size > free_disk_space:
             raise HypervisorError(
                 'Not enough free space in VG {} to build VM while keeping'
@@ -183,7 +183,7 @@ class Hypervisor(Host):
 
     def _check_committed(self, vm):
         """Check that the given VM has no uncommitted changes"""
-        if vm.server_obj.is_dirty():
+        if vm.dataset_obj.is_dirty():
             raise ConfigError(
                 'VM object has uncommitted changes, commit them first!'
             )
@@ -197,7 +197,7 @@ class Hypervisor(Host):
             log.warning('Cannot validate attribute "{}"!'.format(attrib))
             return
         current_value = synced_values[attrib]
-        if current_value != vm.server_obj[attrib]:
+        if current_value != vm.dataset_obj[attrib]:
             raise InconsistentAttributeError(vm, attrib, current_value)
 
     def vm_set_num_cpu(self, vm, num_cpu):
@@ -210,29 +210,29 @@ class Hypervisor(Host):
 
         log.info(
             'Changing #CPUs of "{}" on "{}" from {} to {}...'
-            .format(vm.fqdn, self.fqdn, vm.server_obj['num_cpu'], num_cpu)
+            .format(vm.fqdn, self.fqdn, vm.dataset_obj['num_cpu'], num_cpu)
         )
 
         # If VM is offline, we can just rebuild the domain
         if not self.vm_running(vm):
             log.info('VM is offline, rebuilding domain with new settings')
-            vm.server_obj['num_cpu'] = num_cpu
+            vm.dataset_obj['num_cpu'] = num_cpu
             self.redefine_vm(vm)
         else:
             self._vm_set_num_cpu(vm, num_cpu)
 
         # Validate changes
         # We can't rely on the hypervisor to provide data on VMs all the time.
-        updated_server_obj = self.vm_sync_from_hypervisor(vm)
-        current_num_cpu = updated_server_obj.get('num_cpu', num_cpu)
+        updated_dataset_obj = self.vm_sync_from_hypervisor(vm)
+        current_num_cpu = updated_dataset_obj.get('num_cpu', num_cpu)
         if current_num_cpu != num_cpu:
             raise HypervisorError(
                 'New CPUs are not visible to hypervisor, changes will not be '
                 'committed.'
             )
 
-        vm.server_obj['num_cpu'] = num_cpu
-        vm.server_obj.commit()
+        vm.dataset_obj['num_cpu'] = num_cpu
+        vm.dataset_obj.commit()
 
     def vm_set_memory(self, vm, memory):
         self._check_committed(vm)
@@ -241,19 +241,19 @@ class Hypervisor(Host):
 
         running = self.vm_running(vm)
 
-        if running and memory < vm.server_obj['memory']:
+        if running and memory < vm.dataset_obj['memory']:
             raise InvalidStateError(
                 'Cannot shrink memory while VM is running'
             )
-        if self.free_vm_memory() < memory - vm.server_obj['memory']:
+        if self.free_vm_memory() < memory - vm.dataset_obj['memory']:
             raise HypervisorError('Not enough free memory on hypervisor.')
 
         log.info(
             'Changing memory of "{}" on "{}" from {} MiB to {} MiB'
-            .format(vm.fqdn, self.fqdn, vm.server_obj['memory'], memory)
+            .format(vm.fqdn, self.fqdn, vm.dataset_obj['memory'], memory)
         )
 
-        vm.server_obj['memory'] = memory
+        vm.dataset_obj['memory'] = memory
         vm.check_serveradmin_config()
 
         # If VM is offline, we can just rebuild the domain
@@ -278,11 +278,11 @@ class Hypervisor(Host):
                 'changes will not be committed.'
             )
 
-        vm.server_obj.commit()
+        vm.dataset_obj.commit()
 
     def vm_set_disk_size_gib(self, vm, new_size_gib):
         """Changes disk size of a VM."""
-        if new_size_gib < vm.server_obj['disk_size_gib']:
+        if new_size_gib < vm.dataset_obj['disk_size_gib']:
             raise NotImplementedError('Cannot shrink the disk.')
         domain = self._get_domain(vm)
         with self.fabric_settings():
@@ -292,7 +292,7 @@ class Hypervisor(Host):
 
     def create_vm_storage(self, vm, name, tx=None):
         """Allocate storage for a VM. Returns the disk path."""
-        self.create_storage(name, vm.server_obj['disk_size_gib'])
+        self.create_storage(name, vm.dataset_obj['disk_size_gib'])
         if tx:
             tx.on_rollback(
                 'destroy storage', self.lvremove, self.vm_disk_path(name)
@@ -341,7 +341,7 @@ class Hypervisor(Host):
             self.run('wget -P {} -nv {}'.format(IMAGE_PATH, url))
 
     def extract_image(self, image, target_dir):
-        if self.server_obj['os'] == 'squeeze':
+        if self.dataset_obj['os'] == 'squeeze':
             self.run(
                 'tar xfz {}/{} -C {}'.format(IMAGE_PATH, image, target_dir)
             )
@@ -473,7 +473,7 @@ class Hypervisor(Host):
             )
             self.device_to_netcat(
                 self.vm_disk_path(domain.name()),
-                vm.server_obj['disk_size_gib'] * 1024**3,
+                vm.dataset_obj['disk_size_gib'] * 1024**3,
                 nc_listener,
                 tx,
             )

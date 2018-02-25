@@ -52,8 +52,8 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
             'Changing IP requires a Puppet run, pass --runpuppet.'
         )
 
-    source_hv_os = vm.hypervisor.server_obj['os']
-    destination_hv_os = hypervisor.server_obj['os']
+    source_hv_os = vm.hypervisor.dataset_obj['os']
+    destination_hv_os = hypervisor.dataset_obj['os']
     if (
         not offline and
         (source_hv_os, destination_hv_os) not in MIGRATE_COMMANDS
@@ -81,7 +81,7 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
     # Commit previously changed IP address.
     if newip:
         # TODO: This commit is not rolled back.
-        vm.server_obj.commit()
+        vm.dataset_obj.commit()
         tx.on_rollback('newip warning', log.info, '--newip is not rolled back')
 
     if maintenance or offline:
@@ -110,8 +110,8 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
     vm.reset_state()
 
     # Update Serveradmin
-    vm.server_obj['xen_host'] = hypervisor.server_obj['hostname']
-    vm.server_obj.commit()
+    vm.dataset_obj['xen_host'] = hypervisor.dataset_obj['hostname']
+    vm.dataset_obj.commit()
 
     # If removing the existing VM fails we shouldn't risk undoing the newly
     # migrated one.
@@ -123,5 +123,5 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
 def check_attributes(vm):
     synced_attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
     for attr, value in synced_attributes.iteritems():
-        if vm.server_obj[attr] != value:
+        if vm.dataset_obj[attr] != value:
             raise InconsistentAttributeError(vm, attr, value)

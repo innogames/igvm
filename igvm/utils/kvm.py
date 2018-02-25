@@ -75,24 +75,24 @@ class DomainProperties(object):
         self.qemu_version = _get_qemu_version(hypervisor)
         self.hugepages = False
         self.num_nodes = hypervisor.num_numa_nodes()
-        self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.server_obj['num_cpu'])
+        self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.dataset_obj['num_cpu'])
         self.max_cpus = min(self.max_cpus, hypervisor.num_cpus)
         self.max_mem = hypervisor.vm_max_memory(vm)
         self.numa_mode = self.NUMA_SPREAD
         self.mem_hotplug = (self.qemu_version >= (2, 3))
         self.mem_balloon = False
-        if len(vm.server_obj['mac']) == 0:
+        if len(vm.dataset_obj['mac']) == 0:
             self.mac_address = _generate_mac_address(
-                vm.server_obj['object_id']
+                vm.dataset_obj['object_id']
             )
-            vm.server_obj['mac'] = [self.mac_address]
+            vm.dataset_obj['mac'] = [self.mac_address]
         else:
             # Opportunistic algorighm: get *any* MAC from Serveradmin
-            self.mac_address = next(iter(vm.server_obj['mac']))
-        if vm.server_obj['os'] in ['wheezy', 'jessie', 'stretch']:
+            self.mac_address = next(iter(vm.dataset_obj['mac']))
+        if vm.dataset_obj['os'] in ['wheezy', 'jessie', 'stretch']:
             self.boot_type = 'grub'
             self.kernel_image = '/var/lib/libvirt/boot/grub2.img'
-        elif vm.server_obj['os'] in ['freebsd10', 'freebsd11']:
+        elif vm.dataset_obj['os'] in ['freebsd10', 'freebsd11']:
             self.boot_type = 'freebsd'
 
     def info(self):
@@ -218,9 +218,9 @@ def migrate_live(source, destination, vm, domain):
     # it should have coped the initial disk and memory and changes on them.
     timeout = sum((
         # We assume the disk can be copied at 33 MB/s;
-        vm.server_obj['disk_size_gib'] * 1024 / 33,
+        vm.dataset_obj['disk_size_gib'] * 1024 / 33,
         # the memory at 100 MB/s;
-        vm.server_obj['memory'] / 100,
+        vm.dataset_obj['memory'] / 100,
         # and 5 minutes more for other operations.
         5 * 60,
     ))
@@ -249,7 +249,7 @@ def migrate_live(source, destination, vm, domain):
     # They might not exist for some combinations but this should have
     # been already tested in migratevm.py.
     migrate_cmd += MIGRATE_COMMANDS.get(
-        (source.server_obj['os'], destination.server_obj['os'])
+        (source.dataset_obj['os'], destination.dataset_obj['os'])
     )
 
     # Reduce CPU pinning to minimum number of available cores on both
@@ -283,7 +283,7 @@ def set_memory(hypervisor, vm, domain):
         log.info('Attempting to increase memory with ballooning')
         try:
             domain.setMemoryFlags(
-                vm.server_obj['memory'] * 1024,
+                vm.dataset_obj['memory'] * 1024,
                 VIR_DOMAIN_AFFECT_LIVE | VIR_DOMAIN_AFFECT_CONFIG,
             )
             return
@@ -293,7 +293,7 @@ def set_memory(hypervisor, vm, domain):
             )
 
     if props.mem_hotplug:
-        add_memory = vm.server_obj['memory'] - props.current_memory
+        add_memory = vm.dataset_obj['memory'] - props.current_memory
         assert add_memory > 0
         assert add_memory % (128 * props.num_nodes) == 0
         _attach_memory_dimms(vm, domain, props, add_memory)
@@ -352,8 +352,8 @@ def generate_domain_xml(hypervisor, vm):
     config = {
         'disk_device': '/dev/{}/{}'.format(VG_NAME, vm.fqdn),
         'fqdn': vm.fqdn,
-        'memory': vm.server_obj['memory'],
-        'num_cpu': vm.server_obj['num_cpu'],
+        'memory': vm.dataset_obj['memory'],
+        'num_cpu': vm.dataset_obj['num_cpu'],
         'props': props,
         'vlan_tag': hypervisor.vlan_for_vm(vm),
     }
@@ -368,7 +368,7 @@ def generate_domain_xml(hypervisor, vm):
         _place_numa(hypervisor, vm, tree, props)
 
     log.info('KVM: VCPUs current: {} max: {} available on host: {}'.format(
-        vm.server_obj['num_cpu'], props.max_cpus, hypervisor.num_cpus,
+        vm.dataset_obj['num_cpu'], props.max_cpus, hypervisor.num_cpus,
     ))
     if props.mem_hotplug:
         _set_memory_hotplug(vm, tree, props)
@@ -398,7 +398,7 @@ def _set_cpu_model(hypervisor, vm, tree):
     """
     Selects CPU model based on hardware model.
     """
-    hw_model = hypervisor.server_obj.get('hardware_model')
+    hw_model = hypervisor.dataset_obj.get('hardware_model')
     if not hw_model:
         return
 
@@ -501,7 +501,7 @@ def _place_numa(hypervisor, vm, tree, props):
             cell.attrib = {
                 'id': str(i),
                 'cpus': cpuset,
-                'memory': str(vm.server_obj['memory'] // num_nodes),
+                'memory': str(vm.dataset_obj['memory'] // num_nodes),
                 'unit': 'MiB',
             }
         # </cell></numa>
