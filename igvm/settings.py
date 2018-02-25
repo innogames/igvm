@@ -3,15 +3,13 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
-from igvm.balance.constraints import (
+from igvm.hypervisor_preferences import (
+    CpuOverAllocation,
     DiskSpace,
     EnsureFunctionDistribution,
+    HypervisorMaxCpuUsage,
     HypervisorMaxVcpuUsage,
     Memory,
-)
-from igvm.balance.rules import (
-    CpuOverAllocation,
-    HypervisorMaxCpuUsage,
 )
 
 COMMON_FABRIC_SETTINGS = dict(
@@ -131,21 +129,17 @@ HYPERVISOR_ATTRIBUTES = [
     },
 ]
 
-# The list should be ordered from cheaper to execute to more expensive.
-HYPERVISOR_CONSTRAINTS = [
-    # Hypervisor has enough disk space
+# The list is ordered from more important to less important.  The next
+# preference is only going to be checked when the previous ones return all
+# the same values.
+HYPERVISOR_PREFERENCES = [
     DiskSpace(reserved=5),
-    # Hypervisor has enough memory
     Memory(),
-    # Hypervisor Max 95 vCPU usage < than 45%
-    HypervisorMaxVcpuUsage(threshold=45),
+    HypervisorMaxVcpuUsage(45),
     # Don't migrate two webservers of the same function on one hypervisor
     EnsureFunctionDistribution(),
-]
-
-HYPERVISOR_RULES = [
-    # Find less loaded Hypervisor
-    HypervisorMaxCpuUsage(),
     # Less over-allocated (CPU) hypervisors first
     CpuOverAllocation(),
+    # Find less loaded Hypervisor
+    HypervisorMaxCpuUsage(),
 ]

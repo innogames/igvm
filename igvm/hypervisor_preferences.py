@@ -1,6 +1,10 @@
-"""igvm - Balancing Constraints
+"""igvm - Hypervisor Preferences
 
-This module contains constraints to select hypervisors.
+This module contains preferences to select hypervisors.  Preferences
+return a value of any comparable datatype.  Only the return values of
+the same preference is compared with each other.  Greater values mark
+hypervisors as more preferred.  Keep in mind that for booleans true
+is greater than false.
 
 Copyright (c) 2018, InnoGames GmbH
 """
@@ -87,3 +91,42 @@ class HypervisorMaxVcpuUsage(object):
 
     def __call__(self, vm, hv):
         return hv.dataset_obj['cpu_util_vm_pct'] < self.threshold
+
+
+class HypervisorMaxCpuUsage(object):
+    """Hypervisor maximum CPU usage of the last 24h with 95 percentile score
+
+    Evaluates the maximum CPU usage of the last 24h and returns a score for it.
+    """
+    def __call__(self, vm, hv):
+        return 100.0 - (hv.dataset_obj['cpu_util_pct'] or 100.0)
+
+
+class CpuOverAllocation(object):
+    """CPU Over Allocation
+
+    Rate the CPU over allocation of the target hypervisor by it being better
+    or worse than the current one.
+    """
+    def __call__(self, vm, hv):
+        # New VM has no xen_host attribute yet.
+        if not vm.hypervisor:
+            return 100.0
+
+        cur_hv_cpus = sum(
+            v['num_cpu'] for v in vm.hypervisor.dataset_obj['vms']
+        )
+        cur_hv_rl_cpus = vm.hypervisor.dataset_obj['num_cpu']
+        cur_ovr_allc = float(cur_hv_cpus) / float(cur_hv_rl_cpus)
+
+        tgt_hv_cpus = vm.dataset_obj['num_cpu'] + sum(
+            v['num_cpu'] for v in hv.dataset_obj['vms']
+        )
+        tgt_hv_rl_cpus = hv.dataset_obj['num_cpu']
+        tgt_ovr_allc = float(tgt_hv_cpus) / float(tgt_hv_rl_cpus)
+
+        if tgt_ovr_allc < cur_ovr_allc:
+            return 100.0
+        if tgt_ovr_allc == cur_ovr_allc:
+            return 50.0
+        return 0.0

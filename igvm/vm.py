@@ -10,9 +10,13 @@ from base64 import b64decode
 from fabric.api import cd, get, put, run, settings
 from hashlib import sha1, sha256
 from ipaddress import ip_address
+from os import environ
 from re import compile as re_compile
 from StringIO import StringIO
 from uuid import uuid1
+
+from adminapi.dataset import Query
+from adminapi.filters import Any
 
 from igvm.exceptions import (
     ConfigError,
@@ -21,14 +25,14 @@ from igvm.exceptions import (
 )
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
-from igvm.settings import DEFAULT_SWAP_SIZE
+from igvm.hypervisor_ranking import HypervisorRanking
+from igvm.settings import DEFAULT_SWAP_SIZE, HYPERVISOR_ATTRIBUTES
 from igvm.utils.cli import yellow
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
 from igvm.utils.template import upload_template
 from igvm.utils.transaction import run_in_transaction
 from igvm.utils.units import parse_size
-from igvm.balance.engine import Engine
 
 log = logging.getLogger(__name__)
 
@@ -534,21 +538,29 @@ class VM(Host):
         """Get best hypervisor
 
         Get the best hypervisor and return it rather then directly setting it.
-
-        :param: hv_states: allowed hypervisor states
-
-        :return:
         """
-        for hypervisor in Engine(self, hv_states).run():
+        hypervisors = (Hypervisor(o) for o in Query({
+            'servertype': 'hypervisor',
+            'environment': environ.get('IGVM_MODE', 'production'),
+            'vlan_networks': self.dataset_obj['route_network'],
+            'state': Any(*hv_states),
+        }, HYPERVISOR_ATTRIBUTES))
+
+        log.info('Evaluating hypervisors...')
+
+        # We use decorate-sort-undecorate pattern to get preferred hypervisors.
+        for ranking in sorted(
+            (HypervisorRanking(self, h) for h in hypervisors), reverse=True
+        ):
             # The actual resources are not checked during hypervisor ranking
             # for performance.  We need to validate the hypervisor using
             # the actual values before the final decision.
             try:
-                hypervisor.check_vm(self)
+                ranking.hypervisor.check_vm(self)
             except HypervisorError:
                 continue
 
-            return hypervisor
+            return ranking.hypervisor
 
         raise VMError('Cannot find a hypervisor')
 
