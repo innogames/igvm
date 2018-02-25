@@ -148,6 +148,9 @@ HYPERVISOR_PREFERENCES = [
         'game_world',
         'game_type',
     ]),
+    # Don't migrate two masters database servers together
+    OtherVMsWithSameAttributes(['game_world', 'function'], [0, 'db']),
+    OtherVMsWithSameAttributes(['function'], ['master_db']),
     # Less over-allocated (CPU) hypervisors first
     OverAllocation('num_cpu'),
     # Find less loaded Hypervisor

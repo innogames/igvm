@@ -26,13 +26,20 @@ class InsufficientResource(object):
 
 class OtherVMsWithSameAttributes(object):
     """Count the other VMs on the hypervisor with the same attributes"""
-    def __init__(self, attributes):
+    def __init__(self, attributes, values=None):
+        assert values is None or len(attributes) == len(values)
         self.attributes = attributes
+        self.values = values
 
     def __call__(self, vm, hv):
         result = 0
         for other_vm in hv.dataset_obj['vms']:
             if other_vm['hostname'] == vm.dataset_obj['hostname']:
+                continue
+            if self.values and not all(
+                vm.dataset_obj[a] == v
+                for a, v in zip(self.attributes, self.values)
+            ):
                 continue
             if all(
                 other_vm[a] == vm.dataset_obj[a]
