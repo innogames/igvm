@@ -3,8 +3,6 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
-from igvm.balance.models import GameMarket
-
 
 class Rule(object):
     """Base Rule Class
@@ -70,30 +68,6 @@ class HypervisorMaxCpuUsage(Rule):
         score = 100.0 - max_usage
 
         return score
-
-
-class GameMarketDistribution(Rule):
-    """Game Market Distribution
-
-    Rate the distribution of the game market to ensure to not put too much VMs
-    if a game market on the same hypervisor.
-
-    :return:
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(GameMarketDistribution, self).__init__(*args, **kwargs)
-
-    def score(self, vm, hv):
-        gm = GameMarket(vm['project'], vm['game_market'])
-
-        same_hv = 0.0
-        single_vm_weight = 100.0 / float(len(gm.get_vms()))
-        for cur_vm in gm.get_vms():
-            if cur_vm.get_hypervisor() == hv:
-                same_hv += 1.0
-
-        return 100.0 - (same_hv * single_vm_weight)
 
 
 class CpuOverAllocation(Rule):
