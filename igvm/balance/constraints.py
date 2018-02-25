@@ -140,32 +140,3 @@ class HypervisorMaxVcpuUsage(Constraint):
             return False
 
         return True
-
-
-class ServeradminAttribute(Constraint):
-    """Serveradmin attribute has value
-
-    Check if the serveradmin attribute for the target hypervisor has the given
-    value specified in configuration. You specify the serveradmin attribute and
-    value as "serveradmin_attribute" and "serveradmin_value" in config.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(ServeradminAttribute, self).__init__(*args, **kwargs)
-
-    def fulfilled(self, vm, hv):
-        """Check if serveradmin attribute has given value
-
-        :param vm: igvm.balance.models.VM object
-        :param hv: igvm.balance.models.Hypervisor object
-
-        :return: bool
-        """
-        key = self.serveradmin_attribute
-        value = self.serveradmin_value
-
-        if key in hv.keys():
-            if hv[key] == value:
-                return True
-
-        return False
