@@ -549,7 +549,7 @@ class VM(Host):
             # the hypervisor using the actual values before start using it.
             # TODO: Call a shared function for this
             if (
-                hypervisor.get_disk_free() / 1024.0 <
+                hypervisor.get_disk_free() <
                 self.dataset_obj['disk_size_gib']
             ):
                 continue

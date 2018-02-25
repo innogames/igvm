@@ -84,7 +84,7 @@ IMAGE_PATH = '/tmp'
 # The list should be ordered from cheaper to execute to more expensive.
 HYPERVISOR_CONSTRAINTS = [
     # Hypervisor has enough disk space
-    DiskSpace(reserved=5192),
+    DiskSpace(reserved=5),
     # Hypervisor has enough memory
     Memory(),
     # Hypervisor Max 95 vCPU usage < than 45%

@@ -77,45 +77,21 @@ class Hypervisor(Host):
 
         return self._vms
 
-    def get_memory_free(self, fast=False):
-        """Get free memory for VMs in MiB -> float
-
-        Get free memory in MiB from libvirt and return it or -1.0 on error.
-        """
-
-        if fast:
-            vms_memory = float(sum([vm['memory'] for vm in self.get_vms()]))
-            return float(self['memory']) - vms_memory
-        else:
-            ighv = KVMHypervisor(self.hostname)
-            memory = float(ighv.free_vm_memory())
+    def get_memory_free(self):
+        """Get free memory for VMs in MiB"""
+        ighv = KVMHypervisor(self.hostname)
+        try:
+            return ighv.free_vm_memory()
+        finally:
             close_virtconn(ighv.fqdn)
 
-        return memory
-
-    def get_disk_free(self, fast=False):
-        """Get free disk size in MiB
-
-        Get free disk size in MiB for VMs using igvm.
-
-        :param: fast: Calculate disk by serveradmin value imprecise
-
-        :return: float
-        """
-
-        if fast:
-            # We reserved 10 GiB for root partition and 16 for swap.
-            reserved = 16.0 + 10
-            host = self['disk_size_gib']
-            vms = float(sum(vm['disk_size_gib'] for vm in self.get_vms()))
-            disk_free_mib = (host - vms - reserved) * 1024.0
-        else:
-            ighv = KVMHypervisor(self.hostname)
-            gib = float(ighv.get_free_disk_size_gib())
+    def get_disk_free(self):
+        """Get free disk size in GiB"""
+        ighv = KVMHypervisor(self.hostname)
+        try:
+            return ighv.get_free_disk_size_gib()
+        finally:
             close_virtconn(ighv.fqdn)
-            disk_free_mib = gib * 1024.0
-
-        return disk_free_mib
 
     def get_max_vcpu_usage(self):
         """Get last 24h maximum vCPU usage of 95 percentile for hypervisor

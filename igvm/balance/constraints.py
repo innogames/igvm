@@ -9,23 +9,32 @@ Copyright (c) 2018, InnoGames GmbH
 class DiskSpace(object):
     """Disk Space Constraint
 
-    Check if enough disk space is free on target hypervisor. Disk space is
-    determined by used disk space of VM.
+    Check if enough disk space is free on target hypervisor.  Disk space is
+    estimated using disk space of the VMs.
     """
     def __init__(self, reserved):
         self.reserved = reserved
 
     def __call__(self, vm, hv):
-        return hv.get_disk_free(fast=True) - self.reserved > vm.get_disk_size()
+        total_size = hv['disk_size_gib']
+        # We assume 10 GiB for root partition and 16 for swap.
+        host_size = 16 + 10
+        vms_size = sum(v['disk_size_gib'] for v in hv.get_vms())
+        remaining_size = total_size - vms_size - host_size - self.reserved
+
+        return remaining_size > vm['disk_size_gib']
 
 
 class Memory(object):
     """Memory Constraint
 
-    Check if hypervisor has enough memory free to move desired vm there
+    Check if enough memory is free on target hypervisor.  Memory is estimated
+    using disk space of the VMs.
     """
     def __call__(self, vm, hv):
-        return hv.get_memory_free(fast=True) > vm.get_memory()
+        vms_memory = sum(v['memory'] for v in hv.get_vms())
+
+        return hv['memory'] - vms_memory > vm['memory']
 
 
 class EnsureFunctionDistribution(object):
