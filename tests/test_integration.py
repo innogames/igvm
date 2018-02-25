@@ -14,7 +14,7 @@ import uuid
 from functools import partial
 from pipes import quote
 
-from adminapi.dataset import create, Query, DatasetError
+from adminapi.dataset import Query
 
 from fabric.api import env
 
@@ -83,31 +83,29 @@ def setUpModule():
     if len(HYPERVISORS) < 2:
         raise Exception('Not enough testing hypervisors found')
 
-    vm_obj = create({
-        'hostname': VM_HOSTNAME,
-        'project_network': VM_NET,
-        'servertype': 'vm',
-        'project': 'test',
-        'team': 'test',
-    })
-    vm_obj.commit()
+    query = Query()
+    vm_obj = query.new_object('vm')
+    vm_obj['hostname'] = VM_HOSTNAME
+    vm_obj['intern_ip'] = Query(
+        {'hostname': VM_NET}, ['intern_ip']
+    ).get_free_ip_addrs()
+    vm_obj['project'] = 'test'
+    vm_obj['team'] = 'test'
+
+    query.commit()
 
 
 def tearDownModule():
-    vm_obj = Query(
+    query = Query(
         {
             'servertype': 'vm',
             'hostname': VM_HOSTNAME,
         },
         ['hostname'],
     )
-    try:
-        vm_obj.get()
-    except DatasetError:
-        pass
-    else:
-        vm_obj.delete()
-        vm_obj.commit()
+    for obj in query:
+        obj.delete()
+    query.commit()
 
 
 def cmd(cmd, *args, **kwargs):

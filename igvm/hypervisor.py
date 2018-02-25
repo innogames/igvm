@@ -9,7 +9,8 @@ import urllib2
 
 from libvirt import VIR_DOMAIN_SHUTOFF
 
-from adminapi.dataset import query, filters
+from adminapi.dataset import Query
+from adminapi.filters import Any, Empty, Not
 
 from igvm.exceptions import (
     ConfigError,
@@ -74,10 +75,10 @@ class Hypervisor(Host):
         None for untagged."""
         vlans = []
         if self.dataset_obj.get('vlan_networks'):
-            for vlan_network in query(
-                hostname=filters.Any(*self.dataset_obj['vlan_networks']),
-                vlan_tag=filters.Not(filters.Empty()),
-            ).restrict('vlan_tag'):
+            for vlan_network in Query({
+                'hostname': Any(*self.dataset_obj['vlan_networks']),
+                'vlan_tag': Not(Empty()),
+            }, ['vlan_tag']):
                 vlans.append(vlan_network['vlan_tag'])
         vm_vlan = vm.network_config['vlan_tag']
         if not vlans:

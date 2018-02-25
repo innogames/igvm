@@ -5,8 +5,8 @@ Copyright (c) 2018, InnoGames GmbH
 
 from StringIO import StringIO
 
-from adminapi.dataset import query
-from adminapi.dataset.filters import ExactMatch, Startswith, Or
+from adminapi.dataset import Query
+from adminapi.filters import ExactMatch, Startswith, Or
 
 import fabric.api
 import fabric.state
@@ -23,7 +23,7 @@ def get_server(hostname, servertype):
     """Get a server from Serveradmin by hostname and servertype
 
     The function is accepting hostnames in any length as long as it resolves
-    to a single server on Serveradmin.  It returns the adminapi Server object.
+    to a single server on Serveradmin.  It returns the adminapi DatasetObject.
     """
 
     conditions = [ExactMatch(hostname)]
@@ -33,9 +33,9 @@ def get_server(hostname, servertype):
         conditions.append(Startswith(hostname + '.'))
 
     # We want to return the server, only if it has the correct servertype,
-    # but we are not using it as a condition on the query to be able to give
+    # but we are not using it as a condition on the Query to be able to give
     # better errors.
-    servers = list(query(hostname=Or(*conditions)))
+    servers = list(Query({'hostname': Or(*conditions)}))
 
     if not servers:
         raise ConfigError(

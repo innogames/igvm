@@ -7,8 +7,8 @@ import logging
 
 from os import environ
 
-from adminapi.dataset import query
-from adminapi.dataset.filters import Any
+from adminapi.dataset import Query
+from adminapi.filters import Any
 
 from igvm.balance.models import (
     VM,
@@ -31,31 +31,31 @@ class Engine(object):
         self.config = get_config(config or self.vm['project'])
         self.constraints = get_constraints(self.config['constraints'])
         self.rules = get_rules(self.config['rules'])
-        self.hvs = [HV(host['hostname']) for host in query(
-            servertype='hypervisor',
-            environment=environ.get('IGVM_MODE', 'production'),
-            vlan_networks=self.vm['route_network'],
-            state=Any(*hv_states)
-        )]
+        self.hvs = [HV(host['hostname']) for host in Query({
+            'servertype': 'hypervisor',
+            'environment': environ.get('IGVM_MODE', 'production'),
+            'vlan_networks': self.vm['route_network'],
+            'state': Any(*hv_states),
+        })]
 
     def _cache(self, vm_hostname):
         logging.info('Fetching serveradmin values for cache ...')
 
-        vm = query(hostname=vm_hostname).get()
+        vm = Query({'hostname': vm_hostname}).get()
         ServeradminCache.set(vm_hostname, vm)
 
-        hvs = query(
-            servertype='hypervisor',
-            vlan_networks=vm['route_network'],
-            environment=environ.get('IGVM_MODE', 'production')
-        )
+        hvs = Query({
+            'servertype': 'hypervisor',
+            'vlan_networks': vm['route_network'],
+            'environment': environ.get('IGVM_MODE', 'production')
+        })
         for hv in hvs:
             ServeradminCache.set(hv['hostname'], hv)
 
-        vms = query(
-            servertype='vm',
-            xen_host=Any(*[hv['hostname'] for hv in hvs])
-        )
+        vms = Query({
+            'servertype': 'vm',
+            'xen_host': Any(*[hv['hostname'] for hv in hvs]),
+        })
         for vm in vms:
             ServeradminCache.set(vm['hostname'], vm)
 

@@ -3,8 +3,8 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
-from adminapi.dataset import query
-from adminapi.dataset.filters import Any
+from adminapi.dataset import Query
+from adminapi.filters import Any
 
 from igvm.hypervisor import Hypervisor as KVMHypervisor
 from igvm.utils.virtutils import close_virtconn
@@ -78,11 +78,11 @@ class Game(object):
         """
 
         if self._hypervisors_available is None:
-            hvs = query(
-                vlan_networks=Any(self.get_route_networks()),
-                servertype='hypervisor',
-                state='online'
-            )
+            hvs = Query({
+                'vlan_networks': Any(self.get_route_networks()),
+                'servertype': 'hypervisor',
+                'state': 'online',
+            })
             hvs = set([hv['hostname'] for hv in hvs])
             self._hypervisors_available = [Hypervisor(hv) for hv in hvs]
 
