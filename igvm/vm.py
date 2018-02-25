@@ -16,6 +16,7 @@ from uuid import uuid1
 
 from igvm.exceptions import (
     ConfigError,
+    HypervisorError,
     RemoteCommandError,
 )
 from igvm.host import Host
@@ -538,25 +539,16 @@ class VM(Host):
 
         :return:
         """
-        for hypervisor in Engine(
-            self.dataset_obj['hostname'], hv_states
-        ).run():
-            if self.dataset_obj['xen_host'] == hypervisor['hostname']:
+        for hypervisor in Engine(self, hv_states).run():
+            # The actual resources are not checked during hypervisor ranking
+            # for performance.  We need to validate the hypervisor using
+            # the actual values before the final decision.
+            try:
+                hypervisor.check_vm(self)
+            except HypervisorError:
                 continue
 
-            # The actual free disk size and memory are not checked during
-            # hypervisor ranking for performance.  We need to validate
-            # the hypervisor using the actual values before start using it.
-            # TODO: Call a shared function for this
-            if (
-                hypervisor.get_disk_free() <
-                self.dataset_obj['disk_size_gib']
-            ):
-                continue
-            if hypervisor.get_memory_free() < self.dataset_obj['memory']:
-                continue
-
-            return hypervisor['hostname']
+            return hypervisor
 
         raise VMError('Cannot find a hypervisor')
 
@@ -564,14 +556,8 @@ class VM(Host):
         """Set best hypervisor
 
         Find the best or another hypervisor for the given virtual machine.
-
-        :param: hv_states: allowed hypervisor states
-
-        :return:
         """
-
-        hv = self.get_best_hypervisor(hv_states)
-        logging.info('Setting hypervisor to {}'.format(hv))
-        self.hypervisor = Hypervisor(hv, ignore_reserved=True)
-        self.dataset_obj['xen_host'] = hv
+        self.hypervisor = self.get_best_hypervisor(hv_states)
+        logging.info('Setting hypervisor to {}'.format(self.hypervisor))
+        self.dataset_obj['xen_host'] = self.hypervisor.dataset_obj['hostname']
         self.dataset_obj.commit()

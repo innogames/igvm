@@ -26,14 +26,15 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
     vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
 
     # If not specified automatically find a new better hypervisor
-    if not hypervisor_hostname:
-        hypervisor_hostname = vm.get_best_hypervisor(
+    if hypervisor_hostname:
+        hypervisor = Hypervisor(
+            hypervisor_hostname, ignore_reserved=ignore_reserved
+        )
+    else:
+        hypervisor = vm.get_best_hypervisor(
             ['online', 'online_reserved'] if ignore_reserved else ['online']
         )
 
-    hypervisor = Hypervisor(
-        hypervisor_hostname, ignore_reserved=ignore_reserved
-    )
     was_running = vm.is_running()
 
     # There is no point of online migration, if the VM is already shutdown.

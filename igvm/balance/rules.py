@@ -18,7 +18,7 @@ class HypervisorMaxCpuUsage(object):
     Evaluates the maximum CPU usage of the last 24h and returns a score for it.
     """
     def __call__(self, vm, hv):
-        return 100.0 - (hv.get_max_cpu_usage() or 100.0)
+        return 100.0 - (hv.dataset_obj['cpu_util_pct'] or 100.0)
 
 
 class CpuOverAllocation(object):
@@ -32,12 +32,16 @@ class CpuOverAllocation(object):
         if not vm.hypervisor:
             return 100.0
 
-        cur_hv_cpus = sum(v['num_cpu'] for v in vm.hypervisor['vm'])
-        cur_hv_rl_cpus = vm.hypervisor['num_cpu']
+        cur_hv_cpus = sum(
+            v['num_cpu'] for v in vm.hypervisor.dataset_obj['vms']
+        )
+        cur_hv_rl_cpus = vm.hypervisor.dataset_obj['num_cpu']
         cur_ovr_allc = float(cur_hv_cpus) / float(cur_hv_rl_cpus)
 
-        tgt_hv_cpus = vm['num_cpu'] + sum(v['num_cpu'] for v in hv['vms'])
-        tgt_hv_rl_cpus = hv['num_cpu']
+        tgt_hv_cpus = vm.dataset_obj['num_cpu'] + sum(
+            v['num_cpu'] for v in hv.dataset_obj['vms']
+        )
+        tgt_hv_rl_cpus = hv.dataset_obj['num_cpu']
         tgt_ovr_allc = float(tgt_hv_cpus) / float(tgt_hv_rl_cpus)
 
         if tgt_ovr_allc < cur_ovr_allc:

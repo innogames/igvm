@@ -77,6 +77,9 @@ class Host(object):
                 'Server "{0}" is online_reserved.'.format(self.fqdn)
             )
 
+    def __eq__(self, other):
+        return isinstance(other, Host) and self.fqdn == other.fqdn
+
     def fabric_settings(self, *args, **kwargs):
         """Builds a fabric context manager to run commands on this host."""
         settings = COMMON_FABRIC_SETTINGS.copy()

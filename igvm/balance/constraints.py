@@ -16,13 +16,13 @@ class DiskSpace(object):
         self.reserved = reserved
 
     def __call__(self, vm, hv):
-        total_size = hv['disk_size_gib']
+        total_size = hv.dataset_obj['disk_size_gib']
         # We assume 10 GiB for root partition and 16 for swap.
         host_size = 16 + 10
-        vms_size = sum(v['disk_size_gib'] for v in hv['vms'])
+        vms_size = sum(v['disk_size_gib'] for v in hv.dataset_obj['vms'])
         remaining_size = total_size - vms_size - host_size - self.reserved
 
-        return remaining_size > vm['disk_size_gib']
+        return remaining_size > vm.dataset_obj['disk_size_gib']
 
 
 class Memory(object):
@@ -32,9 +32,9 @@ class Memory(object):
     using disk space of the VMs.
     """
     def __call__(self, vm, hv):
-        vms_memory = sum(v['memory'] for v in hv['vms'])
+        vms_memory = sum(v['memory'] for v in hv.dataset_obj['vms'])
 
-        return hv['memory'] - vms_memory > vm['memory']
+        return hv.dataset_obj['memory'] - vms_memory > vm.dataset_obj['memory']
 
 
 class EnsureFunctionDistribution(object):
@@ -43,10 +43,13 @@ class EnsureFunctionDistribution(object):
     Ensure that redundant servers don't reside on the same hypervisor
     """
     def __call__(self, vm, hv):
-        for other_vm in hv['vms']:
-            if other_vm['hostname'] == vm['hostname']:
+        for other_vm in hv.dataset_obj['vms']:
+            if other_vm['hostname'] == vm.dataset_obj['hostname']:
                 continue
-            if self.get_identifier(other_vm) != self.get_identifier(vm):
+            if (
+                self.get_identifier(other_vm) !=
+                self.get_identifier(vm.dataset_obj)
+            ):
                 return False
         return True
 
@@ -83,4 +86,4 @@ class HypervisorMaxVcpuUsage(object):
         self.threshold = threshold
 
     def __call__(self, vm, hv):
-        return hv.get_max_vcpu_usage() < self.threshold
+        return hv.dataset_obj['cpu_util_vm_pct'] < self.threshold

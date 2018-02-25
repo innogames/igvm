@@ -53,7 +53,7 @@ def get_ranking(vm, hypervisors, rules):
         for rule in rules:
             score = rule(vm, hypervisor)
             rulename = rule.__class__.__name__
-            hostname = hypervisor.hostname
+            hostname = hypervisor.dataset_obj['hostname']
 
             if rulename not in rule_ranking:
                 rule_ranking[rulename] = {}
