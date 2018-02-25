@@ -4,12 +4,11 @@ Copyright (c) 2018, InnoGames GmbH
 """
 
 from igvm.hypervisor_preferences import (
-    CpuOverAllocation,
-    DiskSpace,
-    EnsureFunctionDistribution,
-    HypervisorMaxCpuUsage,
-    HypervisorMaxVcpuUsage,
-    Memory,
+    HypervisorAttributeValue,
+    HypervisorAttributeValueLimit,
+    InsufficientResource,
+    OtherVMsWithSameAttributes,
+    OverAllocation,
 )
 
 COMMON_FABRIC_SETTINGS = dict(
@@ -133,13 +132,24 @@ HYPERVISOR_ATTRIBUTES = [
 # preference is only going to be checked when the previous ones return all
 # the same values.
 HYPERVISOR_PREFERENCES = [
-    DiskSpace(reserved=5),
-    Memory(),
-    HypervisorMaxVcpuUsage(45),
-    # Don't migrate two webservers of the same function on one hypervisor
-    EnsureFunctionDistribution(),
+    # We assume 10 GiB for root partition, 16 for swap, and 6 reserved.
+    InsufficientResource('disk_size_gib', reserved=32),
+    InsufficientResource('memory'),
+    # Checks the maximum vCPU usage (95 percentile) of the given hypervisor
+    # for the given time_range and dismisses it as target when it is over
+    # the value of threshold.
+    HypervisorAttributeValueLimit('cpu_util_vm_pct', 45),
+    # Don't migrate two redundant VMs together
+    OtherVMsWithSameAttributes([
+        'project',
+        'function',
+        'environment',
+        'game_market',
+        'game_world',
+        'game_type',
+    ]),
     # Less over-allocated (CPU) hypervisors first
-    CpuOverAllocation(),
+    OverAllocation('num_cpu'),
     # Find less loaded Hypervisor
-    HypervisorMaxCpuUsage(),
+    HypervisorAttributeValue('cpu_util_pct'),
 ]

@@ -549,9 +549,7 @@ class VM(Host):
         log.info('Evaluating hypervisors...')
 
         # We use decorate-sort-undecorate pattern to get preferred hypervisors.
-        for ranking in sorted(
-            (HypervisorRanking(self, h) for h in hypervisors), reverse=True
-        ):
+        for ranking in sorted(HypervisorRanking(self, h) for h in hypervisors):
             # The actual resources are not checked during hypervisor ranking
             # for performance.  We need to validate the hypervisor using
             # the actual values before the final decision.
