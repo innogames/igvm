@@ -81,6 +81,56 @@ FOREMAN_IMAGE_MD5_URL = 'http://aw-foreman.ig.local:8080/{image}.md5'
 
 IMAGE_PATH = '/tmp'
 
+VM_ATTRIBUTES = [
+    'disk_size_gib',
+    'environment',
+    'function',
+    'hostname',
+    'game_market',
+    'game_world',
+    'game_type',
+    'intern_ip',
+    'mac',
+    'memory',
+    'num_cpu',
+    'os',
+    'project',
+    'puppet_disabled',
+    'puppet_ca',
+    'puppet_master',
+    'sshfp',
+    'state',
+    'route_network',
+    'xen_host',
+]
+
+HYPERVISOR_ATTRIBUTES = [
+    'cpu_util_pct',
+    'cpu_util_vm_pct',
+    'disk_size_gib',
+    'hostname',
+    'intern_ip',
+    'memory',
+    'num_cpu',
+    'os',
+    'state',
+    'vlan_networks',
+    {
+        'vms': [
+            'disk_size_gib',
+            'environment',
+            'function',
+            'hostname',
+            'game_market',
+            'game_world',
+            'game_type',
+            'memory',
+            'num_cpu',
+            'project',
+        ],
+    },
+]
+
 # The list should be ordered from cheaper to execute to more expensive.
 HYPERVISOR_CONSTRAINTS = [
     # Hypervisor has enough disk space

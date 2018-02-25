@@ -3,8 +3,6 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
-from adminapi.dataset import Query
-
 from igvm.hypervisor import Hypervisor as KVMHypervisor
 from igvm.utils.virtutils import close_virtconn
 
@@ -68,15 +66,6 @@ class Hypervisor(Host):
 
         return self['state']
 
-    def get_vms(self):
-        if self._vms is None:
-            self._vms = [VM(o, self) for o in Query({
-                'servertype': 'vm',
-                'xen_host': self.hostname,
-            })]
-
-        return self._vms
-
     def get_memory_free(self):
         """Get free memory for VMs in MiB"""
         ighv = KVMHypervisor(self.hostname)
@@ -128,26 +117,3 @@ class VM(Host):
     def __init__(self, obj, hypervisor=None):
         super(VM, self).__init__(obj)
         self.hypervisor = hypervisor
-
-    def get_identifier(self):
-        """get game identifer for vm -> str"""
-
-        if self['game_market'] and self['game_world']:
-            identifier = '{}-{}-{}'.format(
-                self['project'],
-                self['game_market'],
-                self['game_world'],
-            )
-
-            if self['game_type']:
-                identifier += (
-                    '-' + self['game_type']
-                )
-
-            return identifier
-        else:
-            return '{}-{}-{}'.format(
-                self['project'],
-                self['function'],
-                self['environment']
-            )

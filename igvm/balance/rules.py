@@ -29,14 +29,14 @@ class CpuOverAllocation(object):
     """
     def __call__(self, vm, hv):
         # New VM has no xen_host attribute yet.
-        if not vm['xen_host']:
+        if not vm.hypervisor:
             return 100.0
 
-        cur_hv_cpus = sum(v['num_cpu'] for v in vm.hypervisor.get_vms())
+        cur_hv_cpus = sum(v['num_cpu'] for v in vm.hypervisor['vm'])
         cur_hv_rl_cpus = vm.hypervisor['num_cpu']
         cur_ovr_allc = float(cur_hv_cpus) / float(cur_hv_rl_cpus)
 
-        tgt_hv_cpus = vm['num_cpu'] + sum(v['num_cpu'] for v in hv.get_vms())
+        tgt_hv_cpus = vm['num_cpu'] + sum(v['num_cpu'] for v in hv['vms'])
         tgt_hv_rl_cpus = hv['num_cpu']
         tgt_ovr_allc = float(tgt_hv_cpus) / float(tgt_hv_rl_cpus)
 
