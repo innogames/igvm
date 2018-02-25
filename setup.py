@@ -26,7 +26,6 @@ setup(
             'templates/etc/hosts',
             'templates/etc/inittab',
             'templates/etc/resolv.conf',
-            'templates/balance.json',
         ]
     },
     author='InnoGames System Administration',

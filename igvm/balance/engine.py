@@ -10,14 +10,12 @@ from os import environ
 from adminapi.dataset import Query
 from adminapi.filters import Any
 
+from igvm.settings import HYPERVISOR_CONSTRAINTS, HYPERVISOR_RULES
 from igvm.balance.models import (
     VM,
     Hypervisor as HV,
 )
 from igvm.balance.utils import (
-    get_config,
-    get_constraints,
-    get_rules,
     filter_hypervisors,
     get_ranking,
     ServeradminCache
@@ -25,12 +23,9 @@ from igvm.balance.utils import (
 
 
 class Engine(object):
-    def __init__(self, vm_hostname, config, hv_states=['online']):
+    def __init__(self, vm_hostname, hv_states=['online']):
         self._cache(vm_hostname)
         self.vm = VM(vm_hostname)
-        self.config = get_config(config or self.vm['project'])
-        self.constraints = get_constraints(self.config['constraints'])
-        self.rules = get_rules(self.config['rules'])
         self.hvs = [HV(host['hostname']) for host in Query({
             'servertype': 'hypervisor',
             'environment': environ.get('IGVM_MODE', 'production'),
@@ -62,6 +57,8 @@ class Engine(object):
         logging.info('Cached {} objects'.format(ServeradminCache.size()))
 
     def run(self):
-        candidates = filter_hypervisors(self.vm, self.hvs, self.constraints)
+        candidates = filter_hypervisors(
+            self.vm, self.hvs, HYPERVISOR_CONSTRAINTS
+        )
 
-        return get_ranking(self.vm, candidates, self.rules)
+        return get_ranking(self.vm, candidates, HYPERVISOR_RULES)

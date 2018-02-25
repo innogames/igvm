@@ -3,6 +3,17 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
+from igvm.balance.constraints import (
+    DiskSpace,
+    EnsureFunctionDistribution,
+    HypervisorMaxVcpuUsage,
+    Memory,
+)
+from igvm.balance.rules import (
+    CpuOverAllocation,
+    HypervisorMaxCpuUsage,
+)
+
 COMMON_FABRIC_SETTINGS = dict(
     disable_known_hosts=True,
     use_ssh_config=True,
@@ -69,3 +80,22 @@ FOREMAN_IMAGE_URL = 'http://aw-foreman.ig.local:8080/{image}'
 FOREMAN_IMAGE_MD5_URL = 'http://aw-foreman.ig.local:8080/{image}.md5'
 
 IMAGE_PATH = '/tmp'
+
+# The list should be ordered from cheaper to execute to more expensive.
+HYPERVISOR_CONSTRAINTS = [
+    # Hypervisor has enough disk space
+    DiskSpace(reserved=5192),
+    # Hypervisor has enough memory
+    Memory(),
+    # Hypervisor Max 95 vCPU usage < than 45%
+    HypervisorMaxVcpuUsage(threshold=45),
+    # Don't migrate two webservers of the same function on one hypervisor
+    EnsureFunctionDistribution(),
+]
+
+HYPERVISOR_RULES = [
+    # Find less loaded Hypervisor
+    HypervisorMaxCpuUsage(),
+    # Less over-allocated (CPU) hypervisors first
+    CpuOverAllocation(),
+]

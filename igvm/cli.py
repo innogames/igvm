@@ -28,7 +28,6 @@ from igvm.commands import (
 )
 from igvm.utils.cli import white, red
 from igvm.utils.virtutils import close_virtconns
-from igvm.balance.utils import get_config_keys
 
 
 class IGVMArgumentParser(ArgumentParser):
@@ -102,11 +101,6 @@ def parse_args():
         action='store_true',
         help='Force build on a Host which has the state online_reserved',
     )
-    subparser.add_argument(
-        '--balance-config',
-        choices=get_config_keys(),
-        help='Use this igbalance ruleset instead of project default',
-    )
 
     subparser = subparsers.add_parser(
         'migrate',
@@ -148,11 +142,6 @@ def parse_args():
         dest='ignore_reserved',
         action='store_true',
         help='Force migration to a Host which has the state online_reserved',
-    )
-    subparser.add_argument(
-        '--balance-config',
-        choices=get_config_keys(),
-        help='Use this igbalance ruleset instead of project default',
     )
     subparser = subparsers.add_parser(
         'disk-set',

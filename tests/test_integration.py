@@ -11,14 +11,13 @@ import tempfile
 import unittest
 import uuid
 
-from functools import partial
 from pipes import quote
 
 from adminapi.dataset import Query
 
 from fabric.api import env
 
-from igvm.buildvm import buildvm as real_buildvm
+from igvm.buildvm import buildvm
 from igvm.commands import (
     disk_set,
     host_info,
@@ -37,7 +36,7 @@ from igvm.exceptions import (
     InconsistentAttributeError,
 )
 from igvm.hypervisor import Hypervisor
-from igvm.migratevm import migratevm as real_migratevm
+from igvm.migratevm import migratevm
 from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
     IMAGE_PATH,
@@ -54,10 +53,6 @@ os.environ['IGVM_MODE'] = 'testing'
 # Keep in mind that the whole hostname must fit in 64 characters.
 VM_HOSTNAME = 'igvm-{}.test.ig.local'.format(uuid.uuid4())
 VM_NET = 'igvm-net-aw.test.ig.local'
-
-# Override balancing configuration
-buildvm = partial(real_buildvm, balance_config='test')
-migratevm = partial(real_migratevm, balance_config='test')
 
 
 def setUpModule():

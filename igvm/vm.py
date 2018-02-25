@@ -530,19 +530,16 @@ class VM(Host):
     def copy_postboot_script(self, script):
         self.put('/buildvm-postboot', script, '0755')
 
-    def get_best_hypervisor(self, balance_config=None, hv_states=['online']):
+    def get_best_hypervisor(self, hv_states=['online']):
         """Get best hypervisor
 
         Get the best hypervisor and return it rather then directly setting it.
 
-        :param: balance_config: igbalance configuration
         :param: hv_states: allowed hypervisor states
 
         :return:
         """
-
-        e = Engine(self.dataset_obj['hostname'], balance_config, hv_states)
-        ranking = e.run()
+        ranking = Engine(self.dataset_obj['hostname'], hv_states).run()
 
         for hv in sorted(ranking, key=ranking.get, reverse=True):
             if (
@@ -561,18 +558,17 @@ class VM(Host):
 
         raise VMError('Cannot find a hypervisor')
 
-    def set_best_hypervisor(self, balance_config=None, hv_states=['online']):
+    def set_best_hypervisor(self, hv_states=['online']):
         """Set best hypervisor
 
         Find the best or another hypervisor for the given virtual machine.
 
-        :param: balance_config: igbalance configuration
         :param: hv_states: allowed hypervisor states
 
         :return:
         """
 
-        hv = self.get_best_hypervisor(balance_config, hv_states)
+        hv = self.get_best_hypervisor(hv_states)
         logging.info('Setting hypervisor to {}'.format(hv))
         self.hypervisor = Hypervisor(hv, ignore_reserved=True)
         self.dataset_obj['xen_host'] = hv

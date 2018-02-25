@@ -124,7 +124,7 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
 
 @with_fabric_settings
 def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
-             ignore_reserved=False, balance_config=None):
+             ignore_reserved=False):
     """Create a VM and start it
 
     Puppet in run once to configure baseline networking.
@@ -135,7 +135,6 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
     # Could also have been set in serveradmin already.
     if not vm.hypervisor:
         vm.set_best_hypervisor(
-            balance_config,
             ['online', 'online_reserved'] if ignore_reserved else ['online']
         )
 
