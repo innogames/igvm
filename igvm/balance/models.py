@@ -8,71 +8,6 @@ from igvm.utils.virtutils import close_virtconn
 from igvm.balance.utils import ServeradminCache as sc
 
 
-class Bladecenter(object):
-    """Bladecenter"""
-
-    def __init__(self, bladecenter):
-        super(Bladecenter, self).__init__()
-        self.bladecenter = bladecenter
-        self._hypervisors = None
-        self._vms = None
-
-    def __eq__(self, other):
-        if self.bladecenter == other.bladecenter:
-            return True
-        else:
-            return False
-
-    def __hash__(self):
-        return hash(self.bladecenter)
-
-    def __str__(self):
-        return self.bladecenter
-
-    def __repr__(self):
-        return '<balance.models.Bladecenter {}>'.format(self.bladecenter)
-
-    def get_hypervisors(self):
-        """get hypervisors -> []"""
-
-        if self._hypervisors is None:
-            self._hypervisors = []
-            qs = sc.query(
-                servertype='hypervisor', bladecenter=self.bladecenter
-            )
-            for hypervisor in qs:
-                hostname = hypervisor['hostname']
-                self._hypervisors.append(Hypervisor(hostname))
-
-        return self._hypervisors
-
-    def get_vms(self):
-        """get vms -> []"""
-
-        if self._vms is None:
-            self._vms = []
-            for hypervisor in self.get_hypervisors():
-                self._vms.extend(hypervisor.get_vms())
-
-        return self._vms
-
-    def get_avg_load(self):
-        """Get average load of hypervisors in bladecenter -> float
-
-        Calculates the average load of the bladecenter for all hypervisors and
-        returns the value as float or -1 if no hypervisors are available.
-        """
-
-        if len(self.get_hypervisors()) == 0:
-            return -1.0
-
-        load = 0.0
-        for hv in self.get_hypervisors():
-            load += hv.get_max_load()
-
-        return float(load / len(self.get_hypervisors()))
-
-
 class Host(object):
     """Host"""
 
@@ -129,7 +64,6 @@ class Hypervisor(Host):
 
     def __init__(self, hostname):
         super(Hypervisor, self).__init__(hostname)
-        self._bladecenter = None
         self._vms = None
 
     def __str__(self):
@@ -142,15 +76,6 @@ class Hypervisor(Host):
         """get hypervisor state -> str"""
 
         return self['state']
-
-    def get_bladecenter(self):
-        """get bladecenter -> Bladecenter"""
-
-        if self._bladecenter is None:
-            bladecenter = self['bladecenter']
-            self._bladecenter = Bladecenter(bladecenter)
-
-        return self._bladecenter
 
     def get_vms(self):
         """get vms -> []"""
@@ -256,11 +181,6 @@ class VM(Host):
             self._hypervisor = Hypervisor(hostname)
 
         return self._hypervisor
-
-    def get_bladecenter(self):
-        """get bladecenter -> Bladecenter"""
-
-        return self.get_hypervisor().get_bladecenter()
 
     def get_identifier(self):
         """get game identifer for vm -> str"""

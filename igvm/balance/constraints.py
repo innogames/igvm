@@ -86,29 +86,6 @@ class Memory(Constraint):
         return True
 
 
-class Bladecenter(Constraint):
-    """Bladecenter
-
-    Check if target is in the same bladecenter and return True if yes.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(Bladecenter, self).__init__(*args, **kwargs)
-
-    def fulfilled(self, vm, hv):
-        """Check if target hypervisor is in same bladecenter as VM
-
-        :param vm: igvm.balance.models.VM object
-        :param hv: igvm.balance.models.Hypervisor object
-
-        :return: bool
-        """
-        if vm.get_bladecenter() == hv.get_bladecenter():
-            return True
-
-        return False
-
-
 class EnsureFunctionDistribution(Constraint):
     """Game World / Function Distribution
 
