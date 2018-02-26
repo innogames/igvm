@@ -412,7 +412,7 @@ class Hypervisor(Host):
 
         :return: float
         """
-        return self['cpu_util_vm_percent_max_week']
+        return self['cpu_util_vm_pct']
 
     def get_max_cpu_usage(self):
         """Get last 24h maximum CPU usage of 95 percentile for hypervisor
@@ -422,7 +422,7 @@ class Hypervisor(Host):
 
         :return: float
         """
-        return self['cpu_util_percent_max95_day']
+        return self['cpu_util_pct']
 
     def get_max_load(self):
         """Get maximum load average of last 24h for hypervisor
