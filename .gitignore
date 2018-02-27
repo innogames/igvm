@@ -2,6 +2,9 @@
 *.py[cod]
 *.swp
 *.tmp
-build/
-/venv/
+.cache
 .idea/
+build/
+dist/
+igvm.egg-info/
+venv/
