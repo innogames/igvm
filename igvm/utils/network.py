@@ -5,7 +5,7 @@ Copyright (c) 2018, InnoGames GmbH
 
 import logging
 
-from adminapi.dataset import query
+from adminapi.dataset import Query
 from adminapi.filters import Contains, Not
 
 log = logging.getLogger(__name__)
@@ -15,18 +15,18 @@ def get_network_config(server):
     ret = {}
     # It is impossible to use server['route_network']
     # if IP address of a server was changed via --newip.
-    route_network = query(
-        servertype='route_network',
-        state=Not('retired'),
-        intern_ip=Contains(server['intern_ip']),
-    ).restrict(
+    route_network = Query({
+        'servertype': 'route_network',
+        'state': Not('retired'),
+        'intern_ip': Contains(server['intern_ip']),
+    }, [
         'hostname',
         'intern_ip',
         'default_gateway',
         'internal_gateway',
         'primary_ip6',
         'vlan_tag',
-    ).get()
+    ]).get()
 
     default_gateway_route, internal_gateway_route = get_gateways(route_network)
 
@@ -56,18 +56,18 @@ def get_gateways(network):
     """
 
     if network.get('default_gateway'):
-        default_gateway = query(
-            state=Not('retired'),
-            hostname=network['default_gateway'],
-        ).get()
+        default_gateway = Query({
+            'state': Not('retired'),
+            'hostname': network['default_gateway'],
+        }).get()
     else:
         default_gateway = {}
 
     if network.get('internal_gateway'):
-        internal_gateway = query(
-            state=Not('retired'),
-            hostname=network['internal_gateway'],
-        ).get()
+        internal_gateway = Query({
+            'state': Not('retired'),
+            'hostname': network['internal_gateway'],
+        }).get()
     else:
         internal_gateway = {}
 

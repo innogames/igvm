@@ -46,7 +46,7 @@ def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
         )
         offline = False
 
-    if count == vm.server_obj['num_cpu']:
+    if count == vm.dataset_obj['num_cpu']:
         raise Warning('CPU count is the same.')
 
     if offline:
@@ -69,13 +69,13 @@ def mem_set(vm_hostname, size, offline=False, ignore_reserved=False):
     _check_defined(vm)
 
     if size.startswith('+'):
-        new_memory = vm.server_obj['memory'] + parse_size(size[1:], 'm')
+        new_memory = vm.dataset_obj['memory'] + parse_size(size[1:], 'm')
     elif size.startswith('-'):
-        new_memory = vm.server_obj['memory'] - parse_size(size[1:], 'm')
+        new_memory = vm.dataset_obj['memory'] - parse_size(size[1:], 'm')
     else:
         new_memory = parse_size(size, 'm')
 
-    if new_memory == vm.server_obj['memory']:
+    if new_memory == vm.dataset_obj['memory']:
         raise Warning('Memory size is the same.')
 
     if offline and not vm.is_running():
@@ -105,7 +105,7 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
     vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
     _check_defined(vm)
 
-    current_size_gib = vm.server_obj['disk_size_gib']
+    current_size_gib = vm.dataset_obj['disk_size_gib']
     if size.startswith('+'):
         new_size_gib = current_size_gib + parse_size(size[1:], 'g')
     elif size.startswith('-'):
@@ -113,13 +113,13 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
     else:
         new_size_gib = parse_size(size, 'g')
 
-    if new_size_gib == vm.server_obj['disk_size_gib']:
+    if new_size_gib == vm.dataset_obj['disk_size_gib']:
         raise Warning('Disk size is the same.')
 
     vm.hypervisor.vm_set_disk_size_gib(vm, new_size_gib)
 
-    vm.server_obj['disk_size_gib'] = new_size_gib
-    vm.server_obj.commit()
+    vm.dataset_obj['disk_size_gib'] = new_size_gib
+    vm.dataset_obj.commit()
 
 
 @with_fabric_settings
@@ -249,15 +249,15 @@ def vm_delete(vm_hostname, force=False, retire=False):
     # Delete the serveradmin object of this VM
     # or update its state to 'retired' if retire is True.
     if retire:
-        vm.server_obj['state'] = 'retired'
-        vm.server_obj.commit()
+        vm.dataset_obj['state'] = 'retired'
+        vm.dataset_obj.commit()
         log.info(
             '"{}" is destroyed and set to "retired" state.'
             .format(vm.fqdn)
         )
     else:
-        vm.server_obj.delete()
-        vm.server_obj.commit()
+        vm.dataset_obj.delete()
+        vm.dataset_obj.commit()
         log.info(
             '"{}" is destroyed and deleted from Serveradmin'
             .format(vm.fqdn)
@@ -276,15 +276,15 @@ def vm_sync(vm_hostname):
     attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
     changed = []
     for attrib, value in attributes.iteritems():
-        current = vm.server_obj.get(attrib)
+        current = vm.dataset_obj.get(attrib)
         if current == value:
             log.info('{}: {}'.format(attrib, current))
             continue
         log.info('{}: {} -> {}'.format(attrib, current, value))
-        vm.server_obj[attrib] = value
+        vm.dataset_obj[attrib] = value
         changed.append(attrib)
     if changed:
-        vm.server_obj.commit()
+        vm.dataset_obj.commit()
         log.info(
             '"{}" is synchronized {} attributes ({}).'
             .format(vm.fqdn, len(changed), ', '.join(changed))

@@ -49,7 +49,7 @@ class InconsistentAttributeError(IGVMError):
         self.fqdn = vm.fqdn
         self.attribute = attribute
         self.actual_value = actual_value
-        self.config_value = vm.server_obj[attribute]
+        self.config_value = vm.dataset_obj[attribute]
         assert self.config_value != self.actual_value
 
     def __str__(self):

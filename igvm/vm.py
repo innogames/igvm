@@ -45,9 +45,9 @@ class VM(Host):
                  hypervisor=None):
         super(VM, self).__init__(name_or_obj, ignore_reserved)
 
-        if not hypervisor and self.server_obj['xen_host']:
+        if not hypervisor and self.dataset_obj['xen_host']:
             self.hypervisor = Hypervisor(
-                self.server_obj['xen_host'],
+                self.dataset_obj['xen_host'],
                 ignore_reserved=True
             )
         else:
@@ -62,12 +62,12 @@ class VM(Host):
     def _set_ip(self, new_ip):
         """Changes the IP address and updates all related attributes.
         Internal method for VM building and migration."""
-        old_ip = self.server_obj['intern_ip']
+        old_ip = self.dataset_obj['intern_ip']
         # New IP address is given as a string,
-        # server_obj['intern_ip'] is ip_address!
+        # dataset_obj['intern_ip'] is ip_address!
         # So convert the type.
-        self.server_obj['intern_ip'] = ip_address(new_ip)
-        self.network_config = get_network_config(self.server_obj)
+        self.dataset_obj['intern_ip'] = ip_address(new_ip)
+        self.network_config = get_network_config(self.dataset_obj)
 
         if old_ip != new_ip:
             log.info(
@@ -157,12 +157,12 @@ class VM(Host):
 
     def set_state(self, new_state, tx=None):
         """Changes state of VM for LB and Nagios downtimes"""
-        self.previous_state = self.server_obj['state']
+        self.previous_state = self.dataset_obj['state']
         if new_state == self.previous_state:
             return
         log.debug('Setting VM to state {}'.format(new_state))
-        self.server_obj['state'] = new_state
-        self.server_obj.commit()
+        self.dataset_obj['state'] = new_state
+        self.dataset_obj.commit()
         if tx:
             tx.on_rollback('reset_state', self.reset_state)
 
@@ -210,7 +210,7 @@ class VM(Host):
         ]
 
         for attr, check, err in validations:
-            value = self.server_obj[attr]
+            value = self.dataset_obj[attr]
             if not value:
                 raise ConfigError('"{}" attribute is not set'.format(attr))
             if not check(value):
@@ -222,7 +222,7 @@ class VM(Host):
             raise VMError('VM did not come online in time')
 
         host_up = wait_until(
-            str(self.server_obj['intern_ip']),
+            str(self.dataset_obj['intern_ip']),
             waitmsg='Waiting for SSH to respond',
         )
         if not host_up:
@@ -296,10 +296,10 @@ class VM(Host):
     def info(self):
         result = {
             'hypervisor': self.hypervisor.fqdn,
-            'intern_ip': self.server_obj['intern_ip'],
-            'num_cpu': self.server_obj['num_cpu'],
-            'memory': self.server_obj['memory'],
-            'disk_size_gib': self.server_obj['disk_size_gib'],
+            'intern_ip': self.dataset_obj['intern_ip'],
+            'num_cpu': self.dataset_obj['num_cpu'],
+            'memory': self.dataset_obj['memory'],
+            'disk_size_gib': self.dataset_obj['disk_size_gib'],
         }
 
         if self.hypervisor.vm_defined(self) and self.is_running():
@@ -328,15 +328,15 @@ class VM(Host):
         if localimage is not None:
             image = localimage
         else:
-            image = self.server_obj['os'] + '-base.tar.gz'
+            image = self.dataset_obj['os'] + '-base.tar.gz'
 
         # Populate initial networking attributes.
-        self._set_ip(self.server_obj['intern_ip'])
+        self._set_ip(self.dataset_obj['intern_ip'])
 
         # Can VM run on given hypervisor?
         self.hypervisor.check_vm(self)
 
-        if not runpuppet or self.server_obj['puppet_disabled']:
+        if not runpuppet or self.dataset_obj['puppet_disabled']:
             log.warn(yellow(
                 'Puppet is disabled on the VM.  It will not receive network '
                 'configuration.  Expect things to go south.'
@@ -364,7 +364,7 @@ class VM(Host):
         # We are updating the information on the Serveradmin, before starting
         # the VM, because the VM would still be on the hypervisor even if it
         # fails to start.
-        self.server_obj.commit()
+        self.dataset_obj.commit()
 
         # VM was successfully built, don't risk undoing all this just because
         # start fails.
@@ -393,7 +393,7 @@ class VM(Host):
         if new_fqdn == self.fqdn:
             raise ConfigError('The VM already named as "{}"'.format(self.fqdn))
 
-        self.server_obj['hostname'] = new_hostname
+        self.dataset_obj['hostname'] = new_hostname
         self.check_serveradmin_config()
 
         fd = StringIO(new_fqdn)
@@ -403,17 +403,17 @@ class VM(Host):
         hosts_file = [
             line
             for line in self.run('cat /etc/hosts').splitlines()
-            if not line.startswith(str(self.server_obj['intern_ip']))
+            if not line.startswith(str(self.dataset_obj['intern_ip']))
         ]
         hosts_file.append('{0}\t{1}\t{2}'.format(
-            self.server_obj['intern_ip'], new_fqdn, new_hostname
+            self.dataset_obj['intern_ip'], new_fqdn, new_hostname
         ))
         self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
 
         self.shutdown(tx=tx)
         self.hypervisor.rename_vm(self, new_hostname)
 
-        self.server_obj.commit()
+        self.dataset_obj.commit()
 
         self.start(tx=tx)
 
@@ -450,9 +450,9 @@ class VM(Host):
         # overwrite.
         self.run('rm -f /etc/ssh/ssh_host_*_key*')
 
-        self.server_obj['sshfp'] = set()
+        self.dataset_obj['sshfp'] = set()
         key_types = [(1, 'rsa'), (3, 'ecdsa')]
-        if self.server_obj['os'] != 'wheezy':
+        if self.dataset_obj['os'] != 'wheezy':
             key_types.append((4, 'ed25519'))
         fp_types = [(1, sha1), (2, sha256)]
 
@@ -468,7 +468,7 @@ class VM(Host):
             self.get('/etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)
             pub_key = b64decode(fd.getvalue().split(None, 2)[1])
             for fp_id, fp_type in fp_types:
-                self.server_obj['sshfp'].add('{} {} {}'.format(
+                self.dataset_obj['sshfp'].add('{} {} {}'.format(
                     key_id, fp_id, fp_type(pub_key).hexdigest()
                 ))
 
@@ -484,7 +484,7 @@ class VM(Host):
 
         if clear_cert:
             with settings(
-                host_string=self.server_obj['puppet_ca'],
+                host_string=self.dataset_obj['puppet_ca'],
                 user='root',
                 warn_only=True,
             ):
@@ -512,8 +512,8 @@ class VM(Host):
                 ' test -f /tmp/puppet_success'
                 .format(
                     self.fqdn,
-                    self.server_obj['puppet_master'],
-                    self.server_obj['puppet_ca'],
+                    self.dataset_obj['puppet_master'],
+                    self.dataset_obj['puppet_ca'],
                     '/var/log/puppetrun_igvm',
                 )
             )
@@ -541,22 +541,22 @@ class VM(Host):
         :return:
         """
 
-        e = Engine(self.server_obj['hostname'], balance_config, hv_states)
+        e = Engine(self.dataset_obj['hostname'], balance_config, hv_states)
         ranking = e.run()
 
         for hv in sorted(ranking, key=ranking.get, reverse=True):
             if (
-                not self.server_obj['xen_host'] or
-                self.server_obj['xen_host'] != hv
+                not self.dataset_obj['xen_host'] or
+                self.dataset_obj['xen_host'] != hv
             ):
                 # Free disk size and memory are done in fast mode which might
                 # return wrong or orphaned values so to be sure we really have
                 # enough we check them here again.
                 bhv = BHypervisor(hv)
                 disk_free = bhv.get_disk_free() / 1024.0
-                if float(disk_free) > float(self.server_obj['disk_size_gib']):
+                if float(disk_free) > float(self.dataset_obj['disk_size_gib']):
                     memory_free = bhv.get_memory_free()
-                    if memory_free > float(self.server_obj['memory']):
+                    if memory_free > float(self.dataset_obj['memory']):
                         return hv
 
         raise VMError('Cannot find a hypervisor')
@@ -575,5 +575,5 @@ class VM(Host):
         hv = self.get_best_hypervisor(balance_config, hv_states)
         logging.info('Setting hypervisor to {}'.format(hv))
         self.hypervisor = Hypervisor(hv, ignore_reserved=True)
-        self.server_obj['xen_host'] = hv
-        self.server_obj.commit()
+        self.dataset_obj['xen_host'] = hv
+        self.dataset_obj.commit()

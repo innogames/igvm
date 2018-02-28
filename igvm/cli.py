@@ -11,8 +11,6 @@ import time
 
 from fabric.network import disconnect_all
 
-import adminapi
-
 from igvm.buildvm import buildvm
 from igvm.migratevm import migratevm
 from igvm.commands import (
@@ -366,10 +364,6 @@ def main():
     logging.basicConfig(
         level=(2 + args.pop('silent') - args.pop('verbose')) * 10
     )
-
-    # We have to explicitly authenticate to adminapi, before making any
-    # queries.
-    adminapi.auth()
 
     try:
         args.pop('func')(**args)

@@ -14,7 +14,7 @@ import uuid
 from functools import partial
 from pipes import quote
 
-from adminapi.dataset import create, Query, DatasetError
+from adminapi.dataset import Query
 
 from fabric.api import env
 
@@ -83,31 +83,29 @@ def setUpModule():
     if len(HYPERVISORS) < 2:
         raise Exception('Not enough testing hypervisors found')
 
-    vm_obj = create({
-        'hostname': VM_HOSTNAME,
-        'project_network': VM_NET,
-        'servertype': 'vm',
-        'project': 'test',
-        'team': 'test',
-    })
-    vm_obj.commit()
+    query = Query()
+    vm_obj = query.new_object('vm')
+    vm_obj['hostname'] = VM_HOSTNAME
+    vm_obj['intern_ip'] = Query(
+        {'hostname': VM_NET}, ['intern_ip']
+    ).get_free_ip_addrs()
+    vm_obj['project'] = 'test'
+    vm_obj['team'] = 'test'
+
+    query.commit()
 
 
 def tearDownModule():
-    vm_obj = Query(
+    query = Query(
         {
             'servertype': 'vm',
             'hostname': VM_HOSTNAME,
         },
         ['hostname'],
     )
-    try:
-        vm_obj.get()
-    except DatasetError:
-        pass
-    else:
-        vm_obj.delete()
-        vm_obj.commit()
+    for obj in query:
+        obj.delete()
+    query.commit()
 
 
 def cmd(cmd, *args, **kwargs):
@@ -180,7 +178,7 @@ class IGVMTest(unittest.TestCase):
         vm = VM(self.get_vm_obj())
 
         for hv in HYPERVISORS:
-            if hv.server_obj['hostname'] == vm.server_obj['xen_host']:
+            if hv.dataset_obj['hostname'] == vm.dataset_obj['xen_host']:
                 # Is it on correct HV?
                 self.assertEqual(hv.vm_defined(vm), True)
                 self.assertEqual(hv.vm_running(vm), True)
@@ -192,17 +190,17 @@ class IGVMTest(unittest.TestCase):
         # Is VM itself alive and fine?
         fqdn = vm.run('hostname -f').strip()
         self.assertEqual(fqdn, vm.fqdn)
-        self.assertEqual(vm.server_obj.is_dirty(), False)
+        self.assertEqual(vm.dataset_obj.is_dirty(), False)
 
     def check_vm_absent(self, hv_name=None):
         # Operate on fresh object
         vm = VM(self.get_vm_obj())
 
         if not hv_name:
-            hv_name = vm.server_obj['xen_host']
+            hv_name = vm.dataset_obj['xen_host']
 
         for hv in HYPERVISORS:
-            if (hv.server_obj['hostname'] == hv_name):
+            if (hv.dataset_obj['hostname'] == hv_name):
                 self.assertEqual(hv.vm_defined(vm), False)
                 hv.run('test ! -b /dev/xen-data/{}'.format(vm.fqdn))
 
@@ -213,7 +211,7 @@ class BuildTest(IGVMTest):
     def setUp(self):
         super(BuildTest, self).setUp()
         # Normally build tests happen on the 1st HV
-        self.vm_obj['xen_host'] = HYPERVISORS[0].server_obj['hostname']
+        self.vm_obj['xen_host'] = HYPERVISORS[0].dataset_obj['hostname']
         self.vm_obj.commit()
         self.vm = VM(self.get_vm_obj())
 
@@ -355,7 +353,7 @@ class CommandTest(IGVMTest):
     def setUp(self):
         super(CommandTest, self).setUp()
         # For every command test build a VM on the 1st HV
-        self.vm_obj['xen_host'] = HYPERVISORS[0].server_obj['hostname']
+        self.vm_obj['xen_host'] = HYPERVISORS[0].dataset_obj['hostname']
         self.vm_obj.commit()
         buildvm(self.vm_obj['hostname'])
         self.check_vm_present()
@@ -555,12 +553,12 @@ class MigrationTest(IGVMTest):
     def setUp(self):
         super(MigrationTest, self).setUp()
         # Every migration gets a freshly built VM on the 1st HV
-        self.vm_obj['xen_host'] = HYPERVISORS[0].server_obj['hostname']
+        self.vm_obj['xen_host'] = HYPERVISORS[0].dataset_obj['hostname']
         self.vm_obj.commit()
         buildvm(self.vm_obj['hostname'])
         # And is performed to the 2nd HV
         # Of course apart from migrations to automatically selected HVs
-        self.new_hv_name = HYPERVISORS[1].server_obj['hostname']
+        self.new_hv_name = HYPERVISORS[1].dataset_obj['hostname']
 
     def test_online_migration(self):
         migratevm(self.vm_obj['hostname'], self.new_hv_name)

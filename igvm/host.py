@@ -5,8 +5,8 @@ Copyright (c) 2018, InnoGames GmbH
 
 from StringIO import StringIO
 
-from adminapi.dataset import query
-from adminapi.dataset.filters import ExactMatch, Startswith, Or
+from adminapi.dataset import Query
+from adminapi.filters import ExactMatch, Startswith, Or
 
 import fabric.api
 import fabric.state
@@ -23,7 +23,7 @@ def get_server(hostname, servertype):
     """Get a server from Serveradmin by hostname and servertype
 
     The function is accepting hostnames in any length as long as it resolves
-    to a single server on Serveradmin.  It returns the adminapi Server object.
+    to a single server on Serveradmin.  It returns the adminapi DatasetObject.
     """
 
     conditions = [ExactMatch(hostname)]
@@ -33,9 +33,9 @@ def get_server(hostname, servertype):
         conditions.append(Startswith(hostname + '.'))
 
     # We want to return the server, only if it has the correct servertype,
-    # but we are not using it as a condition on the query to be able to give
+    # but we are not using it as a condition on the Query to be able to give
     # better errors.
-    servers = list(query(hostname=Or(*conditions)))
+    servers = list(Query({'hostname': Or(*conditions)}))
 
     if not servers:
         raise ConfigError(
@@ -78,18 +78,18 @@ class Host(object):
 
     def __init__(self, name_or_obj, ignore_reserved=False):
         if isinstance(name_or_obj, (str, unicode)):
-            self.server_obj = get_server(name_or_obj, self.servertype)
+            self.dataset_obj = get_server(name_or_obj, self.servertype)
         else:
-            self.server_obj = name_or_obj
+            self.dataset_obj = name_or_obj
 
-        if self.server_obj['hostname'].endswith('.ig.local'):
-            self.fqdn = self.server_obj['hostname']
+        if self.dataset_obj['hostname'].endswith('.ig.local'):
+            self.fqdn = self.dataset_obj['hostname']
         else:
-            self.fqdn = self.server_obj['hostname'] + '.ig.local'
+            self.fqdn = self.dataset_obj['hostname'] + '.ig.local'
 
         if (
             not ignore_reserved and
-            self.server_obj['state'] == 'online_reserved'
+            self.dataset_obj['state'] == 'online_reserved'
         ):
             raise InvalidStateError(
                 'Server "{0}" is online_reserved.'.format(self.fqdn)
@@ -100,7 +100,7 @@ class Host(object):
         settings = COMMON_FABRIC_SETTINGS.copy()
         settings.update({
             'abort_exception': RemoteCommandError,
-            'host_string': str(self.server_obj['intern_ip']),
+            'host_string': str(self.dataset_obj['intern_ip']),
         })
         settings.update(kwargs)
         return fabric.api.settings(*args, **settings)
@@ -160,18 +160,18 @@ class Host(object):
 
     def reload(self):
         """Reloads the server object from serveradmin."""
-        if self.server_obj.is_dirty():
+        if self.dataset_obj.is_dirty():
             raise ConfigError(
                 'Serveradmin object must be committed before reloading'
             )
-        self.server_obj = get_server(
-            self.server_obj['hostname'], self.servertype
+        self.dataset_obj = get_server(
+            self.dataset_obj['hostname'], self.servertype
         )
 
     @lazy_property  # Requires fabric call on hypervisor, evaluate lazily.
     def network_config(self):
         """Returns networking attributes, such as IP address and VLAN."""
-        return get_network_config(self.server_obj)
+        return get_network_config(self.dataset_obj)
 
     @lazy_property
     def num_cpus(self):
