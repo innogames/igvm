@@ -1,6 +1,7 @@
-Fabric==1.11.1
-cffi
-paramiko
 ipaddress
-libvirt-python
+netaddr
+cffi
+paramiko==1.18
+fabric==1.13.1
+libvirt-python==1.2.9
 jinja2

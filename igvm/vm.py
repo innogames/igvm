@@ -119,6 +119,16 @@ class VM(Host):
             else:
                 return super(VM, self).run(command, silent=silent)
 
+    def read_file(self, path):
+        """Read a file from a running VM or a mounted image on HV."""
+        with self.vm_host():
+            if self.mounted:
+                return self.hypervisor.read_file('{}/{}'.format(
+                    self.vm_path(''),
+                    path,
+                ))
+            return super(VM, self).read_file(path)
+
     def upload_template(self, filename, destination, context=None):
         """" Same as Fabric's template() but works on mounted or running vm """
         with self.vm_host():
