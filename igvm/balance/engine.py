@@ -63,7 +63,5 @@ class Engine(object):
 
     def run(self):
         candidates = filter_hypervisors(self.vm, self.hvs, self.constraints)
-        if not candidates:
-            return None
 
         return get_ranking(self.vm, candidates, self.rules)
