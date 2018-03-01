@@ -155,4 +155,6 @@ HYPERVISOR_PREFERENCES = [
     OverAllocation('num_cpu'),
     # Find less loaded Hypervisor
     HypervisorAttributeValue('cpu_util_pct'),
+    # As the last resort, choose the hypervisor with less VMs
+    OtherVMsWithSameAttributes([]),
 ]

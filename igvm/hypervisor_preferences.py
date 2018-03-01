@@ -8,6 +8,10 @@ is less than true.
 
 Copyright (c) 2018, InnoGames GmbH
 """
+# NOTE: This module only has simple classes.  We try to keep them reusable,
+# even though most of them are not reused.  Some of the classes are so simple,
+# they would as well just be a function, but we keep them all as classes
+# to have a consistent style.
 
 
 class InsufficientResource(object):
