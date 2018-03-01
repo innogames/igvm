@@ -4,6 +4,7 @@ Copyright (c) 2018, InnoGames GmbH
 """
 
 from igvm.hypervisor_preferences import (
+    HashDifference,
     HypervisorAttributeValue,
     HypervisorAttributeValueLimit,
     InsufficientResource,
@@ -157,4 +158,6 @@ HYPERVISOR_PREFERENCES = [
     HypervisorAttributeValue('cpu_util_pct'),
     # As the last resort, choose the hypervisor with less VMs
     OtherVMsWithSameAttributes([]),
+    # Use hash differences to have a stable ordering
+    HashDifference(),
 ]

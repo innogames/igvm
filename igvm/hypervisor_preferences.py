@@ -125,3 +125,12 @@ class OverAllocation(object):
         tgt_ovr_allc = float(tgt_hv_cpus) / float(tgt_hv_rl_cpus)
 
         return tgt_ovr_allc > cur_ovr_allc
+
+
+class HashDifference(object):
+    """Return some arbitrary number to have stable ordering"""
+    def __repr__(self):
+        return '{}()'.format(type(self).__name__)
+
+    def __call__(self, vm, hv):
+        return hash(hv.fqdn) - hash(vm.fqdn)

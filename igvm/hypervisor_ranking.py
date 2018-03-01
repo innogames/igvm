@@ -37,6 +37,11 @@ class HypervisorRanking(object):
             if rank > other_rank:
                 return False
 
+        raise Exception(
+            'Exact same preferences for hypervisor "{}" and "{}"'
+            .format(self.hypervisor, other.hypervisor)
+        )
+
     def get_rank(self, index):
         if len(self.ranks) == index:
             preference = HYPERVISOR_PREFERENCES[index]
