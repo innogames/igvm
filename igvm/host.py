@@ -77,6 +77,9 @@ class Host(object):
                 'Server "{0}" is online_reserved.'.format(self.fqdn)
             )
 
+    def __str__(self):
+        return self.fqdn
+
     def __eq__(self, other):
         return isinstance(other, Host) and self.fqdn == other.fqdn
 

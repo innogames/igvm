@@ -558,6 +558,12 @@ class VM(Host):
             except HypervisorError:
                 continue
 
+            log.info(
+                'Hypervisor "{}" selected with decisive preference {!r} '
+                'after checking {} preferences.'
+                .format(ranking.hypervisor, *ranking.decisive_preference())
+            )
+
             return ranking.hypervisor
 
         raise VMError('Cannot find a hypervisor')

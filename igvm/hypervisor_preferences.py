@@ -16,6 +16,13 @@ class InsufficientResource(object):
         self.attribute = attribute
         self.reserved = reserved
 
+    def __repr__(self):
+        args = repr(self.attribute)
+        if self.reserved:
+            args += ', reserved=' + repr(self.reserved)
+
+        return '{}({})'.format(type(self).__name__, args)
+
     def __call__(self, vm, hv):
         total_size = hv.dataset_obj[self.attribute]
         vms_size = sum(v[self.attribute] for v in hv.dataset_obj['vms'])
@@ -30,6 +37,13 @@ class OtherVMsWithSameAttributes(object):
         assert values is None or len(attributes) == len(values)
         self.attributes = attributes
         self.values = values
+
+    def __repr__(self):
+        args = repr(self.attributes)
+        if self.values:
+            args += ', ' + repr(self.values)
+
+        return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
         result = 0
@@ -55,6 +69,11 @@ class HypervisorAttributeValue(object):
     def __init__(self, attribute):
         self.attribute = attribute
 
+    def __repr__(self):
+        args = repr(self.attribute)
+
+        return '{}({})'.format(type(self).__name__, args)
+
     def __call__(self, vm, hv):
         return hv.dataset_obj[self.attribute]
 
@@ -65,6 +84,11 @@ class HypervisorAttributeValueLimit(object):
         self.attribute = attribute
         self.limit = limit
 
+    def __repr__(self):
+        args = repr(self.attribute) + ', ' + repr(self.limit)
+
+        return '{}({})'.format(type(self).__name__, args)
+
     def __call__(self, vm, hv):
         return hv.dataset_obj[self.attribute] > self.limit
 
@@ -73,6 +97,11 @@ class OverAllocation(object):
     """Check for an attribute being over allocated than the current one"""
     def __init__(self, attribute):
         self.attribute = attribute
+
+    def __repr__(self):
+        args = repr(self.attribute)
+
+        return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
         # New VM has no xen_host attribute yet.
