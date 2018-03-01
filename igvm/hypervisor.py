@@ -5,7 +5,11 @@ Copyright (c) 2018, InnoGames GmbH
 
 import logging
 import math
-import urllib2
+try:
+    from urllib.error import URLError
+    from urllib.request import urlopen
+except ImportError:
+    from urllib2 import urlopen, URLError
 
 from libvirt import VIR_DOMAIN_SHUTOFF
 
@@ -320,8 +324,8 @@ class Hypervisor(Host):
 
         url = FOREMAN_IMAGE_MD5_URL.format(image=image)
         try:
-            remote_hash = urllib2.urlopen(url, timeout=2).read().split()[0]
-        except urllib2.URLError as e:
+            remote_hash = urlopen(url, timeout=2).read().split()[0]
+        except URLError as e:
             log.warning(
                 'Failed to fetch image checksum at {}: {}'.format(url, e)
             )

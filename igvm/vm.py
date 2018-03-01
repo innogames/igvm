@@ -9,10 +9,13 @@ import time
 from base64 import b64decode
 from fabric.api import cd, get, put, run, settings
 from hashlib import sha1, sha256
+try:
+    from io import StringIO
+except ImportError:
+    from StringIO import StringIO
 from ipaddress import ip_address
 from os import environ
 from re import compile as re_compile
-from StringIO import StringIO
 from uuid import uuid1
 
 from adminapi.dataset import Query

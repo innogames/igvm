@@ -3,7 +3,10 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
-from StringIO import StringIO
+try:
+    from io import StringIO
+except ImportError:
+    from StringIO import StringIO
 
 from adminapi.dataset import Query
 from adminapi.filters import ExactMatch, Startswith, Or
