@@ -3,7 +3,7 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
-from StringIO import StringIO
+from io import BytesIO
 
 import fabric.api
 import fabric.state
@@ -37,6 +37,9 @@ class Host(object):
 
     def __str__(self):
         return self.fqdn
+
+    def __hash__(self):
+        return hash(self.fqdn)
 
     def __eq__(self, other):
         return isinstance(other, Host) and self.fqdn == other.fqdn
@@ -100,7 +103,7 @@ class Host(object):
         if '*' in path:
             raise ValueError('No globbing supported')
         with self.fabric_settings(fabric.api.hide('commands')):
-            fd = StringIO()
+            fd = BytesIO()
             fabric.api.get(path, fd)
             return fd.getvalue()
 

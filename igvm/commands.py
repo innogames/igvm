@@ -386,7 +386,7 @@ def vm_sync(vm_hostname):
 
     attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
     changed = []
-    for attrib, value in attributes.iteritems():
+    for attrib, value in attributes.items():
         current = vm.dataset_obj[attrib]
         if current == value:
             log.info('{}: {}'.format(attrib, current))
@@ -586,6 +586,6 @@ def _get_hypervisor(hostname, ignore_reserved=False):
 
 def _check_attributes(vm):
     synced_attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
-    for attr, value in synced_attributes.iteritems():
+    for attr, value in synced_attributes.items():
         if vm.dataset_obj[attr] != value:
             raise InconsistentAttributeError(vm, attr, value)
