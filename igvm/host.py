@@ -11,6 +11,7 @@ from adminapi.filters import ExactMatch, Startswith, Or
 import fabric.api
 import fabric.state
 from fabric.contrib import files
+from uuid import uuid4
 
 from paramiko import transport
 from igvm.exceptions import RemoteCommandError, InvalidStateError
@@ -143,3 +144,16 @@ class Host(object):
             fd = StringIO()
             fabric.api.get(path, fd)
             return fd.getvalue()
+
+    def put(self, remote_path, local_path, mode='0644'):
+        """Same as Fabric's put but with working sudo permissions
+
+        Setting permissions on files and using sudo via Fabric's put() seems
+        broken, at least for mounted VM. This is why we run extra commands here.
+        """
+        with self.fabric_settings():
+            tempfile = '/tmp/' + str(uuid4())
+            fabric.api.put(local_path, tempfile)
+            self.run('mv {0} {1} ; chmod {2} {1}'.format(
+                tempfile, remote_path, mode
+            ))
