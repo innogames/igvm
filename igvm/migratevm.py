@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 @with_fabric_settings   # NOQA: C901
 def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
               runpuppet=False, maintenance=False, offline=False,
-              ignore_reserved=False):
+              ignore_reserved=False, offline_transport='drbd'):
     """Migrate a VM to a new hypervisor."""
     vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
 
@@ -87,11 +87,9 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
         if maintenance or offline:
             vm.set_state('maintenance', transaction=transaction)
 
-        # Finally migrate the VM
-        if offline and was_running:
-            vm.shutdown(transaction=transaction)
-
-        vm.hypervisor.migrate_vm(vm, hypervisor, offline, transaction)
+        vm.hypervisor.migrate_vm(
+            vm, hypervisor, offline, offline_transport, transaction
+        )
 
         previous_hypervisor = vm.hypervisor
         vm.hypervisor = hypervisor

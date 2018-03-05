@@ -19,6 +19,7 @@ from igvm.exceptions import (
     InvalidStateError,
     StorageError,
 )
+from igvm.drbd import DRBD
 from igvm.host import Host
 from igvm.kvm import (
     DomainProperties,
@@ -462,23 +463,42 @@ class Hypervisor(Host):
                 'configuration (different VLAN).'
             )
 
-    def migrate_vm(self, vm, target_hypervisor, offline, transaction):
-        """Migrate a VM to the given destination hypervisor"""
+    def migrate_vm(
+        self, vm, target_hypervisor, offline, offline_transport, transaction,
+    ):
+        if offline_transport not in ['netcat', 'drbd']:
+            raise StorageError(
+                'Unknown offline transport method {}!'.format(offline_transport)
+            )
+
         self.check_migration(vm, target_hypervisor, offline)
         domain = self._get_domain(vm)
         if offline:
             target_hypervisor.create_vm_storage(vm, vm.fqdn, transaction)
 
-            with Transaction() as subtransaction:
-                nc_listener = target_hypervisor.netcat_to_device(
-                    self.vm_disk_path(vm.fqdn), subtransaction
-                )
-                self.device_to_netcat(
-                    self.vm_disk_path(domain.name()),
-                    vm.dataset_obj['disk_size_gib'] * 1024**3,
-                    nc_listener,
-                    subtransaction,
-                )
+            if offline_transport == 'drbd':
+                with Transaction() as subtransaction:
+                    self.start_drbd(vm, target_hypervisor, subtransaction)
+                try:
+                    self.wait_for_sync()
+                    if vm.is_running():
+                        vm.shutdown(transaction)
+                finally:
+                    self.stop_drbd()
+
+            elif offline_transport == 'netcat':
+                if vm.is_running():
+                    vm.shutdown(transaction)
+                with Transaction() as subtransaction:
+                    nc_listener = target_hypervisor.netcat_to_device(
+                        self.vm_disk_path(vm.fqdn), subtransaction
+                    )
+                    self.device_to_netcat(
+                        self.vm_disk_path(domain.name()),
+                        vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
+                        nc_listener,
+                        subtransaction,
+                    )
 
             target_hypervisor.define_vm(vm, transaction)
         else:
@@ -699,3 +719,26 @@ class Hypervisor(Host):
             '| /bin/nc.traditional -q 1 {2} {3}'
             .format(device, size, *listener)
         )
+
+    def start_drbd(self, vm, peer, transaction=None):
+        # Ensure that current domain name is used, this might be non-fqdn
+        # one on source Hypervisor.
+        domain = self._get_domain(vm)
+
+        self.host_drbd = DRBD(
+            self, VG_NAME, domain.name(), vm.fqdn, True, transaction
+        )
+        self.peer_drbd = DRBD(
+            peer, VG_NAME, vm.fqdn, vm.fqdn, False, transaction
+        )
+
+        self.host_drbd.start(self.peer_drbd)
+        self.peer_drbd.start(self.host_drbd)
+
+    def wait_for_sync(self):
+        self.host_drbd.wait_for_sync()
+        self.peer_drbd.wait_for_sync()
+
+    def stop_drbd(self):
+        self.host_drbd.stop()
+        self.peer_drbd.stop()
