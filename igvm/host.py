@@ -14,7 +14,11 @@ from fabric.contrib import files
 
 from paramiko import transport
 from igvm.exceptions import ConfigError, RemoteCommandError, InvalidStateError
-from igvm.settings import COMMON_FABRIC_SETTINGS
+from igvm.settings import (
+    COMMON_FABRIC_SETTINGS,
+    VM_ATTRIBUTES,
+    HYPERVISOR_ATTRIBUTES,
+)
 from igvm.utils.lazy_property import lazy_property
 from igvm.utils.network import get_network_config
 
@@ -32,35 +36,13 @@ def get_server(hostname, servertype):
     else:
         conditions.append(Startswith(hostname + '.'))
 
-    # We want to return the server, only if it has the correct servertype,
-    # but we are not using it as a condition on the Query to be able to give
-    # better errors.
-    servers = list(Query({'hostname': Or(*conditions)}))
-
-    if not servers:
-        raise ConfigError(
-            'Server with hostname "{}" is not found.'.format(hostname)
-        )
-
-    server = servers[0]
-    for other_server in servers[1:]:
-        if other_server['servertype'] != servertype:
-            continue
-        if server['servertype'] != servertype:
-            server = other_server
-            continue
-
-        raise ConfigError(
-            'Hostname "{}" matches with multiple servers "{}" and "{}".'
-            .format(hostname, server['hostname'], other_server['hostname'])
-        )
-
-    if server['servertype'] != servertype:
-        raise ConfigError(
-            'Server "{0}" is not a "{1}".'.format(hostname, servertype)
-        )
-
-    return server
+    return Query(
+        {
+            'servertype': servertype,
+            'hostname': Or(*conditions),
+        },
+        HYPERVISOR_ATTRIBUTES if servertype == 'hypervisor' else VM_ATTRIBUTES
+    ).get()
 
 
 def with_fabric_settings(fn):
@@ -94,6 +76,12 @@ class Host(object):
             raise InvalidStateError(
                 'Server "{0}" is online_reserved.'.format(self.fqdn)
             )
+
+    def __str__(self):
+        return self.fqdn
+
+    def __eq__(self, other):
+        return isinstance(other, Host) and self.fqdn == other.fqdn
 
     def fabric_settings(self, *args, **kwargs):
         """Builds a fabric context manager to run commands on this host."""

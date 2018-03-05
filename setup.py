@@ -12,7 +12,7 @@ from igvm import VERSION
 setup(
     name='igvm',
     version='.'.join(str(v) for v in VERSION),
-    packages=['igvm', 'igvm.utils', 'igvm.balance'],
+    packages=['igvm', 'igvm.utils'],
     entry_points={
         'console_scripts': [
             'igvm=igvm.cli:main',
@@ -26,7 +26,6 @@ setup(
             'templates/etc/hosts',
             'templates/etc/inittab',
             'templates/etc/resolv.conf',
-            'templates/balance.json',
         ]
     },
     author='InnoGames System Administration',

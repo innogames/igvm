@@ -10,25 +10,29 @@ from base64 import b64decode
 from fabric.api import cd, get, put, run, settings
 from hashlib import sha1, sha256
 from ipaddress import ip_address
+from os import environ
 from re import compile as re_compile
 from StringIO import StringIO
 from uuid import uuid1
 
+from adminapi.dataset import Query
+from adminapi.filters import Any
+
 from igvm.exceptions import (
     ConfigError,
+    HypervisorError,
     RemoteCommandError,
 )
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
-from igvm.settings import DEFAULT_SWAP_SIZE
+from igvm.hypervisor_ranking import HypervisorRanking
+from igvm.settings import DEFAULT_SWAP_SIZE, HYPERVISOR_ATTRIBUTES
 from igvm.utils.cli import yellow
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
 from igvm.utils.template import upload_template
 from igvm.utils.transaction import run_in_transaction
 from igvm.utils.units import parse_size
-from igvm.balance.engine import Engine
-from igvm.balance.models import Hypervisor as BHypervisor
 
 log = logging.getLogger(__name__)
 
@@ -530,50 +534,46 @@ class VM(Host):
     def copy_postboot_script(self, script):
         self.put('/buildvm-postboot', script, '0755')
 
-    def get_best_hypervisor(self, balance_config=None, hv_states=['online']):
+    def get_best_hypervisor(self, hv_states=['online']):
         """Get best hypervisor
 
         Get the best hypervisor and return it rather then directly setting it.
-
-        :param: balance_config: igbalance configuration
-        :param: hv_states: allowed hypervisor states
-
-        :return:
         """
+        hypervisors = (Hypervisor(o) for o in Query({
+            'servertype': 'hypervisor',
+            'environment': environ.get('IGVM_MODE', 'production'),
+            'vlan_networks': self.dataset_obj['route_network'],
+            'state': Any(*hv_states),
+        }, HYPERVISOR_ATTRIBUTES))
 
-        e = Engine(self.dataset_obj['hostname'], balance_config, hv_states)
-        ranking = e.run()
+        log.info('Evaluating hypervisors...')
 
-        for hv in sorted(ranking, key=ranking.get, reverse=True):
-            if (
-                not self.dataset_obj['xen_host'] or
-                self.dataset_obj['xen_host'] != hv
-            ):
-                # Free disk size and memory are done in fast mode which might
-                # return wrong or orphaned values so to be sure we really have
-                # enough we check them here again.
-                bhv = BHypervisor(hv)
-                disk_free = bhv.get_disk_free() / 1024.0
-                if float(disk_free) > float(self.dataset_obj['disk_size_gib']):
-                    memory_free = bhv.get_memory_free()
-                    if memory_free > float(self.dataset_obj['memory']):
-                        return hv
+        # We use decorate-sort-undecorate pattern to get preferred hypervisors.
+        for ranking in sorted(HypervisorRanking(self, h) for h in hypervisors):
+            # The actual resources are not checked during hypervisor ranking
+            # for performance.  We need to validate the hypervisor using
+            # the actual values before the final decision.
+            try:
+                ranking.hypervisor.check_vm(self)
+            except HypervisorError:
+                continue
+
+            log.info(
+                'Hypervisor "{}" selected with decisive preference {!r} '
+                'after checking {} preferences.'
+                .format(ranking.hypervisor, *ranking.decisive_preference())
+            )
+
+            return ranking.hypervisor
 
         raise VMError('Cannot find a hypervisor')
 
-    def set_best_hypervisor(self, balance_config=None, hv_states=['online']):
+    def set_best_hypervisor(self, hv_states=['online']):
         """Set best hypervisor
 
         Find the best or another hypervisor for the given virtual machine.
-
-        :param: balance_config: igbalance configuration
-        :param: hv_states: allowed hypervisor states
-
-        :return:
         """
-
-        hv = self.get_best_hypervisor(balance_config, hv_states)
-        logging.info('Setting hypervisor to {}'.format(hv))
-        self.hypervisor = Hypervisor(hv, ignore_reserved=True)
-        self.dataset_obj['xen_host'] = hv
+        self.hypervisor = self.get_best_hypervisor(hv_states)
+        logging.info('Setting hypervisor to {}'.format(self.hypervisor))
+        self.dataset_obj['xen_host'] = self.hypervisor.dataset_obj['hostname']
         self.dataset_obj.commit()

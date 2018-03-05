@@ -3,6 +3,15 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
+from igvm.hypervisor_preferences import (
+    HashDifference,
+    HypervisorAttributeValue,
+    HypervisorAttributeValueLimit,
+    InsufficientResource,
+    OtherVMsWithSameAttributes,
+    OverAllocation,
+)
+
 COMMON_FABRIC_SETTINGS = dict(
     disable_known_hosts=True,
     use_ssh_config=True,
@@ -69,3 +78,86 @@ FOREMAN_IMAGE_URL = 'http://aw-foreman.ig.local:8080/{image}'
 FOREMAN_IMAGE_MD5_URL = 'http://aw-foreman.ig.local:8080/{image}.md5'
 
 IMAGE_PATH = '/tmp'
+
+VM_ATTRIBUTES = [
+    'disk_size_gib',
+    'environment',
+    'function',
+    'hostname',
+    'game_market',
+    'game_world',
+    'game_type',
+    'intern_ip',
+    'mac',
+    'memory',
+    'num_cpu',
+    'os',
+    'project',
+    'puppet_disabled',
+    'puppet_ca',
+    'puppet_master',
+    'sshfp',
+    'state',
+    'route_network',
+    'xen_host',
+]
+
+HYPERVISOR_ATTRIBUTES = [
+    'cpu_util_pct',
+    'cpu_util_vm_pct',
+    'disk_size_gib',
+    'hostname',
+    'intern_ip',
+    'memory',
+    'num_cpu',
+    'os',
+    'state',
+    'vlan_networks',
+    {
+        'vms': [
+            'disk_size_gib',
+            'environment',
+            'function',
+            'hostname',
+            'game_market',
+            'game_world',
+            'game_type',
+            'memory',
+            'num_cpu',
+            'project',
+        ],
+    },
+]
+
+# The list is ordered from more important to less important.  The next
+# preference is only going to be checked when the previous ones return all
+# the same values.
+HYPERVISOR_PREFERENCES = [
+    # We assume 10 GiB for root partition, 16 for swap, and 6 reserved.
+    InsufficientResource('disk_size_gib', reserved=32),
+    InsufficientResource('memory'),
+    # Checks the maximum vCPU usage (95 percentile) of the given hypervisor
+    # for the given time_range and dismisses it as target when it is over
+    # the value of threshold.
+    HypervisorAttributeValueLimit('cpu_util_vm_pct', 45),
+    # Don't migrate two redundant VMs together
+    OtherVMsWithSameAttributes([
+        'project',
+        'function',
+        'environment',
+        'game_market',
+        'game_world',
+        'game_type',
+    ]),
+    # Don't migrate two masters database servers together
+    OtherVMsWithSameAttributes(['game_world', 'function'], [0, 'db']),
+    OtherVMsWithSameAttributes(['function'], ['master_db']),
+    # Less over-allocated (CPU) hypervisors first
+    OverAllocation('num_cpu'),
+    # Find less loaded Hypervisor
+    HypervisorAttributeValue('cpu_util_pct'),
+    # As the last resort, choose the hypervisor with less VMs
+    OtherVMsWithSameAttributes([]),
+    # Use hash differences to have a stable ordering
+    HashDifference(),
+]
