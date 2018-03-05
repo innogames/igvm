@@ -17,7 +17,6 @@ from uuid import uuid1
 
 from adminapi.dataset import Query
 from adminapi.filters import Any
-from adminapi.request import Settings
 
 from igvm.exceptions import (
     ConfigError,
@@ -540,16 +539,12 @@ class VM(Host):
 
         Get the best hypervisor and return it rather then directly setting it.
         """
-        # This takes long time.
-        old_timeout = Settings.timeout
-        Settings.timeout = 300
-        hypervisors = [Hypervisor(o) for o in Query({
+        hypervisors = (Hypervisor(o) for o in Query({
             'servertype': 'hypervisor',
             'environment': environ.get('IGVM_MODE', 'production'),
             'vlan_networks': self.dataset_obj['route_network'],
             'state': Any(*hv_states),
-        }, HYPERVISOR_ATTRIBUTES)]
-        Settings.timeout = old_timeout
+        }, HYPERVISOR_ATTRIBUTES))
 
         log.info('Evaluating hypervisors...')
 
