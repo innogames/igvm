@@ -106,6 +106,7 @@ HYPERVISOR_ATTRIBUTES = [
     'cpu_util_pct',
     'cpu_util_vm_pct',
     'disk_size_gib',
+    'hardware_model',
     'hostname',
     'intern_ip',
     'memory',
