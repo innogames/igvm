@@ -275,7 +275,7 @@ def vm_sync(vm_hostname):
     attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
     changed = []
     for attrib, value in attributes.iteritems():
-        current = vm.dataset_obj.get(attrib)
+        current = vm.dataset_obj[attrib]
         if current == value:
             log.info('{}: {}'.format(attrib, current))
             continue

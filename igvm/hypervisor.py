@@ -73,13 +73,11 @@ class Hypervisor(Host):
     def vlan_for_vm(self, vm):
         """Returns the VLAN number a VM should use on this hypervisor.
         None for untagged."""
-        vlans = []
-        if self.dataset_obj.get('vlan_networks'):
-            for vlan_network in Query({
-                'hostname': Any(*self.dataset_obj['vlan_networks']),
-                'vlan_tag': Not(Empty()),
-            }, ['vlan_tag']):
-                vlans.append(vlan_network['vlan_tag'])
+        vlans = [v['vlan_tag'] for v in Query({
+            'hostname': Any(*self.dataset_obj['vlan_networks']),
+            'vlan_tag': Not(Empty()),
+        }, ['vlan_tag'])]
+
         vm_vlan = vm.network_config['vlan_tag']
         if not vlans:
             if self.network_config['vlan_tag'] != vm_vlan:
@@ -225,7 +223,7 @@ class Hypervisor(Host):
         # Validate changes
         # We can't rely on the hypervisor to provide data on VMs all the time.
         updated_dataset_obj = self.vm_sync_from_hypervisor(vm)
-        current_num_cpu = updated_dataset_obj.get('num_cpu', num_cpu)
+        current_num_cpu = updated_dataset_obj['num_cpu']
         if current_num_cpu != num_cpu:
             raise HypervisorError(
                 'New CPUs are not visible to hypervisor, changes will not be '
