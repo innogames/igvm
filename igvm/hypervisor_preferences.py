@@ -35,9 +35,9 @@ class InsufficientResource(object):
         return remaining_size < vm.dataset_obj[self.attribute]
 
 
-class OtherVMsWithSameAttributes(object):
+class OtherVMs(object):
     """Count the other VMs on the hypervisor with the same attributes"""
-    def __init__(self, attributes, values=None):
+    def __init__(self, attributes=[], values=None):
         assert values is None or len(attributes) == len(values)
         self.attributes = attributes
         self.values = values
