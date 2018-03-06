@@ -156,6 +156,8 @@ HYPERVISOR_PREFERENCES = [
     OverAllocation('num_cpu'),
     # Find less loaded Hypervisor
     HypervisorAttributeValue('cpu_util_pct'),
+    # Prefer the hypervisor with less VMs from the same cluster
+    OtherVMs(['project', 'environment', 'game_market']),
     # As the last resort, choose the hypervisor with less VMs
     OtherVMs([]),
     # Use hash differences to have a stable ordering
