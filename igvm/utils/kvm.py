@@ -398,9 +398,7 @@ def _set_cpu_model(hypervisor, vm, tree):
     """
     Selects CPU model based on hardware model.
     """
-    hw_model = hypervisor.dataset_obj.get('hardware_model')
-    if not hw_model:
-        return
+    hw_model = hypervisor.dataset_obj['hardware_model']
 
     for arch, models in KVM_HWMODEL_TO_CPUMODEL.iteritems():
         if hw_model in models:
@@ -415,7 +413,10 @@ def _set_cpu_model(hypervisor, vm, tree):
             })
             model.text = arch
             log.info('KVM: CPU model set to "%s"' % arch)
-            break
+            return
+    raise HypervisorError(
+        'No CPU configuration for hardware model "{}"'.format(hw_model)
+    )
 
 
 def _set_memory_hotplug(vm, tree, props):
