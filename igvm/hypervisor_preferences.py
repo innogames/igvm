@@ -43,9 +43,11 @@ class OtherVMs(object):
         self.values = values
 
     def __repr__(self):
-        args = repr(self.attributes)
-        if self.values:
-            args += ', ' + repr(self.values)
+        args = ''
+        if self.attributes:
+            args += repr(self.attributes)
+            if self.values:
+                args += ', ' + repr(self.values)
 
         return '{}({})'.format(type(self).__name__, args)
 
