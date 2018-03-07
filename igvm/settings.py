@@ -8,7 +8,7 @@ from igvm.hypervisor_preferences import (
     HypervisorAttributeValue,
     HypervisorAttributeValueLimit,
     InsufficientResource,
-    OtherVMsWithSameAttributes,
+    OtherVMs,
     OverAllocation,
 )
 
@@ -142,7 +142,7 @@ HYPERVISOR_PREFERENCES = [
     # the value of threshold.
     HypervisorAttributeValueLimit('cpu_util_vm_pct', 45),
     # Don't migrate two redundant VMs together
-    OtherVMsWithSameAttributes([
+    OtherVMs([
         'project',
         'function',
         'environment',
@@ -151,14 +151,16 @@ HYPERVISOR_PREFERENCES = [
         'game_type',
     ]),
     # Don't migrate two masters database servers together
-    OtherVMsWithSameAttributes(['game_world', 'function'], [0, 'db']),
-    OtherVMsWithSameAttributes(['function'], ['master_db']),
+    OtherVMs(['game_world', 'function'], [0, 'db']),
+    OtherVMs(['function'], ['master_db']),
     # Less over-allocated (CPU) hypervisors first
     OverAllocation('num_cpu'),
     # Find less loaded Hypervisor
     HypervisorAttributeValue('cpu_util_pct'),
+    # Prefer the hypervisor with less VMs from the same cluster
+    OtherVMs(['project', 'environment', 'game_market']),
     # As the last resort, choose the hypervisor with less VMs
-    OtherVMsWithSameAttributes([]),
+    OtherVMs([]),
     # Use hash differences to have a stable ordering
     HashDifference(),
 ]
