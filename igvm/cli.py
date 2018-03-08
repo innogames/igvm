@@ -344,15 +344,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-
-    # We are summing up the silent and verbose arguments.  It is not much
-    # meaningful to use them both, but giving an error is not an improvement.
-    # See Python logging library documentation [1] for the levels.
-    #
-    # [1] https://docs.python.org/library/logging.html#logging-levels
-    logging.basicConfig(
-        level=(2 + args.pop('silent') - args.pop('verbose')) * 10
-    )
+    configure_logging(args.pop('silent'), args.pop('verbose'))
 
     try:
         args.pop('func')(**args)
@@ -367,3 +359,17 @@ def main():
         # destruction right after the disconnect function is called.  We are
         # sleeping for a little while to avoid this.
         time.sleep(0.1)
+
+
+def configure_logging(silent, verbose):
+    """We are summing up the silent and verbose arguments in here.  It
+    is not really meaningful to use them both, but giving an error is not
+    better.  See Python logging library documentation [1] for the levels.
+
+    [1] https://docs.python.org/library/logging.html#logging-levels
+    """
+    level = 20 + (silent - verbose) * 10
+    logging.basicConfig(level=level)
+
+    # Paramiko is overly verbose.  We configure it for one level higher.
+    logging.getLogger('paramiko').setLevel(level + 10)
