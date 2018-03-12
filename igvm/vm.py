@@ -13,7 +13,7 @@ from ipaddress import ip_address
 from os import environ
 from re import compile as re_compile
 from StringIO import StringIO
-from uuid import uuid1
+from uuid import uuid4
 
 from adminapi.dataset import Query
 from adminapi.filters import Any
@@ -153,7 +153,7 @@ class VM(Host):
             extra commands here.
         """
         with self.vm_host():
-            tempfile = '/tmp/' + str(uuid1())
+            tempfile = '/tmp/' + str(uuid4())
             put(local_path, self.vm_path(tempfile))
             self.run('mv {0} {1} ; chmod {2} {1}'.format(
                 tempfile, remote_path, mode

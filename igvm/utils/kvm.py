@@ -6,7 +6,7 @@ Copyright (c) 2018, InnoGames GmbH
 import logging
 import re
 import time
-import uuid
+from uuid import uuid4
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
 
@@ -71,7 +71,7 @@ class DomainProperties(object):
         self._hypervisor = hypervisor
         self._vm = vm
         self._domain = None
-        self.uuid = uuid.uuid1()
+        self.uuid = uuid4()
         self.qemu_version = _get_qemu_version(hypervisor)
         self.hugepages = False
         self.num_nodes = hypervisor.num_numa_nodes()
