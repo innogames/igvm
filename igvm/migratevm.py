@@ -8,9 +8,9 @@ import logging
 from igvm.exceptions import IGVMError, InconsistentAttributeError
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
-from igvm.utils.transaction import run_in_transaction
-from igvm.vm import VM
 from igvm.settings import MIGRATE_COMMANDS
+from igvm.transaction import run_in_transaction
+from igvm.vm import VM
 
 log = logging.getLogger(__name__)
 

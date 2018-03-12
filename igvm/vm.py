@@ -31,10 +31,10 @@ from igvm.settings import (
     HYPERVISOR_ATTRIBUTES,
     HYPERVISOR_PREFERENCES,
 )
+from igvm.transaction import run_in_transaction
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
 from igvm.utils.template import upload_template
-from igvm.utils.transaction import run_in_transaction
 from igvm.utils.units import parse_size
 
 log = logging.getLogger(__name__)
