@@ -160,7 +160,7 @@ HYPERVISOR_PREFERENCES = [
     # Prefer the hypervisor with less VMs from the same cluster
     OtherVMs(['project', 'environment', 'game_market']),
     # As the last resort, choose the hypervisor with less VMs
-    OtherVMs([]),
+    OtherVMs(),
     # Use hash differences to have a stable ordering
     HashDifference(),
 ]

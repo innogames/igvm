@@ -26,7 +26,11 @@ from igvm.exceptions import (
 from igvm.host import Host
 from igvm.hypervisor import Hypervisor
 from igvm.hypervisor_ranking import HypervisorRanking
-from igvm.settings import DEFAULT_SWAP_SIZE, HYPERVISOR_ATTRIBUTES
+from igvm.settings import (
+    DEFAULT_SWAP_SIZE,
+    HYPERVISOR_ATTRIBUTES,
+    HYPERVISOR_PREFERENCES,
+)
 from igvm.utils.cli import yellow
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
@@ -546,27 +550,73 @@ class VM(Host):
             'state': Any(*hv_states),
         }, HYPERVISOR_ATTRIBUTES))
 
-        log.info('Evaluating hypervisors...')
+        log.debug('Evaluating hypervisors...')
+
+        selected_hypervisor = None
+        index = len(HYPERVISOR_PREFERENCES)
+        hypervisor_count = 0
 
         # We use decorate-sort-undecorate pattern to get preferred hypervisors.
         for ranking in sorted(HypervisorRanking(self, h) for h in hypervisors):
+
+            # We care to keep track of the preference indexes only to provide
+            # good logging.
+            new_index = ranking.get_last_preference_index()
+            if new_index < index:
+                if hypervisor_count:
+                    log.warning(
+                        '{} hypervisors are equally preferred by the first '
+                        '{} preferences:  {}'
+                        .format(hypervisor_count, index, ', '.join(
+                            map(repr, HYPERVISOR_PREFERENCES[:index])
+                        ))
+                    )
+                index = new_index
+            hypervisor_count += 1
+
+            if selected_hypervisor:
+                # We shortcut logging when it wouldn't provide much value.
+                # This condition would always be false for the next
+                # hypervisors, if it is false for the selected one.
+                if hypervisor_count * 2 < index:
+                    break
+                continue
+
             # The actual resources are not checked during hypervisor ranking
             # for performance.  We need to validate the hypervisor using
             # the actual values before the final decision.
             try:
                 ranking.hypervisor.check_vm(self)
-            except HypervisorError:
+            except HypervisorError as error:
+                log.warning(
+                    'Preferred hypervisor "{}" is skipped:  {}'
+                    .format(ranking.hypervisor, error)
+                )
                 continue
 
+            selected_hypervisor = ranking.hypervisor
             log.info(
                 'Hypervisor "{}" selected with decisive preference {!r} '
                 'after checking {} preferences.'
-                .format(ranking.hypervisor, *ranking.decisive_preference())
+                .format(
+                    selected_hypervisor,
+                    HYPERVISOR_PREFERENCES[index],
+                    index,
+                )
+            )
+        else:
+            log.warning(
+                'All {} hypervisors are equally preferred by the first '
+                '{} preferences.'
+                .format(hypervisor_count, index, ', '.join(
+                    map(repr, HYPERVISOR_PREFERENCES[:index])
+                ))
             )
 
-            return ranking.hypervisor
+        if not selected_hypervisor:
+            raise VMError('Cannot find a hypervisor')
 
-        raise VMError('Cannot find a hypervisor')
+        return selected_hypervisor
 
     def set_best_hypervisor(self, hv_states=['online']):
         """Set best hypervisor

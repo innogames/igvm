@@ -52,8 +52,6 @@ class HypervisorRanking(object):
 
         return rank
 
-    def decisive_preference(self):
-        """Return the last needed preference and its index"""
-        index = len(self.ranks) - 1
-
-        return HYPERVISOR_PREFERENCES[index], index
+    def get_last_preference_index(self):
+        """Return the index of the last needed preference"""
+        return len(self.ranks) - 1
