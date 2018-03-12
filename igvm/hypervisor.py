@@ -35,6 +35,7 @@ from igvm.settings import (
     FOREMAN_IMAGE_MD5_URL,
     IMAGE_PATH,
 )
+from igvm.transaction import Transaction
 from igvm.utils.backoff import retry_wait_backoff
 from igvm.utils.network import get_network_config
 from igvm.utils.virtutils import get_virtconn
@@ -467,15 +468,18 @@ class Hypervisor(Host):
         domain = self._get_domain(vm)
         if offline:
             target_hypervisor.create_vm_storage(vm, vm.fqdn, transaction)
-            nc_listener = target_hypervisor.netcat_to_device(
-                self.vm_disk_path(vm.fqdn), transaction
-            )
-            self.device_to_netcat(
-                self.vm_disk_path(domain.name()),
-                vm.dataset_obj['disk_size_gib'] * 1024**3,
-                nc_listener,
-                transaction,
-            )
+
+            with Transaction() as subtransaction:
+                nc_listener = target_hypervisor.netcat_to_device(
+                    self.vm_disk_path(vm.fqdn), subtransaction
+                )
+                self.device_to_netcat(
+                    self.vm_disk_path(domain.name()),
+                    vm.dataset_obj['disk_size_gib'] * 1024**3,
+                    nc_listener,
+                    subtransaction,
+                )
+
             target_hypervisor.define_vm(vm, transaction)
         else:
             target_hypervisor.create_vm_storage(vm, domain.name(), transaction)
