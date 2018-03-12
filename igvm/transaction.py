@@ -14,42 +14,45 @@ class Transaction(object):
     If the transaction fails, all registered callbacks are invoked in
     LIFO order."""
     def __init__(self):
-        self._actions = []
+        self._actions = None
 
     def __enter__(self):
+        assert self._actions is None
+        self._actions = []
+
         return self
 
     def __exit__(self, type, value, traceback):
         if traceback:
             self.rollback()
-        else:
-            self.checkpoint()
-        return False
+
+        assert self._actions is not None
+        self._actions = None    # Invalidate transaction
 
     def on_rollback(self, name, fn, *args, **kwargs):
         assert callable(fn)
-        if self._actions is None:
-            raise ValueError('Transaction already rolled back.')
+
         self._actions.append((name, fn, args, kwargs))
 
     def rollback(self):
-        if not self._actions:
-            return
         log.info('Rolling back transaction')
-        for (name, fn, args, kwargs) in reversed(self._actions):
+        while self._actions:
+            name, fn, args, kwargs = self._actions.pop()
             log.debug('Running rollback action "{}"'.format(name))
+
             try:
                 fn(*args, **kwargs)
-            except Exception as e:
+            except Exception as exception:
                 log.warning(
-                    'Rollback action "{}" failed: {}'
-                    .format(name, e)
+                    'Rollback action "{}" failed: {}'.format(name, exception)
                 )
-        self._actions = None  # Invalidate transaction
 
     def checkpoint(self):
-        """Marks a safe state within the transaction. All previous on_rollback
-        actions will not be invoked, even if the transaction fails later on."""
+        """Mark a safe state within the transaction
+
+        All previous on_rollback actions will not be invoked, even if
+        the transaction fails later on.
+        """
         log.debug('Checkpoint reached, all previous actions are now permanent')
         self._actions = []
 
