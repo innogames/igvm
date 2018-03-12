@@ -163,7 +163,7 @@ class Hypervisor(Host):
         # Proper VLAN?
         self.vlan_for_vm(vm)
 
-    def define_vm(self, vm, tx=None):
+    def define_vm(self, vm, transaction=None):
         """Creates a VM on the hypervisor."""
         log.info('Defining "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
 
@@ -173,8 +173,8 @@ class Hypervisor(Host):
         for pool_name in self.conn().listStoragePools():
             pool = self.conn().storagePoolLookupByName(pool_name)
             pool.refresh(0)
-        if tx:
-            tx.on_rollback(
+        if transaction:
+            transaction.on_rollback(
                 'delete VM', self.delete_vm, vm, keep_storage=True
             )
 
@@ -287,15 +287,15 @@ class Hypervisor(Host):
 
         self._vm_set_disk_size_gib(vm, new_size_gib)
 
-    def create_vm_storage(self, vm, name, tx=None):
+    def create_vm_storage(self, vm, name, transaction=None):
         """Allocate storage for a VM. Returns the disk path."""
         self.create_storage(name, vm.dataset_obj['disk_size_gib'])
-        if tx:
-            tx.on_rollback(
+        if transaction:
+            transaction.on_rollback(
                 'destroy storage', self.lvremove, self.vm_disk_path(name)
             )
 
-    def format_vm_storage(self, vm, tx=None):
+    def format_vm_storage(self, vm, transaction=None):
         """Create new filesystem for VM and mount it. Returns mount path."""
 
         if self.vm_defined(vm):
@@ -305,7 +305,7 @@ class Hypervisor(Host):
             )
 
         self.format_storage(self.vm_disk_path(vm.fqdn))
-        return self.mount_vm_storage(vm, tx)
+        return self.mount_vm_storage(vm, transaction)
 
     def validate_image_checksum(self, image):
         """Compares the local image checksum against the checksum returned by
@@ -349,7 +349,7 @@ class Hypervisor(Host):
                 )
             )
 
-    def mount_vm_storage(self, vm, tx=None):
+    def mount_vm_storage(self, vm, transaction=None):
         """Mount VM filesystem on host and return mount point."""
         if vm in self._mount_path:
             return self._mount_path[vm]
@@ -362,8 +362,10 @@ class Hypervisor(Host):
         self._mount_path[vm] = self.mount_temp(
             self.vm_disk_path(vm.fqdn), suffix=('-' + vm.fqdn)
         )
-        if tx:
-            tx.on_rollback('unmount storage', self.umount_vm_storage, vm)
+        if transaction:
+            transaction.on_rollback(
+                'unmount storage', self.umount_vm_storage, vm
+            )
 
         vm.mounted = True
         return self._mount_path[vm]
@@ -459,24 +461,24 @@ class Hypervisor(Host):
                 'configuration (different VLAN).'
             )
 
-    def migrate_vm(self, vm, target_hypervisor, offline, tx):
+    def migrate_vm(self, vm, target_hypervisor, offline, transaction):
         """Migrate a VM to the given destination hypervisor"""
         self.check_migration(vm, target_hypervisor, offline)
         domain = self._get_domain(vm)
         if offline:
-            target_hypervisor.create_vm_storage(vm, vm.fqdn, tx)
+            target_hypervisor.create_vm_storage(vm, vm.fqdn, transaction)
             nc_listener = target_hypervisor.netcat_to_device(
-                self.vm_disk_path(vm.fqdn), tx
+                self.vm_disk_path(vm.fqdn), transaction
             )
             self.device_to_netcat(
                 self.vm_disk_path(domain.name()),
                 vm.dataset_obj['disk_size_gib'] * 1024**3,
                 nc_listener,
-                tx,
+                transaction,
             )
-            target_hypervisor.define_vm(vm, tx)
+            target_hypervisor.define_vm(vm, transaction)
         else:
-            target_hypervisor.create_vm_storage(vm, domain.name(), tx)
+            target_hypervisor.create_vm_storage(vm, domain.name(), transaction)
             migrate_live(self, target_hypervisor, vm, self._get_domain(vm))
 
     def total_vm_memory(self):
@@ -670,7 +672,7 @@ class Hypervisor(Host):
     def kill_netcat(self, port):
         self.run('pkill -f "^/bin/nc.traditional -l -p {}"'.format(port))
 
-    def netcat_to_device(self, device, tx=None):
+    def netcat_to_device(self, device, transaction=None):
         dev_minor = self.run('stat -L -c "%T" {}'.format(device), silent=True)
         dev_minor = int(dev_minor, 16)
         port = 7000 + dev_minor
@@ -682,11 +684,11 @@ class Hypervisor(Host):
             'nohup /bin/nc.traditional -l -p {0} | dd of={1} obs=1048576 &'
             .format(port, device)
         )
-        if tx:
-            tx.on_rollback('kill netcat', self.kill_netcat, port)
+        if transaction:
+            transaction.on_rollback('kill netcat', self.kill_netcat, port)
         return self.fqdn, port
 
-    def device_to_netcat(self, device, size, listener, tx=None):
+    def device_to_netcat(self, device, size, listener, transaction=None):
         # Using DD lowers load on device with big enough Block Size
         self.run(
             'dd if={0} ibs=1048576 | pv -f -s {1} '

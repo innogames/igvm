@@ -31,7 +31,7 @@ from igvm.settings import (
     HYPERVISOR_ATTRIBUTES,
     HYPERVISOR_PREFERENCES,
 )
-from igvm.transaction import run_in_transaction
+from igvm.transaction import Transaction
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
 from igvm.utils.template import upload_template
@@ -162,7 +162,7 @@ class VM(Host):
                 tempfile, remote_path, mode
             ))
 
-    def set_state(self, new_state, tx=None):
+    def set_state(self, new_state, transaction=None):
         """Changes state of VM for LB and Nagios downtimes"""
         self.previous_state = self.dataset_obj['state']
         if new_state == self.previous_state:
@@ -170,8 +170,8 @@ class VM(Host):
         log.debug('Setting VM to state {}'.format(new_state))
         self.dataset_obj['state'] = new_state
         self.dataset_obj.commit()
-        if tx:
-            tx.on_rollback('reset_state', self.reset_state)
+        if transaction:
+            transaction.on_rollback('reset_state', self.reset_state)
 
     def reset_state(self):
         """Change state of VM to the original one"""
@@ -223,7 +223,7 @@ class VM(Host):
             if not check(value):
                 raise ConfigError(err)
 
-    def start(self, tx=None):
+    def start(self, transaction=None):
         self.hypervisor.start_vm(self)
         if not self.wait_for_running(running=True):
             raise VMError('VM did not come online in time')
@@ -235,16 +235,16 @@ class VM(Host):
         if not host_up:
             raise VMError('The server is not reachable with SSH')
 
-        if tx:
-            tx.on_rollback('stop VM', self.shutdown)
+        if transaction:
+            transaction.on_rollback('stop VM', self.shutdown)
 
-    def shutdown(self, tx=None):
+    def shutdown(self, transaction=None):
         self.hypervisor.stop_vm(self)
         if not self.wait_for_running(running=False):
             self.hypervisor.stop_vm_force(self)
 
-        if tx:
-            tx.on_rollback('start VM', self.start)
+        if transaction:
+            transaction.on_rollback('start VM', self.start)
 
     def is_running(self):
         return self.hypervisor.vm_running(self)
@@ -324,11 +324,8 @@ class VM(Host):
             result['status'] = 'new'
         return result
 
-    @run_in_transaction
-    def build(self, localimage=None, runpuppet=True, postboot=None, tx=None):
+    def build(self, localimage=None, runpuppet=True, postboot=None):
         """Builds a VM."""
-        assert tx is not None, 'tx populated by run_in_transaction'
-
         hypervisor = self.hypervisor
         self.check_serveradmin_config()
 
@@ -349,34 +346,33 @@ class VM(Host):
                 'configuration.  Expect things to go south.'
             )
 
-        # Perform operations on the hypervisor
-        self.hypervisor.create_vm_storage(self, self.fqdn, tx)
-        mount_path = self.hypervisor.format_vm_storage(self, tx)
+        with Transaction() as transaction:
+            # Perform operations on the hypervisor
+            self.hypervisor.create_vm_storage(self, self.fqdn, transaction)
+            mount_path = self.hypervisor.format_vm_storage(self, transaction)
 
-        if not localimage:
-            self.hypervisor.download_image(image)
-        self.hypervisor.extract_image(image, mount_path)
+            if not localimage:
+                self.hypervisor.download_image(image)
+            self.hypervisor.extract_image(image, mount_path)
 
-        self.prepare_vm()
+            self.prepare_vm()
 
-        if runpuppet:
-            self.run_puppet(clear_cert=True, tx=tx)
+            if runpuppet:
+                self.run_puppet(clear_cert=True, transaction=transaction)
 
-        if postboot is not None:
-            self.copy_postboot_script(postboot)
+            if postboot is not None:
+                self.copy_postboot_script(postboot)
 
-        self.hypervisor.umount_vm_storage(self)
-        hypervisor.define_vm(self, tx)
+            self.hypervisor.umount_vm_storage(self)
+            hypervisor.define_vm(self, transaction)
 
-        # We are updating the information on the Serveradmin, before starting
-        # the VM, because the VM would still be on the hypervisor even if it
-        # fails to start.
-        self.dataset_obj.commit()
+            # We are updating the information on the Serveradmin, before
+            # starting the VM, because the VM would still be on the hypervisor
+            # even if it fails to start.
+            self.dataset_obj.commit()
 
         # VM was successfully built, don't risk undoing all this just because
         # start fails.
-        tx.checkpoint()
-
         self.start()
 
         # Perform operations on Virtual Machine
@@ -386,11 +382,8 @@ class VM(Host):
 
         log.info('"{}" is successfully built.'.format(self.fqdn))
 
-    @run_in_transaction
-    def rename(self, new_hostname, tx=None):
+    def rename(self, new_hostname):
         """Rename the VM"""
-        assert tx is not None, 'tx populated by run_in_transaction'
-
         new_fqdn = (
             new_hostname
             if new_hostname.endswith('.ig.local')
@@ -417,12 +410,13 @@ class VM(Host):
         ))
         self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
 
-        self.shutdown(tx=tx)
-        self.hypervisor.rename_vm(self, new_hostname)
+        with Transaction() as transaction:
+            self.shutdown(transaction=transaction)
+            self.hypervisor.rename_vm(self, new_hostname)
 
-        self.dataset_obj.commit()
+            self.dataset_obj.commit()
 
-        self.start(tx=tx)
+            self.start(transaction=transaction)
 
     def prepare_vm(self):
         """Prepare the rootfs for a VM
@@ -486,7 +480,7 @@ class VM(Host):
         self.run('/bin/chmod 0600 /swap')
         self.run('/sbin/mkswap /swap')
 
-    def run_puppet(self, clear_cert, tx):
+    def run_puppet(self, clear_cert, transaction):
         """Runs Puppet in chroot on the hypervisor."""
 
         if clear_cert:
@@ -502,8 +496,8 @@ class VM(Host):
 
         self.block_autostart()
 
-        if tx:
-            tx.on_rollback(
+        if transaction:
+            transaction.on_rollback(
                 'Kill puppet',
                 self.run,
                 'pkill -9 -f "/usr/bin/puppet agent -v --fqdn={}"'
