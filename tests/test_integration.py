@@ -37,7 +37,9 @@ from igvm.hypervisor import Hypervisor
 from igvm.migratevm import migratevm
 from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
+    HYPERVISOR_ATTRIBUTES,
     IMAGE_PATH,
+    VM_ATTRIBUTES,
 )
 from igvm.utils.units import parse_size
 from igvm.vm import VM
@@ -57,17 +59,19 @@ def setUpModule():
     # Automatically find suitable HVs for tests.
     # Terminate if this is impossible - we can't run tests without HVs.
     global HYPERVISORS
-    vm_route_net = Query({'hostname': VM_NET}).get()['route_network']
+    vm_route_net = (
+        Query({'hostname': VM_NET}, ['route_network']).get()['route_network']
+    )
 
     # We can access HVs as objects but that does not mean we can compare them
     # to any objects returned from igvm - those will be different objects,
     # created from scratch from Serveradmin data.
-    HYPERVISORS = [Hypervisor(h['hostname']) for h in Query({
+    HYPERVISORS = [Hypervisor(o) for o in Query({
         'servertype': 'hypervisor',
         'environment': 'testing',
         'vlan_networks': vm_route_net,
         'state': 'online',
-    })]
+    }, HYPERVISOR_ATTRIBUTES)]
 
     if len(HYPERVISORS) < 2:
         raise Exception('Not enough testing hypervisors found')
@@ -157,7 +161,7 @@ class IGVMTest(TestCase):
             )
 
     def get_vm(self):
-        return VM(Query({'hostname': VM_HOSTNAME}).get())
+        return VM(Query({'hostname': VM_HOSTNAME}, VM_ATTRIBUTES).get())
 
     def check_vm_present(self):
         # Operate on fresh object
