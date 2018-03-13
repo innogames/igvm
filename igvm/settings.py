@@ -127,7 +127,7 @@ VM_ATTRIBUTES = [
     'route_network',
     'sshfp',
     'state',
-    'xen_host',
+    {'xen_host': HYPERVISOR_ATTRIBUTES},
 ]
 
 # The list is ordered from more important to less important.  The next
