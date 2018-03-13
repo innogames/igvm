@@ -5,6 +5,8 @@ Copyright (c) 2018, InnoGames GmbH
 
 import logging
 
+from adminapi.dataset import Query
+from adminapi.filters import ExactMatch, Startswith, Or
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 
@@ -15,7 +17,11 @@ from igvm.exceptions import (
 )
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
-from igvm.settings import MIGRATE_COMMANDS
+from igvm.settings import (
+    HYPERVISOR_ATTRIBUTES,
+    MIGRATE_COMMANDS,
+    VM_ATTRIBUTES,
+)
 from igvm.transaction import Transaction
 from igvm.utils.units import parse_size
 from igvm.vm import VM
@@ -43,7 +49,7 @@ def _check_defined(vm, fail_hard=True):
 @with_fabric_settings
 def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
     """Change the number of CPUs in a VM"""
-    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
+    vm = _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
     _check_defined(vm)
 
     if offline and not vm.is_running():
@@ -72,7 +78,7 @@ def mem_set(vm_hostname, size, offline=False, ignore_reserved=False):
     difference in the size.  Reducing memory is only allowed while the VM is
     powered off.
     """
-    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
+    vm = _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
     _check_defined(vm)
 
     if size.startswith('+'):
@@ -109,7 +115,7 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
     a relative difference in the size.  Of course, minus is going to
     error out.
     """
-    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
+    vm = _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
     _check_defined(vm)
 
     current_size_gib = vm.dataset_obj['disk_size_gib']
@@ -137,7 +143,7 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
     Puppet in run once to configure baseline networking.
     """
 
-    vm = VM(vm_hostname)
+    vm = _get_vm(vm_hostname)
 
     # Could also have been set in serveradmin already.
     if not vm.hypervisor:
@@ -157,11 +163,11 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
                runpuppet=False, maintenance=False, offline=False,
                ignore_reserved=False, offline_transport='drbd'):
     """Migrate a VM to a new hypervisor."""
-    vm = VM(vm_hostname, ignore_reserved=ignore_reserved)
+    vm = _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
 
     # If not specified automatically find a new better hypervisor
     if hypervisor_hostname:
-        hypervisor = Hypervisor(
+        hypervisor = _get_hypervisor(
             hypervisor_hostname, ignore_reserved=ignore_reserved
         )
     else:
@@ -254,7 +260,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
 @with_fabric_settings
 def vm_rebuild(vm_hostname, force=False):
     """Destroy and reinstall a VM"""
-    vm = VM(vm_hostname, ignore_reserved=True)
+    vm = _get_vm(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     if vm.is_running():
@@ -270,7 +276,7 @@ def vm_rebuild(vm_hostname, force=False):
 @with_fabric_settings
 def vm_start(vm_hostname):
     """Start a VM"""
-    vm = VM(vm_hostname)
+    vm = _get_vm(vm_hostname)
     _check_defined(vm)
 
     if vm.is_running():
@@ -282,7 +288,7 @@ def vm_start(vm_hostname):
 @with_fabric_settings
 def vm_stop(vm_hostname, force=False):
     """Gracefully stop a VM"""
-    vm = VM(vm_hostname)
+    vm = _get_vm(vm_hostname)
     _check_defined(vm)
 
     if not vm.is_running():
@@ -303,7 +309,7 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
     useful to discard temporary changes or adapt new hypervisor optimizations.
     No data will be lost.
     """
-    vm = VM(vm_hostname, ignore_reserved=True)
+    vm = _get_vm(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     if not vm.is_running():
@@ -334,7 +340,7 @@ def vm_delete(vm_hostname, force=False, retire=False):
     state will be updated to 'retired'.
     """
 
-    vm = VM(vm_hostname, ignore_reserved=True)
+    vm = _get_vm(vm_hostname, ignore_reserved=True)
     # Make sure the VM has a hypervisor and that it is defined on it.
     # Abort if the VM has not been defined and force is not True.
     _check_defined(vm, fail_hard=not force)
@@ -375,7 +381,7 @@ def vm_sync(vm_hostname):
 
     This command collects actual resource allocation of a VM from the
     hypervisor and overwrites outdated attribute values in Serveradmin."""
-    vm = VM(vm_hostname, ignore_reserved=True)
+    vm = _get_vm(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
@@ -406,7 +412,7 @@ def host_info(vm_hostname):
 
     Library consumers should use VM.info() directly.
     """
-    vm = VM(vm_hostname, ignore_reserved=True)
+    vm = _get_vm(vm_hostname, ignore_reserved=True)
 
     info = vm.info()
 
@@ -513,7 +519,7 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
     to be shut down.  No data will be lost.
     """
 
-    vm = VM(vm_hostname, ignore_reserved=True)
+    vm = _get_vm(vm_hostname, ignore_reserved=True)
     _check_defined(vm)
 
     if not offline:
@@ -526,6 +532,53 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
         )
 
     vm.rename(new_hostname)
+
+
+def _get_vm(hostname, ignore_reserved=False):
+    """Get a server from Serveradmin by hostname to return VM object
+
+    The function is accepting hostnames in any length as long as it resolves
+    to a single server on Serveradmin.
+    """
+    conditions = [ExactMatch(hostname)]
+    if hostname.endswith('.ig.local'):
+        conditions.append(ExactMatch(hostname[:-len('.ig.local')]))
+    else:
+        conditions.append(Startswith(hostname + '.'))
+
+    dataset_obj = Query({
+        'hostname': Or(*conditions),
+        'servertype': 'vm',
+    }, VM_ATTRIBUTES).get()
+
+    if not ignore_reserved and dataset_obj['state'] == 'online_reserved':
+        raise InvalidStateError(
+            'Server "{0}" is online_reserved.'.format(dataset_obj['hostname'])
+        )
+
+    if dataset_obj['xen_host']:
+        hypervisor = Hypervisor(Query({
+            'hostname': dataset_obj['xen_host']
+        }, HYPERVISOR_ATTRIBUTES).get())
+    else:
+        hypervisor = None
+
+    return VM(dataset_obj, hypervisor)
+
+
+def _get_hypervisor(hostname, ignore_reserved=False):
+    """Get a server from Serveradmin by hostname to return Hypervisor object"""
+    dataset_obj = Query({
+        'hostname': hostname,
+        'servertype': 'hypervisor',
+    }, HYPERVISOR_ATTRIBUTES).get()
+
+    if not ignore_reserved and dataset_obj['state'] == 'online_reserved':
+        raise InvalidStateError(
+            'Server "{0}" is online_reserved.'.format(dataset_obj['hostname'])
+        )
+
+    return Hypervisor(dataset_obj)
 
 
 def _check_attributes(vm):

@@ -48,10 +48,10 @@ class Hypervisor(Host):
     """Hypervisor interface."""
     servertype = 'hypervisor'
 
-    def __init__(self, *args, **kwargs):
-        super(Hypervisor, self).__init__(*args, **kwargs)
+    def __init__(self, dataset_obj):
+        super(Hypervisor, self).__init__(dataset_obj)
 
-        if self.dataset_obj['state'] == 'retired':
+        if dataset_obj['state'] == 'retired':
             raise InvalidStateError(
                 'Hypervisor "{0}" is retired.'.format(self.fqdn)
             )

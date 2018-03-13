@@ -48,17 +48,9 @@ class VM(Host):
     """VM interface."""
     servertype = 'vm'
 
-    def __init__(self, name_or_obj, ignore_reserved=False,
-                 hypervisor=None):
-        super(VM, self).__init__(name_or_obj, ignore_reserved)
-
-        if not hypervisor and self.dataset_obj['xen_host']:
-            self.hypervisor = Hypervisor(
-                self.dataset_obj['xen_host'],
-                ignore_reserved=True
-            )
-        else:
-            self.hypervisor = hypervisor
+    def __init__(self, dataset_obj, hypervisor=None):
+        super(VM, self).__init__(dataset_obj)
+        self.hypervisor = hypervisor
 
         # A flag to keep state of machine consistent between VM methods.
         # Operations on VM like run() or put() will use it to decide

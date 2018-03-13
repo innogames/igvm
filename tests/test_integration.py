@@ -27,6 +27,7 @@ from igvm.commands import (
     vm_start,
     vm_stop,
     vm_sync,
+    _get_vm,
 )
 from igvm.exceptions import (
     IGVMError,
@@ -39,10 +40,8 @@ from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
     HYPERVISOR_ATTRIBUTES,
     IMAGE_PATH,
-    VM_ATTRIBUTES,
 )
 from igvm.utils.units import parse_size
-from igvm.vm import VM
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -162,12 +161,9 @@ class IGVMTest(TestCase):
                 warn_only=True,
             )
 
-    def get_vm(self):
-        return VM(Query({'hostname': VM_HOSTNAME}, VM_ATTRIBUTES).get())
-
     def check_vm_present(self):
         # Operate on fresh object
-        vm = self.get_vm()
+        vm = _get_vm(VM_HOSTNAME)
 
         for hv in HYPERVISORS:
             if hv.dataset_obj['hostname'] == vm.dataset_obj['xen_host']:
@@ -186,7 +182,7 @@ class IGVMTest(TestCase):
 
     def check_vm_absent(self, hv_name=None):
         # Operate on fresh object
-        vm = self.get_vm()
+        vm = _get_vm(VM_HOSTNAME)
 
         if not hv_name:
             hv_name = vm.dataset_obj['xen_host']
@@ -206,7 +202,7 @@ class BuildTest(IGVMTest):
         obj = Query({'hostname': VM_HOSTNAME}, ['xen_host']).get()
         obj['xen_host'] = HYPERVISORS[0].dataset_obj['hostname']
         obj.commit()
-        self.vm = self.get_vm()
+        self.vm = _get_vm(VM_HOSTNAME)
 
     def test_build(self):
         buildvm(VM_HOSTNAME)
@@ -351,7 +347,7 @@ class CommandTest(IGVMTest):
         obj.commit()
         buildvm(VM_HOSTNAME)
         self.check_vm_present()
-        self.vm = self.get_vm()     # For contacting VM and HV over shell
+        self.vm = _get_vm(VM_HOSTNAME)  # For contacting VM and HV over shell
 
     def test_start_stop(self):
         # Doesn't fail, but should print a message
@@ -621,7 +617,7 @@ class MigrationTest(IGVMTest):
 
         obj = Query({'hostname': VM_HOSTNAME}, ['intern_ip']).get()
         self.assertEqual(obj['intern_ip'], new_address)
-        self.get_vm().run(cmd('ip a | grep {}', new_address))
+        _get_vm(VM_HOSTNAME).run(cmd('ip a | grep {}', new_address))
         self.check_vm_present()
 
     def test_reject_online_with_puppet(self):
