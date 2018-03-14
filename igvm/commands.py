@@ -534,14 +534,8 @@ def _get_vm(hostname, ignore_reserved=False):
     The function is accepting hostnames in any length as long as it resolves
     to a single server on Serveradmin.
     """
-    conditions = [ExactMatch(hostname)]
-    if hostname.endswith('.ig.local'):
-        conditions.append(ExactMatch(hostname[:-len('.ig.local')]))
-    else:
-        conditions.append(Startswith(hostname + '.'))
-
     dataset_obj = Query({
-        'hostname': Or(*conditions),
+        'hostname': Or(ExactMatch(hostname), Startswith(hostname + '.')),
         'servertype': 'vm',
     }, VM_ATTRIBUTES).get()
 
