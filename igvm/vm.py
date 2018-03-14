@@ -31,7 +31,6 @@ from igvm.settings import (
     HYPERVISOR_ATTRIBUTES,
     HYPERVISOR_PREFERENCES,
 )
-from igvm.utils.cli import yellow
 from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
 from igvm.utils.template import upload_template
@@ -345,10 +344,10 @@ class VM(Host):
         self.hypervisor.check_vm(self)
 
         if not runpuppet or self.dataset_obj['puppet_disabled']:
-            log.warn(yellow(
+            log.warn(
                 'Puppet is disabled on the VM.  It will not receive network '
                 'configuration.  Expect things to go south.'
-            ))
+            )
 
         # Perform operations on the hypervisor
         self.hypervisor.create_vm_storage(self, self.fqdn, tx)
