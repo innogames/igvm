@@ -6,7 +6,6 @@ Copyright (c) 2017, InnoGames GmbH
 from __future__ import print_function
 from argparse import ArgumentParser, _SubParsersAction
 import logging
-import sys
 import time
 
 from fabric.network import disconnect_all
@@ -26,16 +25,11 @@ from igvm.commands import (
     vm_sync,
     vm_rename,
 )
-from igvm.utils.cli import white, red
+from igvm.utils.cli import white
 from igvm.utils.virtutils import close_virtconns
 
 
 class IGVMArgumentParser(ArgumentParser):
-    def error(self, message):
-        print(red('error: {}'.format(message)), file=sys.stderr)
-        print(self.format_help(), file=sys.stderr)
-        sys.exit(2)
-
     def format_help(self):
         if not any(isinstance(a, _SubParsersAction) for a in self._actions):
             return super(IGVMArgumentParser, self).format_help()
