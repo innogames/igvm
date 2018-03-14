@@ -134,11 +134,11 @@ class Hypervisor(Host):
             )
 
         # Enough CPUs?
-        if vm.dataset_obj['num_cpu'] > self.num_cpus:
+        if vm.dataset_obj['num_cpu'] > self.dataset_obj['num_cpu']:
             raise HypervisorError(
                 'Not enough CPUs. Destination Hypervisor has {0}, '
                 'but VM requires {1}.'
-                .format(self.num_cpus, vm.dataset_obj['num_cpu'])
+                .format(self.dataset_obj['num_cpu'], vm.dataset_obj['num_cpu'])
             )
 
         # Enough memory?
@@ -218,7 +218,7 @@ class Hypervisor(Host):
             vm.dataset_obj['num_cpu'] = num_cpu
             self.redefine_vm(vm)
         else:
-            self._vm_set_num_cpu(vm, num_cpu)
+            set_vcpus(self, vm, self._get_domain(vm), num_cpu)
 
         # Validate changes
         # We can't rely on the hypervisor to provide data on VMs all the time.
@@ -502,9 +502,6 @@ class Hypervisor(Host):
             used_kib += dom.info()[2]
         free_mib = total_mib - used_kib / 1024
         return free_mib
-
-    def _vm_set_num_cpu(self, vm, num_cpu):
-        set_vcpus(self, vm, self._get_domain(vm), num_cpu)
 
     def _vm_set_disk_size_gib(self, vm, disk_size_gib):
         # TODO: Use libvirt

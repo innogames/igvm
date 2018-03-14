@@ -150,11 +150,3 @@ class Host(object):
     def network_config(self):
         """Returns networking attributes, such as IP address and VLAN."""
         return get_network_config(self.dataset_obj)
-
-    @lazy_property
-    def num_cpus(self):
-        """Returns the number of online CPUs"""
-        return int(self.run(
-            'grep vendor_id < /proc/cpuinfo | wc -l',
-            silent=True,
-        ))
