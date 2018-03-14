@@ -13,7 +13,7 @@ import fabric.state
 from fabric.contrib import files
 
 from paramiko import transport
-from igvm.exceptions import ConfigError, RemoteCommandError, InvalidStateError
+from igvm.exceptions import RemoteCommandError, InvalidStateError
 from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
     VM_ATTRIBUTES,
@@ -145,16 +145,6 @@ class Host(object):
             fd = StringIO()
             fabric.api.get(path, fd)
             return fd.getvalue()
-
-    def reload(self):
-        """Reloads the server object from serveradmin."""
-        if self.dataset_obj.is_dirty():
-            raise ConfigError(
-                'Serveradmin object must be committed before reloading'
-            )
-        self.dataset_obj = get_server(
-            self.dataset_obj['hostname'], self.servertype
-        )
 
     @lazy_property  # Requires fabric call on hypervisor, evaluate lazily.
     def network_config(self):
