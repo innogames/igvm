@@ -36,6 +36,7 @@ from igvm.settings import (
     IMAGE_PATH,
 )
 from igvm.utils.backoff import retry_wait_backoff
+from igvm.utils.network import get_network_config
 from igvm.utils.virtutils import get_virtconn
 
 log = logging.getLogger(__name__)
@@ -78,16 +79,13 @@ class Hypervisor(Host):
             'vlan_tag': Not(Empty()),
         }, ['vlan_tag'])]
 
-        vm_vlan = vm.network_config['vlan_tag']
+        vm_vlan = get_network_config(vm.dataset_obj)['vlan_tag']
         if not vlans:
-            if self.network_config['vlan_tag'] != vm_vlan:
+            hypervisor_vlan = get_network_config(self.dataset_obj)['vlan_tag']
+            if hypervisor_vlan != vm_vlan:
                 raise HypervisorError(
                     'Hypervisor "{}" is not on same VLAN {} as VM {}.'
-                    .format(
-                        self.fqdn,
-                        self.network_config['vlan_tag'],
-                        vm_vlan,
-                    )
+                    .format(self.fqdn, hypervisor_vlan, vm_vlan)
                 )
             # For untagged Hypervisors VM must be untagged, too.
             return None
