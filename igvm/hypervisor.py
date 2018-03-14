@@ -20,6 +20,13 @@ from igvm.exceptions import (
     StorageError,
 )
 from igvm.host import Host
+from igvm.kvm import (
+    DomainProperties,
+    generate_domain_xml,
+    migrate_live,
+    set_memory,
+    set_vcpus,
+)
 from igvm.settings import (
     HOST_RESERVED_MEMORY,
     VG_NAME,
@@ -29,13 +36,6 @@ from igvm.settings import (
     IMAGE_PATH,
 )
 from igvm.utils.backoff import retry_wait_backoff
-from igvm.utils.kvm import (
-    DomainProperties,
-    generate_domain_xml,
-    migrate_live,
-    set_memory,
-    set_vcpus,
-)
 from igvm.utils.virtutils import get_virtconn
 
 log = logging.getLogger(__name__)
