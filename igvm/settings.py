@@ -79,29 +79,6 @@ FOREMAN_IMAGE_MD5_URL = 'http://aw-foreman.ig.local:8080/{image}.md5'
 
 IMAGE_PATH = '/tmp'
 
-VM_ATTRIBUTES = [
-    'disk_size_gib',
-    'environment',
-    'function',
-    'hostname',
-    'game_market',
-    'game_world',
-    'game_type',
-    'intern_ip',
-    'mac',
-    'memory',
-    'num_cpu',
-    'os',
-    'project',
-    'puppet_disabled',
-    'puppet_ca',
-    'puppet_master',
-    'sshfp',
-    'state',
-    'route_network',
-    'xen_host',
-]
-
 HYPERVISOR_ATTRIBUTES = [
     'cpu_util_pct',
     'cpu_util_vm_pct',
@@ -128,6 +105,29 @@ HYPERVISOR_ATTRIBUTES = [
             'project',
         ],
     },
+]
+
+VM_ATTRIBUTES = [
+    'disk_size_gib',
+    'environment',
+    'function',
+    'hostname',
+    'game_market',
+    'game_world',
+    'game_type',
+    'intern_ip',
+    'mac',
+    'memory',
+    'num_cpu',
+    'os',
+    'project',
+    'puppet_disabled',
+    'puppet_ca',
+    'puppet_master',
+    'sshfp',
+    'state',
+    'route_network',
+    'xen_host',
 ]
 
 # The list is ordered from more important to less important.  The next
