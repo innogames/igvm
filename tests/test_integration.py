@@ -5,16 +5,14 @@ Copyright (c) 2018, InnoGames GmbH
 
 from __future__ import print_function
 
-import os
-import logging
-import tempfile
-import unittest
-import uuid
-
+from logging import INFO, basicConfig
+from os import environ
 from pipes import quote
+from tempfile import NamedTemporaryFile
+from unittest import TestCase
+from uuid import uuid4
 
 from adminapi.dataset import Query
-
 from fabric.api import env
 
 from igvm.buildvm import buildvm
@@ -44,14 +42,14 @@ from igvm.settings import (
 from igvm.utils.units import parse_size
 from igvm.vm import VM
 
-logging.basicConfig(level=logging.INFO)
+basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
 env['user'] = 'igtesting'  # Enforce user for integration testing process
-os.environ['IGVM_MODE'] = 'testing'
+environ['IGVM_MODE'] = 'testing'
 
 # Configuration of VMs used for tests
 # Keep in mind that the whole hostname must fit in 64 characters.
-VM_HOSTNAME = 'igvm-{}.test.ig.local'.format(uuid.uuid4())
+VM_HOSTNAME = 'igvm-{}.test.ig.local'.format(uuid4())
 VM_NET = 'igvm-net-aw.test.ig.local'
 
 
@@ -59,11 +57,7 @@ def setUpModule():
     # Automatically find suitable HVs for tests.
     # Terminate if this is impossible - we can't run tests without HVs.
     global HYPERVISORS
-    vm_route_net = Query(
-        {
-            'hostname': VM_NET,
-        },
-    ).get()['route_network']
+    vm_route_net = Query({'hostname': VM_NET}).get()['route_network']
 
     # We can access HVs as objects but that does not mean we can compare them
     # to any objects returned from igvm - those will be different objects,
@@ -91,13 +85,7 @@ def setUpModule():
 
 
 def tearDownModule():
-    query = Query(
-        {
-            'servertype': 'vm',
-            'hostname': VM_HOSTNAME,
-        },
-        ['hostname'],
-    )
+    query = Query({'hostname': VM_HOSTNAME}, ['hostname'])
     for obj in query:
         obj.delete()
     query.commit()
@@ -113,14 +101,13 @@ def cmd(cmd, *args, **kwargs):
     return cmd.format(*escaped_args, **escaped_kwargs)
 
 
-class IGVMTest(unittest.TestCase):
+class IGVMTest(TestCase):
     def setUp(self):
-        """Initialize VM object before every test.
+        """Initialize VM object before every test
 
         Get object from Serveradmin and initialize it to safe defaults.
         Don't assign VM to any of HVs yet!
         """
-
         # igvm operates always on hostname of VM and queries it from
         # Serveradmin whenever it needs. Because of that we must never store
         # any igvm objects and query things anew each time.
@@ -143,8 +130,7 @@ class IGVMTest(unittest.TestCase):
         self.vm_obj.commit()
 
     def tearDown(self):
-        """Clean up all HVs after every test."""
-
+        """Clean up all HVs after every test"""
         for hv in HYPERVISORS:
             hv.run(
                 'virsh destroy {vm}; '
@@ -160,13 +146,7 @@ class IGVMTest(unittest.TestCase):
             )
 
     def get_vm_obj(self):
-        vm_obj = Query(
-            {
-                'servertype': 'vm',
-                'hostname': VM_HOSTNAME,
-            },
-        )
-        return vm_obj.get()
+        return Query({'hostname': VM_HOSTNAME}).get()
 
     def check_vm_present(self):
         # Operate on fresh object
@@ -195,13 +175,13 @@ class IGVMTest(unittest.TestCase):
             hv_name = vm.dataset_obj['xen_host']
 
         for hv in HYPERVISORS:
-            if (hv.dataset_obj['hostname'] == hv_name):
+            if hv.dataset_obj['hostname'] == hv_name:
                 self.assertEqual(hv.vm_defined(vm), False)
                 hv.run('test ! -b /dev/xen-data/{}'.format(vm.fqdn))
 
 
 class BuildTest(IGVMTest):
-    """Test many possible VM building scenarios."""
+    """Test many possible VM building scenarios"""
 
     def setUp(self):
         super(BuildTest, self).setUp()
@@ -248,8 +228,9 @@ class BuildTest(IGVMTest):
         self.vm.hypervisor.run(
             'echo 42 > {}/root/local_image_canary'.format(local_extract)
         )
-        self.vm.hypervisor.run('tar --remove-files -zcf {}/{} -C {} .'.format(
-            IMAGE_PATH, local_image, local_extract)
+        self.vm.hypervisor.run(
+            'tar --remove-files -zcf {}/{} -C {} .'
+            .format(IMAGE_PATH, local_image, local_extract)
         )
 
         buildvm(self.vm_obj['hostname'], localimage=local_image)
@@ -260,11 +241,11 @@ class BuildTest(IGVMTest):
         self.assertIn('50a2fabfdd276f573ff97ace8b11c5f4', output)
 
     def test_postboot(self):
-        with tempfile.NamedTemporaryFile() as f:
-            f.write('echo hello > /root/postboot_result')
-            f.flush()
+        with NamedTemporaryFile() as fd:
+            fd.write('echo hello > /root/postboot_result')
+            fd.flush()
 
-            buildvm(self.vm_obj['hostname'], postboot=f.name)
+            buildvm(self.vm_obj['hostname'], postboot=fd.name)
             self.check_vm_present()
 
             output = self.vm.run('cat /root/postboot_result')
@@ -293,8 +274,7 @@ class BuildTest(IGVMTest):
         self.check_vm_absent()
 
     def test_image_corruption(self):
-        """Tests re-downloading of broken image"""
-
+        """Test re-downloading of broken image"""
         image = '{}/{}-base.tar.gz'.format(
             IMAGE_PATH, self.vm_obj['os']
         )
@@ -383,9 +363,11 @@ class CommandTest(IGVMTest):
             )
 
         def _get_vm():
-            return parse_size(self.vm.run(
-                "df -h / | tail -n+2 | awk '{ print $2 }'"
-            ).strip(), 'G')
+            return parse_size(
+                self.vm.run("df -h / | tail -n+2 | awk '{ print $2 }'")
+                .strip(),
+                'G'
+            )
 
         # Initial size same as built
         size = self.vm_obj['disk_size_gib']
@@ -423,9 +405,11 @@ class CommandTest(IGVMTest):
             return data['memory']
 
         def _get_mem_vm():
-            return int(float(self.vm.run(
-                "cat /proc/meminfo | grep MemTotal | awk '{ print $2 }'"
-            ).strip()) / 1024)
+            return float(
+                self.vm
+                .run("cat /proc/meminfo | grep MemTotal | awk '{ print $2 }'")
+                .strip()
+            ) // 1024
 
         # Online
         self.assertEqual(_get_mem_hv(), 2048)
@@ -468,9 +452,10 @@ class CommandTest(IGVMTest):
             return data['num_cpu']
 
         def _get_vm():
-            return int(self.vm.run(
-                "cat /proc/cpuinfo | grep vendor_id | wc -l"
-            ).strip())
+            return int(
+                self.vm.run('cat /proc/cpuinfo | grep vendor_id | wc -l')
+                .strip()
+            )
 
         # Online
         self.assertEqual(_get_hv(), 2)
@@ -523,10 +508,7 @@ class CommandTest(IGVMTest):
         self.vm_obj = self.get_vm_obj()
 
         self.assertEqual(self.vm_obj['memory'], expected_memory)
-        self.assertEqual(
-            self.vm_obj['disk_size_gib'],
-            expected_disk_size,
-        )
+        self.assertEqual(self.vm_obj['disk_size_gib'], expected_disk_size)
 
         # Shouldn't do anything, but also shouldn't fail
         vm_sync(self.vm_obj['hostname'])
@@ -573,15 +555,16 @@ class MigrationTest(IGVMTest):
         with self.assertRaises(IGVMError):
             # Fake IP address is fine, this is a failing test.
             migratevm(
-                self.vm_obj['hostname'], self.new_hv_name,
-                newip='1.2.3.4',
+                self.vm_obj['hostname'], self.new_hv_name, newip='1.2.3.4'
             )
 
     def test_reject_new_ip_without_puppet(self):
         with self.assertRaises(IGVMError):
             # Fake IP address is fine, this is a failing test.
             migratevm(
-                self.vm_obj['hostname'], self.new_hv_name, offline=True,
+                self.vm_obj['hostname'],
+                self.new_hv_name,
+                offline=True,
                 newip='1.2.3.4',
             )
 
@@ -590,13 +573,9 @@ class MigrationTest(IGVMTest):
         # We don't have a way to ask for new IP address from Serveradmin
         # and lock it for us. The method below will usually work fine.
         # When it starts failing, we must develop retry method.
-
-        new_address = Query(
-            {
-                'hostname': VM_NET
-            },
-            ['intern_ip'],
-        ).get_free_ip_addrs()
+        new_address = (
+            Query({'hostname': VM_NET}, ['intern_ip']).get_free_ip_addrs()
+        )
 
         migratevm(
             self.vm_obj['hostname'],
@@ -624,7 +603,9 @@ class MigrationTest(IGVMTest):
 
         with self.assertRaises(IGVMError):
             migratevm(
-                self.vm_obj['hostname'], self.new_hv_name, offline=True,
+                self.vm_obj['hostname'],
+                self.new_hv_name,
+                offline=True,
                 runpuppet=True,
             )
 
