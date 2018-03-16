@@ -568,12 +568,11 @@ class MigrationTest(IGVMTest):
                 newip='1.2.3.4',
             )
 
-    @unittest.skip("Broken until we have new Serveradmin API deployed")
     def test_new_ip(self):
         # We don't have a way to ask for new IP address from Serveradmin
         # and lock it for us. The method below will usually work fine.
         # When it starts failing, we must develop retry method.
-        new_address = (
+        new_address = next(
             Query({'hostname': VM_NET}, ['intern_ip']).get_free_ip_addrs()
         )
 
@@ -587,7 +586,7 @@ class MigrationTest(IGVMTest):
         self.vm_obj = self.get_vm_obj()
 
         self.assertEqual(self.vm_obj['intern_ip'], new_address)
-        self.vm.run(cmd('ip a | grep {}', new_address))
+        VM(self.vm_obj).run(cmd('ip a | grep {}', new_address))
         self.check_vm_present()
 
     def test_reject_online_with_puppet(self):
