@@ -419,9 +419,8 @@ class CommandTest(IGVMTest):
 
     def test_mem_set(self):
         def _get_mem_hv():
-            # Xen does not provide values when VM is powered off
             data = self.vm.hypervisor.vm_sync_from_hypervisor(self.vm)
-            return data.get('memory', self.vm_obj['memory'])
+            return data['memory']
 
         def _get_mem_vm():
             return int(float(self.vm.run(
@@ -432,7 +431,6 @@ class CommandTest(IGVMTest):
         self.assertEqual(_get_mem_hv(), 2048)
         vm_mem = _get_mem_vm()
         mem_set(self.vm_obj['hostname'], '+1G')
-        self.vm_obj = self.get_vm_obj()
         self.assertEqual(_get_mem_hv(), 3072)
         self.assertEqual(_get_mem_vm() - vm_mem, 1024)
 
@@ -449,7 +447,6 @@ class CommandTest(IGVMTest):
         with self.assertRaises(IGVMError):
             mem_set(self.vm_obj['hostname'], '4097M')
 
-        self.vm_obj = self.get_vm_obj()
         self.assertEqual(_get_mem_hv(), 3072)
         vm_mem = _get_mem_vm()
         self.vm.shutdown()
@@ -458,20 +455,17 @@ class CommandTest(IGVMTest):
             mem_set(self.vm_obj['hostname'], '200G')
 
         mem_set(self.vm_obj['hostname'], '1024M')
-        self.vm_obj = self.get_vm_obj()
         self.assertEqual(_get_mem_hv(), 1024)
 
         mem_set(self.vm_obj['hostname'], '2G')
-        self.vm_obj = self.get_vm_obj()
         self.assertEqual(_get_mem_hv(), 2048)
         self.vm.start()
         self.assertEqual(_get_mem_vm() - vm_mem, -1024)
 
     def test_vcpu_set(self):
         def _get_hv():
-            # Xen does not provide values when VM is powered off
             data = self.vm.hypervisor.vm_sync_from_hypervisor(self.vm)
-            return data.get('num_cpu', self.vm_obj['num_cpu'])
+            return data['num_cpu']
 
         def _get_vm():
             return int(self.vm.run(
