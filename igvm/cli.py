@@ -5,8 +5,7 @@ Copyright (c) 2017, InnoGames GmbH
 
 from __future__ import print_function
 from argparse import ArgumentParser, _SubParsersAction
-import logging
-import sys
+from logging import StreamHandler, root as root_logger
 import time
 
 from fabric.network import disconnect_all
@@ -26,22 +25,23 @@ from igvm.commands import (
     vm_sync,
     vm_rename,
 )
-from igvm.utils.cli import white, red
 from igvm.utils.virtutils import close_virtconns
 
 
-class IGVMArgumentParser(ArgumentParser):
-    def error(self, message):
-        print(red('error: {}'.format(message)), file=sys.stderr)
-        print(self.format_help(), file=sys.stderr)
-        sys.exit(2)
+class ColorFormatters():
+    BOLD = '\033[1m{}\033[0m'
+    WARNING = '\033[1;33m{}\033[0m'
+    ERROR = '\033[1;31m{}\033[0m'
+    CRITICAL = '\033[1;41m{}\033[0m'
 
+
+class IGVMArgumentParser(ArgumentParser):
     def format_help(self):
         if not any(isinstance(a, _SubParsersAction) for a in self._actions):
             return super(IGVMArgumentParser, self).format_help()
 
         out = []
-        out.append(white(__doc__, bold=True))
+        out.append(ColorFormatters.BOLD.format(__doc__))
         out.append('Available commands:\n')
 
         subparsers_actions = [
@@ -54,7 +54,7 @@ class IGVMArgumentParser(ArgumentParser):
         for subparsers_action in subparsers_actions:
             # Get all subparsers and print help
             for choice, subparser in subparsers_action.choices.items():
-                out.append(white(choice, bold=True))
+                out.append(ColorFormatters.BOLD.format(choice))
                 if subparser.get_default('func').__doc__:
                     out.append('\n'.join(
                         '\t{}'.format(l.strip()) for l in subparser
@@ -63,6 +63,21 @@ class IGVMArgumentParser(ArgumentParser):
                 out.append('\n\t{}'.format(subparser.format_usage()))
 
         return '\n'.join(out)
+
+
+class IGVMLogHandler(StreamHandler):
+    """Extend StreamHandler to format messages short-cutting Formatters"""
+
+    def __init__(self, *args, **kwargs):
+        super(IGVMLogHandler, self).__init__(*args, **kwargs)
+        self.isatty = self.stream.isatty()
+
+    def format(self, record):
+        level = record.levelname
+        msg = '{}: {}: {}'.format(level, record.name, record.getMessage())
+        if self.isatty and level in vars(ColorFormatters):
+            msg = getattr(ColorFormatters, level).format(msg)
+        return msg
 
 
 def parse_args():
@@ -344,7 +359,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    configure_logging(args.pop('silent'), args.pop('verbose'))
+    configure_root_logger(args.pop('silent'), args.pop('verbose'))
 
     try:
         args.pop('func')(**args)
@@ -361,15 +376,15 @@ def main():
         time.sleep(0.1)
 
 
-def configure_logging(silent, verbose):
-    """We are summing up the silent and verbose arguments in here.  It
-    is not really meaningful to use them both, but giving an error is not
-    better.  See Python logging library documentation [1] for the levels.
+def configure_root_logger(silent, verbose):
+    root_logger.addHandler(IGVMLogHandler())
 
-    [1] https://docs.python.org/library/logging.html#logging-levels
-    """
-    level = 20 + (silent - verbose) * 10
-    logging.basicConfig(level=level)
-
+    # We are summing up the silent and verbose arguments in here.  It
+    # is not really meaningful to use them both, but giving an error is not
+    # better.  See Python logging library documentation [1] for the levels.
     # Paramiko is overly verbose.  We configure it for one level higher.
-    logging.getLogger('paramiko').setLevel(level + 10)
+    #
+    # [1] https://docs.python.org/library/logging.html#logging-levels
+    level = 20 + (silent - verbose) * 10
+    root_logger.setLevel(level)
+    root_logger.getChild('paramiko').setLevel(level + 10)
