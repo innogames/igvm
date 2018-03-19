@@ -76,7 +76,7 @@ class DomainProperties(object):
         self.hugepages = False
         self.num_nodes = hypervisor.num_numa_nodes()
         self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.dataset_obj['num_cpu'])
-        self.max_cpus = min(self.max_cpus, hypervisor.num_cpus)
+        self.max_cpus = min(self.max_cpus, hypervisor.dataset_obj['num_cpu'])
         self.max_mem = hypervisor.vm_max_memory(vm)
         self.numa_mode = self.NUMA_SPREAD
         self.mem_hotplug = (self.qemu_version >= (2, 3))
@@ -180,7 +180,7 @@ def set_vcpus(hypervisor, vm, domain, num_cpu):
         raise HypervisorError('setVcpus failed: {}'.format(e))
 
     # Properly pin all new VCPUs
-    _live_repin_cpus(domain, props, hypervisor.num_cpus)
+    _live_repin_cpus(domain, props, hypervisor.dataset_obj['num_cpu'])
 
     # Activate all CPUs in the guest
     log.info('KVM: Activating new CPUs in guest')
@@ -258,7 +258,7 @@ def migrate_live(source, destination, vm, domain):
     _live_repin_cpus(
         domain,
         props,
-        min(source.num_cpus, destination.num_cpus),
+        min(source.dataset_obj['num_cpu'], destination.dataset_obj['num_cpu']),
     )
 
     source.run(
@@ -272,7 +272,7 @@ def migrate_live(source, destination, vm, domain):
 
     # And pin again, in case we migrated to a host with more physical cores
     domain = destination._get_domain(vm)
-    _live_repin_cpus(domain, props, destination.num_cpus)
+    _live_repin_cpus(domain, props, destination.dataset_obj['num_cpu'])
 
 
 def set_memory(hypervisor, vm, domain):
@@ -368,7 +368,9 @@ def generate_domain_xml(hypervisor, vm):
         _place_numa(hypervisor, vm, tree, props)
 
     log.info('KVM: VCPUs current: {} max: {} available on host: {}'.format(
-        vm.dataset_obj['num_cpu'], props.max_cpus, hypervisor.num_cpus,
+        vm.dataset_obj['num_cpu'],
+        props.max_cpus,
+        hypervisor.dataset_obj['num_cpu'],
     ))
     if props.mem_hotplug:
         _set_memory_hotplug(vm, tree, props)

@@ -19,8 +19,6 @@ from igvm.settings import (
     VM_ATTRIBUTES,
     HYPERVISOR_ATTRIBUTES,
 )
-from igvm.utils.lazy_property import lazy_property
-from igvm.utils.network import get_network_config
 
 
 def get_server(hostname, servertype):
@@ -145,16 +143,3 @@ class Host(object):
             fd = StringIO()
             fabric.api.get(path, fd)
             return fd.getvalue()
-
-    @lazy_property  # Requires fabric call on hypervisor, evaluate lazily.
-    def network_config(self):
-        """Returns networking attributes, such as IP address and VLAN."""
-        return get_network_config(self.dataset_obj)
-
-    @lazy_property
-    def num_cpus(self):
-        """Returns the number of online CPUs"""
-        return int(self.run(
-            'grep vendor_id < /proc/cpuinfo | wc -l',
-            silent=True,
-        ))

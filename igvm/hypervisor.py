@@ -20,6 +20,13 @@ from igvm.exceptions import (
     StorageError,
 )
 from igvm.host import Host
+from igvm.kvm import (
+    DomainProperties,
+    generate_domain_xml,
+    migrate_live,
+    set_memory,
+    set_vcpus,
+)
 from igvm.settings import (
     HOST_RESERVED_MEMORY,
     VG_NAME,
@@ -29,13 +36,7 @@ from igvm.settings import (
     IMAGE_PATH,
 )
 from igvm.utils.backoff import retry_wait_backoff
-from igvm.utils.kvm import (
-    DomainProperties,
-    generate_domain_xml,
-    migrate_live,
-    set_memory,
-    set_vcpus,
-)
+from igvm.utils.network import get_network_config
 from igvm.utils.virtutils import get_virtconn
 
 log = logging.getLogger(__name__)
@@ -78,16 +79,13 @@ class Hypervisor(Host):
             'vlan_tag': Not(Empty()),
         }, ['vlan_tag'])]
 
-        vm_vlan = vm.network_config['vlan_tag']
+        vm_vlan = get_network_config(vm.dataset_obj)['vlan_tag']
         if not vlans:
-            if self.network_config['vlan_tag'] != vm_vlan:
+            hypervisor_vlan = get_network_config(self.dataset_obj)['vlan_tag']
+            if hypervisor_vlan != vm_vlan:
                 raise HypervisorError(
                     'Hypervisor "{}" is not on same VLAN {} as VM {}.'
-                    .format(
-                        self.fqdn,
-                        self.network_config['vlan_tag'],
-                        vm_vlan,
-                    )
+                    .format(self.fqdn, hypervisor_vlan, vm_vlan)
                 )
             # For untagged Hypervisors VM must be untagged, too.
             return None
@@ -134,11 +132,11 @@ class Hypervisor(Host):
             )
 
         # Enough CPUs?
-        if vm.dataset_obj['num_cpu'] > self.num_cpus:
+        if vm.dataset_obj['num_cpu'] > self.dataset_obj['num_cpu']:
             raise HypervisorError(
                 'Not enough CPUs. Destination Hypervisor has {0}, '
                 'but VM requires {1}.'
-                .format(self.num_cpus, vm.dataset_obj['num_cpu'])
+                .format(self.dataset_obj['num_cpu'], vm.dataset_obj['num_cpu'])
             )
 
         # Enough memory?
@@ -218,7 +216,7 @@ class Hypervisor(Host):
             vm.dataset_obj['num_cpu'] = num_cpu
             self.redefine_vm(vm)
         else:
-            self._vm_set_num_cpu(vm, num_cpu)
+            set_vcpus(self, vm, self._get_domain(vm), num_cpu)
 
         # Validate changes
         # We can't rely on the hypervisor to provide data on VMs all the time.
@@ -502,9 +500,6 @@ class Hypervisor(Host):
             used_kib += dom.info()[2]
         free_mib = total_mib - used_kib / 1024
         return free_mib
-
-    def _vm_set_num_cpu(self, vm, num_cpu):
-        set_vcpus(self, vm, self._get_domain(vm), num_cpu)
 
     def _vm_set_disk_size_gib(self, vm, disk_size_gib):
         # TODO: Use libvirt
