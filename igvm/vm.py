@@ -353,7 +353,7 @@ class VM(Host):
             self.prepare_vm()
 
             if runpuppet:
-                self.run_puppet(clear_cert=True, transaction=transaction)
+                self.run_puppet(clear_cert=True)
 
             if postboot is not None:
                 self.copy_postboot_script(postboot)
@@ -475,7 +475,7 @@ class VM(Host):
         self.run('/bin/chmod 0600 /swap')
         self.run('/sbin/mkswap /swap')
 
-    def run_puppet(self, clear_cert, transaction):
+    def run_puppet(self, clear_cert):
         """Runs Puppet in chroot on the hypervisor."""
 
         if clear_cert:
@@ -490,29 +490,18 @@ class VM(Host):
                 )
 
         self.block_autostart()
-
-        if transaction:
-            transaction.on_rollback(
-                'Kill puppet',
-                self.run,
-                'pkill -9 -f "/usr/bin/puppet agent -v --fqdn={}"'
-                .format(self.fqdn)
+        self.run(
+            '/usr/bin/puppet agent -v --fqdn={} --server={} --ca_server={} '
+            '--no-report --waitforcert=60 --onetime --no-daemonize '
+            '--skip_tags=chroot_unsafe && touch /tmp/puppet_success '
+            '| tee {} ; test -f /tmp/puppet_success'
+            .format(
+                self.fqdn,
+                self.dataset_obj['puppet_master'],
+                self.dataset_obj['puppet_ca'],
+                '/var/log/puppetrun_igvm',
             )
-            self.run(
-                '/usr/bin/puppet agent -v --fqdn={}'
-                ' --server {} --ca_server {} --no-report'
-                ' --waitforcert=60 --onetime --no-daemonize'
-                ' --skip_tags=chroot_unsafe'
-                ' && touch /tmp/puppet_success'
-                ' | tee {} ;'
-                ' test -f /tmp/puppet_success'
-                .format(
-                    self.fqdn,
-                    self.dataset_obj['puppet_master'],
-                    self.dataset_obj['puppet_ca'],
-                    '/var/log/puppetrun_igvm',
-                )
-            )
+        )
 
         self.unblock_autostart()
 
