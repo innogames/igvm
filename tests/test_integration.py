@@ -117,6 +117,7 @@ class IGVMTest(TestCase):
         # any igvm objects and query things anew each time.
         obj = Query({'hostname': VM_HOSTNAME}, [
             'state',
+            'backup_disabled',
             'disk_size_gib',
             'memory',
             'num_cpu',
