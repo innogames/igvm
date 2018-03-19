@@ -142,6 +142,7 @@ class IGVMTest(TestCase):
             'int:innogames:stable jessie',
         ]
         obj['puppet_environment'] = None
+        obj['backup_disabled'] = True
         obj.commit()
 
     def tearDown(self):
