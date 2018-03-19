@@ -564,7 +564,7 @@ class VM(Host):
             if new_index < index:
                 if hypervisor_count:
                     log.warning(
-                        '{} hypervisors are equally preferred by the first '
+                        '{} hypervisors are equally preferred by only first '
                         '{} preferences:  {}'
                         .format(hypervisor_count, index, ', '.join(
                             map(repr, HYPERVISOR_PREFERENCES[:index])
@@ -605,7 +605,7 @@ class VM(Host):
             )
         else:
             log.warning(
-                'All {} hypervisors are equally preferred by the first '
+                'All {} hypervisors are equally preferred by only first '
                 '{} preferences.'
                 .format(hypervisor_count, index, ', '.join(
                     map(repr, HYPERVISOR_PREFERENCES[:index])
