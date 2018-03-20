@@ -96,7 +96,13 @@ HYPERVISOR_ATTRIBUTES = [
     'num_cpu',
     'os',
     'state',
-    'vlan_networks',
+    {
+        'vlan_networks': [
+            'hostname',
+            'intern_ip',
+            'vlan_tag',
+        ],
+    },
     {
         'vms': [
             'disk_size_gib',
