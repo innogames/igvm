@@ -100,7 +100,7 @@ def migratevm(vm_hostname, hypervisor_hostname=None, newip=None,
 
         if runpuppet:
             hypervisor.mount_vm_storage(vm, transaction)
-            vm.run_puppet(clear_cert=False, transaction=transaction)
+            vm.run_puppet(clear_cert=False)
             hypervisor.umount_vm_storage(vm)
 
         if offline and was_running:
