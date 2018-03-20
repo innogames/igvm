@@ -9,10 +9,10 @@ import time
 from base64 import b64decode
 from fabric.api import cd, get, put, run, settings
 from hashlib import sha1, sha256
+from io import BytesIO
 from ipaddress import ip_address
 from os import environ
 from re import compile as re_compile
-from StringIO import StringIO
 from uuid import uuid4
 
 from adminapi.dataset import Query
@@ -48,17 +48,9 @@ class VM(Host):
     """VM interface."""
     servertype = 'vm'
 
-    def __init__(self, name_or_obj, ignore_reserved=False,
-                 hypervisor=None):
-        super(VM, self).__init__(name_or_obj, ignore_reserved)
-
-        if not hypervisor and self.dataset_obj['xen_host']:
-            self.hypervisor = Hypervisor(
-                self.dataset_obj['xen_host'],
-                ignore_reserved=True
-            )
-        else:
-            self.hypervisor = hypervisor
+    def __init__(self, dataset_obj, hypervisor=None):
+        super(VM, self).__init__(dataset_obj)
+        self.hypervisor = hypervisor
 
         # A flag to keep state of machine consistent between VM methods.
         # Operations on VM like run() or put() will use it to decide
@@ -391,7 +383,8 @@ class VM(Host):
         self.dataset_obj['hostname'] = new_hostname
         self.check_serveradmin_config()
 
-        fd = StringIO(new_fqdn)
+        fd = BytesIO()
+        fd.write(new_fqdn)
         self.put('/etc/hostname', fd)
         self.put('/etc/mailname', fd)
 
@@ -418,7 +411,8 @@ class VM(Host):
 
         VM storage must be mounted on the hypervisor.
         """
-        fd = StringIO(self.fqdn)
+        fd = BytesIO()
+        fd.write(self.fqdn.encode())
         self.put('/etc/hostname', fd)
         self.put('/etc/mailname', fd)
 
@@ -431,9 +425,9 @@ class VM(Host):
         self.upload_template('etc/inittab', '/etc/inittab')
 
         # Copy resolv.conf from Hypervisor
-        fd = StringIO()
+        fd = BytesIO()
         with self.hypervisor.fabric_settings(
-                cd(self.hypervisor.vm_mount_path(self))
+            cd(self.hypervisor.vm_mount_path(self))
         ):
             get('/etc/resolv.conf', fd)
         self.put('/etc/resolv.conf', fd)
@@ -460,7 +454,7 @@ class VM(Host):
                 .format(key_type)
             )
 
-            fd = StringIO()
+            fd = BytesIO()
             self.get('/etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)
             pub_key = b64decode(fd.getvalue().split(None, 2)[1])
             for fp_id, fp_type in fp_types:
@@ -506,7 +500,8 @@ class VM(Host):
         self.unblock_autostart()
 
     def block_autostart(self):
-        fd = StringIO('#!/bin/sh\nexit 101\n')
+        fd = BytesIO()
+        fd.write(b'#!/bin/sh\nexit 101\n')
         self.put('/usr/sbin/policy-rc.d', fd, '0755')
 
     def unblock_autostart(self):

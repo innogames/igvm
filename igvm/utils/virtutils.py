@@ -24,7 +24,7 @@ def get_virtconn(fqdn):
 
 
 def close_virtconns():
-    for fqdn in _conns.keys():
+    for fqdn in list(_conns.keys()):
         conn = _conns[fqdn]
         try:
             conn.close()

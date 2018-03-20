@@ -6,14 +6,13 @@ to call the functions in this library.  The binary is "bin/igvm".
 The library functions can be included like this:
 
 ```python
-from igvm.commands import vm_build
-from igvm.migratevm import migratevm
+from igvm.commands import vm_build, vm_migrate
 ```
 
 The functions are to be called like this:
 
 ```python
-migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, maintenance=False, offline=False, ignore_reserved=False)
+vm_migrate(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, maintenance=False, offline=False, ignore_reserved=False)
 ```
 
 * Mandatory:
@@ -27,7 +26,7 @@ migratevm(vm_hostname, dsthv_hostname, newip=None, nopuppet=False, maintenance=F
  * ignore_reserved - boolean, allow migration to an online_reserved hypervisor
 
 ```python
-buildvm(vm_hostname, localimage=None, nopuppet=False, postboot=None, ignore_reserved=False)
+vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None, ignore_reserved=False)
 ```
 
 * Mandatory:

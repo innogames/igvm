@@ -11,19 +11,19 @@ import time
 from fabric.network import disconnect_all
 
 from igvm.buildvm import buildvm
-from igvm.migratevm import migratevm
 from igvm.commands import (
     disk_set,
     host_info,
     mem_set,
     vcpu_set,
+    vm_delete,
+    vm_migrate,
+    vm_rebuild,
+    vm_rename,
+    vm_restart,
     vm_start,
     vm_stop,
-    vm_rebuild,
-    vm_restart,
-    vm_delete,
     vm_sync,
-    vm_rename,
 )
 from igvm.utils.virtutils import close_virtconns
 
@@ -119,9 +119,9 @@ def parse_args():
 
     subparser = subparsers.add_parser(
         'migrate',
-        description=migratevm.__doc__,
+        description=vm_migrate.__doc__,
     )
-    subparser.set_defaults(func=migratevm)
+    subparser.set_defaults(func=vm_migrate)
     subparser.add_argument(
         'vm_hostname',
         help='Hostname of the guest system',

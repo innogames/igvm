@@ -8,7 +8,7 @@ import re
 import time
 from uuid import uuid4
 from xml.dom import minidom
-import xml.etree.ElementTree as ET
+from xml.etree import ElementTree
 
 from libvirt import (
     VIR_DOMAIN_VCPU_MAXIMUM,
@@ -55,7 +55,7 @@ def _find_or_create(parent, name):
     el = parent.find(name)
     if el is not None:
         return el
-    return ET.SubElement(parent, name)
+    return ElementTree.SubElement(parent, name)
 
 
 class DomainProperties(object):
@@ -99,14 +99,14 @@ class DomainProperties(object):
         """Returns a dictionary with user-exposable information."""
         return {
             k: v
-            for k, v in vars(self).iteritems()
+            for k, v in vars(self).items()
             if not k.startswith('_')
         }
 
     @classmethod
     def from_running(cls, hypervisor, vm, domain):
         xml = domain.XMLDesc()
-        tree = ET.fromstring(xml)
+        tree = ElementTree.fromstring(xml)
 
         self = cls(hypervisor, vm)
         self._domain = domain
@@ -361,7 +361,7 @@ def generate_domain_xml(hypervisor, vm):
     jenv = Environment(loader=PackageLoader('igvm', 'templates'))
     domain_xml = jenv.get_template('domain.xml').render(**config)
 
-    tree = ET.fromstring(domain_xml)
+    tree = ElementTree.fromstring(domain_xml)
 
     if props.qemu_version >= (2, 3):
         _set_cpu_model(hypervisor, vm, tree)
@@ -381,7 +381,7 @@ def generate_domain_xml(hypervisor, vm):
         log.info('KVM: Memory hotplug disabled, requires qemu 2.3')
 
     # Remove whitespace and re-indent properly.
-    out = re.sub('>\s+<', '><', ET.tostring(tree))
+    out = re.sub(b'>\s+<', b'><', ElementTree.tostring(tree))
     domain_xml = minidom.parseString(out).toprettyxml()
     return domain_xml
 
@@ -402,7 +402,7 @@ def _set_cpu_model(hypervisor, vm, tree):
     """
     hw_model = hypervisor.dataset_obj['hardware_model']
 
-    for arch, models in KVM_HWMODEL_TO_CPUMODEL.iteritems():
+    for arch, models in KVM_HWMODEL_TO_CPUMODEL.items():
         if hw_model in models:
             cpu = _find_or_create(tree, 'cpu')
             cpu.attrib.update({
@@ -476,7 +476,7 @@ def _place_numa(hypervisor, vm, tree, props):
         # Expose N NUMA nodes (= sockets+ to the guest, each with a
         # proportionate amount of VCPUs.
         cpu = _find_or_create(tree, 'cpu')
-        topology = ET.SubElement(cpu, 'topology')
+        topology = ElementTree.SubElement(cpu, 'topology')
         topology.attrib = {
             'sockets': str(num_nodes),
             'cores': str(num_vcpus // num_nodes),
@@ -489,7 +489,7 @@ def _place_numa(hypervisor, vm, tree, props):
         # same node.
         cputune = _find_or_create(tree, 'cputune')
         for i in range(0, num_vcpus):
-            vcpupin = ET.SubElement(cputune, 'vcpupin')
+            vcpupin = ElementTree.SubElement(cputune, 'vcpupin')
             vcpupin.attrib = {
                 'vcpu': str(i),
                 'cpuset': pcpu_sets[i % num_nodes],
@@ -498,9 +498,9 @@ def _place_numa(hypervisor, vm, tree, props):
 
         # <numa><cell>
         # Expose equal slices of RAM to each guest node.
-        numa = ET.SubElement(cpu, 'numa')
+        numa = ElementTree.SubElement(cpu, 'numa')
         for i, cpuset in enumerate(vcpu_sets):
-            cell = ET.SubElement(numa, 'cell')
+            cell = ElementTree.SubElement(numa, 'cell')
             cell.attrib = {
                 'id': str(i),
                 'cpus': cpuset,
@@ -519,7 +519,7 @@ def _place_numa(hypervisor, vm, tree, props):
             memory.attrib['mode'] = 'strict'
             memory.attrib['nodeset'] = nodeset
             for i in range(0, num_nodes):
-                memnode = ET.SubElement(numatune, 'memnode')
+                memnode = ElementTree.SubElement(numatune, 'memnode')
                 memnode.attrib = {
                     'cellid': str(i),
                     'nodeset': str(i),
