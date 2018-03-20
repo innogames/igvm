@@ -83,15 +83,6 @@ class Hypervisor(Host):
         }, ['vlan_tag'])]
 
         vm_vlan = get_network_config(vm.dataset_obj)['vlan_tag']
-        if not vlans:
-            hypervisor_vlan = get_network_config(self.dataset_obj)['vlan_tag']
-            if hypervisor_vlan != vm_vlan:
-                raise HypervisorError(
-                    'Hypervisor "{}" is not on same VLAN {} as VM {}.'
-                    .format(self.fqdn, hypervisor_vlan, vm_vlan)
-                )
-            # For untagged Hypervisors VM must be untagged, too.
-            return None
 
         # On source hypervisor, it is unnecessary to perform this check.
         # The VLAN is obviously there, even if not on Serveradmin.  This can
