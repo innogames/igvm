@@ -6,7 +6,7 @@ Copyright (c) 2018, InnoGames GmbH
 import logging
 
 from adminapi.dataset import Query
-from adminapi.filters import ExactMatch, Startswith, Or
+from adminapi.filters import Any, StartsWith
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 
@@ -535,7 +535,7 @@ def _get_vm(hostname, ignore_reserved=False):
     to a single server on Serveradmin.
     """
     dataset_obj = Query({
-        'hostname': Or(ExactMatch(hostname), Startswith(hostname + '.')),
+        'hostname': Any(hostname, StartsWith(hostname + '.')),
         'servertype': 'vm',
     }, VM_ATTRIBUTES).get()
 
