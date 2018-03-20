@@ -158,6 +158,11 @@ def parse_args():
         action='store_true',
         help='Force migration to a Host which has the state online_reserved',
     )
+    subparser.add_argument(
+        '--offline-transport',
+        default='drbd',
+        help='Specify drbd (default) or netcat transport to migrate disk image',
+    )
     subparser = subparsers.add_parser(
         'disk-set',
         description=disk_set.__doc__,
