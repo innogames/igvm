@@ -3,7 +3,7 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
-from StringIO import StringIO
+from io import BytesIO
 from logging import getLogger
 from time import sleep
 
@@ -99,32 +99,33 @@ class DRBD(object):
             )
 
     def build_config(self, peer, transaction=None):
-        fd = StringIO(
-            'resource {dev} {{\n'
-            '    net {{\n'
-            '        protocol A;\n'
+        fd = BytesIO()
+        fd.write(
+            b'resource {dev} {{\n'
+            b'    net {{\n'
+            b'        protocol A;\n'
             # max-buffers vs MB/s
             # 4k-150, 8k-233, 12k-330, 16K-397, 24k-561, 32k-700
             # 32k seems jumpy and might end up at as low aw 250MB/s
-            '        max-buffers 24k;\n'
+            b'        max-buffers 24k;\n'
             # Buffer sizes don't seem to make any difference, at least within
             # one datacenter.
-            '#        sndbuf-size 2048k;\n'
-            '#        rcvbuf-size 2048k;\n'
-            '    }}\n'
+            b'#        sndbuf-size 2048k;\n'
+            b'#        rcvbuf-size 2048k;\n'
+            b'    }}\n'
             # We don't care for flushes and barriers - we are replicating one
             # way only and if things fail, we will just replicate them again.
-            '    disk {{\n'
-            '         no-disk-flushes;\n'
-            '         no-md-flushes;\n'
-            '         no-disk-barrier;\n'
+            b'    disk {{\n'
+            b'         no-disk-flushes;\n'
+            b'         no-md-flushes;\n'
+            b'         no-disk-barrier;\n'
             # Try maximum speed immediately, no need for the slow-start
-            '         c-max-rate 750M;\n'
-            '         resync-rate 750M;\n'
-            '    }}\n'
-            '{src_host}\n'
-            '{dst_host}\n'
-            '}}\n'
+            b'         c-max-rate 750M;\n'
+            b'         resync-rate 750M;\n'
+            b'    }}\n'
+            b'{src_host}\n'
+            b'{dst_host}\n'
+            b'}}\n'
             .format(
                 dev=self.vm_name,
                 src_host=self.get_host_config(),
@@ -140,12 +141,12 @@ class DRBD(object):
 
     def get_host_config(self):
         return (
-            '    on {host} {{\n'
-            '        address   {addr}:{port};\n'
-            '        device    /dev/drbd{dm_minor};\n'
-            '        disk      /dev/{disk};\n'
-            '        meta-disk /dev/{vg_name}/{meta_disk};\n'
-            '    }}'
+            b'    on {host} {{\n'
+            b'        address   {addr}:{port};\n'
+            b'        device    /dev/drbd{dm_minor};\n'
+            b'        disk      /dev/{disk};\n'
+            b'        meta-disk /dev/{vg_name}/{meta_disk};\n'
+            b'    }}'
             .format(
                 host=self.hv.dataset_obj['hostname'],
                 addr=self.hv.dataset_obj['intern_ip'],
