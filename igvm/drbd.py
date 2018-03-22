@@ -1,13 +1,17 @@
-import logging
+"""igvm - DRBD Transport Internals
+
+Copyright (c) 2018, InnoGames GmbH
+"""
+
 from StringIO import StringIO
+from logging import getLogger
 from time import sleep
 
-
-log = logging.getLogger(__name__)
+log = getLogger(__name__)
 
 
 class DRBD(object):
-    def __init__(self, hv, vg_name, lv_name, vm_name, master_role, tx=None):
+    def __init__(self, hv, vg_name, lv_name, vm_name, master_role=False):
         self.hv = hv
         self.vg_name = vg_name
         self.lv_name = lv_name
@@ -15,7 +19,6 @@ class DRBD(object):
         self.master_role = master_role
         self.meta_disk = self.vm_name + '_meta'
         self.table_file = '/tmp/{}_{}_table'.format(self.vg_name, self.lv_name)
-        self.tx = tx
 
         # Cached properties
         self.dev_minor = None
@@ -43,17 +46,17 @@ class DRBD(object):
             .format(self.vg_name, self.lv_name)
         ).strip())
 
-    def start(self, peer, tx=None):
-        self.prepare_metadata_device()
+    def start(self, peer, transaction=None):
+        self.prepare_metadata_device(transaction)
         if self.master_role:
-            self.prepare_lv_override()
-        self.build_config(peer)
+            self.prepare_lv_override(transaction)
+        self.build_config(peer, transaction)
         if self.master_role:
-            self.replicate_to_slave()
+            self.replicate_to_slave(transaction)
         else:
-            self.replicate_from_master()
+            self.replicate_from_master(transaction)
 
-    def prepare_metadata_device(self):
+    def prepare_metadata_device(self, transaction=None):
         """Create and zero metadata device for DRBD"""
 
         # 256MiB of metadata is fine up to 7TiB of synced storage.
@@ -61,9 +64,10 @@ class DRBD(object):
             'lvcreate -n {} -L256M {}'
             .format(self.meta_disk, self.vg_name)
         )
-        if self.tx:
-            self.tx.on_rollback(
-                'Remove DRBD meta device', self.hv.run,
+        if transaction:
+            transaction.on_rollback(
+                'Remove DRBD meta device',
+                self.hv.run,
                 'lvremove -fy {}/{}'.format(self.vg_name, self.meta_disk)
             )
 
@@ -73,8 +77,8 @@ class DRBD(object):
             .format(self.vg_name, self.meta_disk)
         )
 
-    def prepare_lv_override(self):
-        """Prepare logical volume to be overriden by DRBD revice"""
+    def prepare_lv_override(self, transaction=None):
+        """Prepare logical volume to be overridden by DRBD device"""
 
         # Dump mapper parameters of original LV
         self.hv.run(
@@ -87,13 +91,14 @@ class DRBD(object):
             'dmsetup create {}_orig < {}'
             .format(self.lv_name, self.table_file)
         )
-        if self.tx:
-            self.tx.on_rollback(
-                'Remove copy of original device', self.hv.run,
+        if transaction:
+            transaction.on_rollback(
+                'Remove copy of original device',
+                self.hv.run,
                 'dmsetup remove {}_orig'.format(self.lv_name)
             )
 
-    def build_config(self, peer):
+    def build_config(self, peer, transaction=None):
         fd = StringIO(
             'resource {dev} {{\n'
             '    net {{\n'
@@ -113,24 +118,25 @@ class DRBD(object):
             '         no-disk-flushes;\n'
             '         no-md-flushes;\n'
             '         no-disk-barrier;\n'
-            # Try maximum speed immediately, no need for the slow-start protocol
+            # Try maximum speed immediately, no need for the slow-start
             '         c-max-rate 750M;\n'
             '         resync-rate 750M;\n'
             '    }}\n'
             '{src_host}\n'
             '{dst_host}\n'
-            '}}\n'.format(
+            '}}\n'
+            .format(
                 dev=self.vm_name,
                 src_host=self.get_host_config(),
                 dst_host=peer.get_host_config(),
             )
         )
         self.hv.put('/etc/drbd.d/{}.res'.format(self.vm_name), fd, '0640')
-        if self.tx:
-            self.tx.on_rollback(
+        if transaction:
+            transaction.on_rollback(
                 'Remove configuration file', self.hv.run,
                 'rm /etc/drbd.d/{}.res'.format(self.vm_name)
-          )
+            )
 
     def get_host_config(self):
         return (
@@ -139,7 +145,8 @@ class DRBD(object):
             '        device    /dev/drbd{dm_minor};\n'
             '        disk      /dev/{disk};\n'
             '        meta-disk /dev/{vg_name}/{meta_disk};\n'
-            '    }}'.format(
+            '    }}'
+            .format(
                 host=self.hv.dataset_obj['hostname'],
                 addr=self.hv.dataset_obj['intern_ip'],
                 port=self.get_device_port(),
@@ -153,26 +160,26 @@ class DRBD(object):
                 ),
                 vg_name=self.vg_name,
                 meta_disk=self.meta_disk,
-
             )
         )
 
-    def replicate_to_slave(self):
+    def replicate_to_slave(self, transaction=None):
         # Size must be retrieved before suspending device
         dev_size = self.get_device_size()
 
         # Suspend all traffic to disk from VM
         self.hv.run('dmsetup suspend /dev/{}/{}'.format(
             self.vg_name, self.lv_name))
-        if self.tx:
-            self.tx.on_rollback(
-                'Resume original device', self.hv.run,
+        if transaction:
+            transaction.on_rollback(
+                'Resume original device',
+                self.hv.run,
                 'dmsetup resume /dev/{}/{}'.format(self.vg_name, self.lv_name)
             )
             # The "up" command might fail due to misconfiguration but the
             # device is started nevertheless. This is why "down" rollback is
             # always performed.
-            self.tx.on_rollback(
+            transaction.on_rollback(
                 'Bring DRBD device down', self.hv.run,
                 'drbdadm down {}'.format(self.vm_name)
             )
@@ -198,7 +205,7 @@ class DRBD(object):
                 self.get_device_minor(),
             )
         )
-        if self.tx:
+        if transaction:
             # There should be no need for resume because it happens also
             # via another rollback defined above. Unfortunately it is
             # needed because DRBD won't allow to be shut down when its
@@ -207,24 +214,25 @@ class DRBD(object):
             # WARNING: Potential race between writes to DRBD and underlying
             # device - potential data loss?
             # TODO: suspend VM for rollback
-            self.tx.on_rollback(
+            transaction.on_rollback(
                 'Resume LV device', self.hv.run,
                 'dmsetup resume /dev/{}/{}'
                 .format(self.vg_name, self.lv_name)
             )
-            self.tx.on_rollback(
+            transaction.on_rollback(
                 'Restore LV device table', self.hv.run,
                 'dmsetup load /dev/{}/{} < {}'
                 .format(self.vg_name, self.lv_name, self.table_file)
             )
 
         self.hv.run('dmsetup resume /dev/{}/{}'.format(
-            self.vg_name, self.lv_name))
+            self.vg_name, self.lv_name
+        ))
 
-    def replicate_from_master(self):
+    def replicate_from_master(self, transaction=None):
         self.hv.run('drbdadm create-md {}'.format(self.vm_name))
         self.hv.run('drbdadm up {}'.format(self.vm_name))
-        self.tx.on_rollback(
+        transaction.on_rollback(
             'Bring DRBD device down', self.hv.run,
             'drbdadm down {}'.format(self.vm_name)
         )
@@ -262,7 +270,8 @@ class DRBD(object):
                 .format(self.vg_name, self.lv_name, self.table_file)
             )
             self.hv.run('dmsetup resume /dev/{}/{}'.format(
-                self.vg_name, self.lv_name))
+                self.vg_name, self.lv_name
+            ))
 
         # One would expect that DRBD must be shut down after table load and
         # before resume. Unfortunately that is impossible because table is
@@ -276,8 +285,5 @@ class DRBD(object):
         if self.master_role:
             self.hv.run('dmsetup remove {}_orig'.format(self.lv_name))
 
-        self.hv.run(
-            'lvremove -fy {}/{}'
-            .format(self.vg_name, self.meta_disk)
-        )
+        self.hv.run('lvremove -fy {}/{}'.format(self.vg_name, self.meta_disk))
         self.hv.run('rm /etc/drbd.d/{}.res'.format(self.vm_name))

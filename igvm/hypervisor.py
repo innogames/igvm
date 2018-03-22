@@ -472,7 +472,8 @@ class Hypervisor(Host):
     ):
         if offline_transport not in ['netcat', 'drbd']:
             raise StorageError(
-                'Unknown offline transport method {}!'.format(offline_transport)
+                'Unknown offline transport method {}!'
+                .format(offline_transport)
             )
 
         self.check_migration(vm, target_hypervisor, offline)
@@ -481,8 +482,7 @@ class Hypervisor(Host):
             target_hypervisor.create_vm_storage(vm, vm.fqdn, transaction)
 
             if offline_transport == 'drbd':
-                with Transaction() as subtransaction:
-                    self.start_drbd(vm, target_hypervisor, subtransaction)
+                self.start_drbd(vm, target_hypervisor)
                 try:
                     self.wait_for_sync()
                     if vm.is_running():
@@ -724,20 +724,17 @@ class Hypervisor(Host):
             .format(device, size, *listener)
         )
 
-    def start_drbd(self, vm, peer, transaction=None):
-        # Ensure that current domain name is used, this might be non-fqdn
+    def start_drbd(self, vm, peer):
+        # Ensure that current domain name is used, this might be non-FQDN
         # one on source Hypervisor.
         domain = self._get_domain(vm)
 
-        self.host_drbd = DRBD(
-            self, VG_NAME, domain.name(), vm.fqdn, True, transaction
-        )
-        self.peer_drbd = DRBD(
-            peer, VG_NAME, vm.fqdn, vm.fqdn, False, transaction
-        )
+        self.host_drbd = DRBD(self, VG_NAME, domain.name(), vm.fqdn, True)
+        self.peer_drbd = DRBD(peer, VG_NAME, vm.fqdn, vm.fqdn)
 
-        self.host_drbd.start(self.peer_drbd)
-        self.peer_drbd.start(self.host_drbd)
+        with Transaction() as transaction:
+            self.host_drbd.start(self.peer_drbd, transaction)
+            self.peer_drbd.start(self.host_drbd, transaction)
 
     def wait_for_sync(self):
         self.host_drbd.wait_for_sync()

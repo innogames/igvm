@@ -111,11 +111,13 @@ class Host(object):
         """Same as Fabric's put but with working sudo permissions
 
         Setting permissions on files and using sudo via Fabric's put() seems
-        broken, at least for mounted VM. This is why we run extra commands here.
+        broken, at least for mounted VM.  This is why we run extra commands
+        in here.
         """
         with self.fabric_settings():
             tempfile = '/tmp/' + str(uuid4())
             fabric.api.put(local_path, tempfile)
-            self.run('mv {0} {1} ; chmod {2} {1}'.format(
-                tempfile, remote_path, mode
-            ))
+            self.run(
+                'mv {0} {1} ; chmod {2} {1}'
+                .format(tempfile, remote_path, mode)
+            )
