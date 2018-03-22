@@ -3,6 +3,7 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 
+from contextlib import contextmanager
 from io import BytesIO
 from logging import getLogger
 from time import sleep
@@ -49,17 +50,27 @@ class DRBD(object):
             .format(self.vg_name, self.lv_name)
         ).strip())
 
-    def start(self, peer, transaction=None):
-        self.prepare_metadata_device(transaction)
-        if self.master_role:
-            self.prepare_lv_override(transaction)
-        self.build_config(peer, transaction)
-        if self.master_role:
-            self.replicate_to_slave(transaction)
-        else:
-            self.replicate_from_master(transaction)
+    @contextmanager
+    def start(self, peer):
+        """Start the replication
 
-    def prepare_metadata_device(self, transaction=None):
+        This is a context manager that would start the replication and stop
+        once we are done with it.  However we can only stop it properly after
+        all the initialization steps are successfully completed.  Therefore,
+        all of the initialization must handle cleaning up themselves.
+        """
+        with self.prepare_metadata_device(), self.build_config(peer):
+            if self.master_role:
+                self.replicate_to_slave()
+            else:
+                self.replicate_from_master()
+        try:
+            yield
+        finally:
+            self.stop()
+
+    @contextmanager
+    def prepare_metadata_device(self):
         """Create and zero metadata device for DRBD"""
 
         # 256MiB of metadata is fine up to 7TiB of synced storage.
@@ -67,20 +78,25 @@ class DRBD(object):
             'lvcreate -y -n {} -L256M {}'
             .format(self.meta_disk, self.vg_name)
         )
-        if transaction:
-            transaction.on_rollback(
-                'Remove DRBD meta device',
-                self.hv.run,
+        try:
+            # Meta device must be zeroed, otherwise DRBD might complain
+            self.hv.run(
+                'dd if=/dev/zero of=/dev/{}/{} bs=1048576 count=256'
+                .format(self.vg_name, self.meta_disk)
+            )
+            if self.master_role:
+                with self.prepare_lv_override():
+                    yield
+            else:
+                yield
+        except BaseException:
+            self.hv.run(
                 'lvremove -fy {}/{}'.format(self.vg_name, self.meta_disk)
             )
+            raise
 
-        # Meta device must be zeroed, otherwise DRBD might complain
-        self.hv.run(
-            'dd if=/dev/zero of=/dev/{}/{} bs=1048576 count=256'
-            .format(self.vg_name, self.meta_disk)
-        )
-
-    def prepare_lv_override(self, transaction=None):
+    @contextmanager
+    def prepare_lv_override(self):
         """Prepare logical volume to be overridden by DRBD device"""
 
         # Dump mapper parameters of original LV
@@ -94,14 +110,14 @@ class DRBD(object):
             'dmsetup create {}_orig < {}'
             .format(self.lv_name, self.table_file)
         )
-        if transaction:
-            transaction.on_rollback(
-                'Remove copy of original device',
-                self.hv.run,
-                'dmsetup remove {}_orig'.format(self.lv_name)
-            )
+        try:
+            yield
+        except BaseException:
+            self.hv.run('dmsetup remove {}_orig'.format(self.lv_name))
+            raise
 
-    def build_config(self, peer, transaction=None):
+    @contextmanager
+    def build_config(self, peer):
         fd = BytesIO()
         fd.write(
             'resource {dev} {{\n'
@@ -136,11 +152,11 @@ class DRBD(object):
             ).encode()
         )
         self.hv.put('/etc/drbd.d/{}.res'.format(self.vm_name), fd, '0640')
-        if transaction:
-            transaction.on_rollback(
-                'Remove configuration file', self.hv.run,
-                'rm /etc/drbd.d/{}.res'.format(self.vm_name)
-            )
+        try:
+            yield
+        except BaseException:
+            self.hv.run('rm /etc/drbd.d/{}.res'.format(self.vm_name))
+            raise
 
     def get_host_config(self):
         return (
@@ -171,75 +187,72 @@ class DRBD(object):
         dev_size = self.get_device_size()
 
         # Suspend all traffic to disk from VM
-        self.hv.run('dmsetup suspend /dev/{}/{}'.format(
-            self.vg_name, self.lv_name))
-        if transaction:
-            transaction.on_rollback(
-                'Resume original device',
-                self.hv.run,
-                'dmsetup resume /dev/{}/{}'.format(self.vg_name, self.lv_name)
+        self.hv.run(
+            'dmsetup suspend /dev/{}/{}'.format(self.vg_name, self.lv_name)
+        )
+        try:
+            # Start DRBD on device
+            self.hv.run('drbdadm create-md {}'.format(self.vm_name))
+            self.hv.run('drbdadm up {}'.format(self.vm_name))
+
+            # Enforce primary operation and sync to secondary with
+            # overwriting of data
+            self.hv.run(
+                'drbdadm -- --overwrite-data-of-peer primary {}'
+                .format(self.vm_name)
             )
+
+            # DRBD is finally up, now replace device which VM talks to on-fly.
+            # In Device Mapper block is always 512 bytes.
+            self.hv.run(
+                'dmsetup load /dev/{}/{} --table "0 {} linear /dev/drbd{} 0"'
+                .format(
+                    self.vg_name, self.lv_name,
+                    dev_size // 512,
+                    self.get_device_minor(),
+                )
+            )
+            try:
+                self.hv.run(
+                    'dmsetup resume /dev/{}/{}'
+                    .format(self.vg_name, self.lv_name)
+                )
+            except BaseException:
+                # There should be no need for resume because it happens also
+                # via another rollback defined above.  Unfortunately, it is
+                # needed because DRBD won't allow to be shut down when its
+                # device is still held open by somebody.  Also see the comment
+                # about active and inactive slots in stop() method.
+                # WARNING: Potential race between writes to DRBD and underlying
+                # device - potential data loss?
+                # TODO: suspend VM for rollback
+                self.hv.run(
+                    'dmsetup load /dev/{}/{} < {}'
+                    .format(self.vg_name, self.lv_name, self.table_file)
+                )
+                self.hv.run(
+                    'dmsetup resume /dev/{}/{}'
+                    .format(self.vg_name, self.lv_name)
+                )
+                raise
+        except BaseException:
             # The "up" command might fail due to misconfiguration but the
             # device is started nevertheless. This is why "down" rollback is
             # always performed.
-            transaction.on_rollback(
-                'Bring DRBD device down', self.hv.run,
-                'drbdadm down {}'.format(self.vm_name)
+            self.hv.run('drbdadm down {}'.format(self.vm_name))
+            self.hv.run(
+                'dmsetup resume /dev/{}/{}'.format(self.vg_name, self.lv_name)
             )
-
-        # Start DRBD on device
-        self.hv.run('drbdadm create-md {}'.format(self.vm_name))
-        self.hv.run('drbdadm up {}'.format(self.vm_name))
-
-        # Enforce primary operation and sync to secondary with
-        # overwriting of data
-        self.hv.run(
-            'drbdadm -- --overwrite-data-of-peer primary {}'
-            .format(self.vm_name)
-        )
-
-        # DRBD is finally up, now replace device which VM talks to on-fly.
-        # In Device Mapper block is always 512 bytes.
-        self.hv.run(
-            'dmsetup load /dev/{}/{} --table "0 {} linear /dev/drbd{} 0"'
-            .format(
-                self.vg_name, self.lv_name,
-                dev_size // 512,
-                self.get_device_minor(),
-            )
-        )
-        if transaction:
-            # There should be no need for resume because it happens also
-            # via another rollback defined above. Unfortunately it is
-            # needed because DRBD won't allow to be shut down when its
-            # device is still held open by somebody. Also see the comment about
-            # active and inactive slots in stop() method.
-            # WARNING: Potential race between writes to DRBD and underlying
-            # device - potential data loss?
-            # TODO: suspend VM for rollback
-            transaction.on_rollback(
-                'Resume LV device', self.hv.run,
-                'dmsetup resume /dev/{}/{}'
-                .format(self.vg_name, self.lv_name)
-            )
-            transaction.on_rollback(
-                'Restore LV device table', self.hv.run,
-                'dmsetup load /dev/{}/{} < {}'
-                .format(self.vg_name, self.lv_name, self.table_file)
-            )
-
-        self.hv.run('dmsetup resume /dev/{}/{}'.format(
-            self.vg_name, self.lv_name
-        ))
+            raise
 
     def replicate_from_master(self, transaction=None):
         self.hv.run('drbdadm create-md {}'.format(self.vm_name))
         self.hv.run('drbdadm up {}'.format(self.vm_name))
-        transaction.on_rollback(
-            'Bring DRBD device down', self.hv.run,
-            'drbdadm down {}'.format(self.vm_name)
-        )
-        self.hv.run('drbdadm wait-connect {}'.format(self.vm_name))
+        try:
+            self.hv.run('drbdadm wait-connect {}'.format(self.vm_name))
+        except BaseException:
+            self.hv.run('drbdadm down {}'.format(self.vm_name))
+            raise
 
     def wait_for_sync(self):
         # Display a "nice" progress bar

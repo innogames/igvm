@@ -3,6 +3,7 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 
+from contextlib import contextmanager
 import logging
 import math
 from time import sleep
@@ -37,7 +38,6 @@ from igvm.settings import (
     MIGRATE_COMMANDS,
     KVM_HWMODEL_TO_CPUMODEL,
 )
-from igvm.transaction import Transaction
 from igvm.utils import retry_wait_backoff
 
 log = logging.getLogger(__name__)
@@ -536,29 +536,28 @@ class Hypervisor(Host):
                         'DRBD migration is supported only between hypervisors '
                         ' using LVM storage!'
                     )
-                self.start_drbd(vm, target_hypervisor)
-                try:
-                    self.wait_for_sync()
+
+                host_drbd = DRBD(self, vm, master_role=True)
+                peer_drbd = DRBD(target_hypervisor, vm)
+                with host_drbd.start(peer_drbd), peer_drbd.start(host_drbd):
+                    # XXX: Do we really need to wait for the both?
+                    host_drbd.wait_for_sync()
+                    peer_drbd.wait_for_sync()
                     vm.set_state('maintenance', transaction=transaction)
+
                     if vm.is_running():
                         vm.shutdown(transaction)
-                finally:
-                    self.stop_drbd()
 
             elif offline_transport == 'netcat':
                 vm.set_state('maintenance', transaction=transaction)
                 if vm.is_running():
                     vm.shutdown(transaction)
-                with Transaction() as subtransaction:
-                    nc_listener = target_hypervisor.netcat_to_device(
-                        target_hypervisor.get_volume_by_vm(vm).path(),
-                        subtransaction
-                    )
+                vm_disk_path = target_hypervisor.get_volume_by_vm(vm).path()
+                with target_hypervisor.netcat_to_device(vm_disk_path) as args:
                     self.device_to_netcat(
                         self.get_volume_by_vm(vm).path(),
                         vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
-                        nc_listener,
-                        subtransaction,
+                        args,
                     )
             target_hypervisor.define_vm(vm, transaction)
         else:
@@ -726,7 +725,8 @@ class Hypervisor(Host):
     def kill_netcat(self, port):
         self.run('pkill -f "^/bin/nc.traditional -l -p {}"'.format(port))
 
-    def netcat_to_device(self, device, transaction=None):
+    @contextmanager
+    def netcat_to_device(self, device):
         dev_minor = self.run('stat -L -c "%T" {}'.format(device), silent=True)
         dev_minor = int(dev_minor, 16)
         port = 7000 + dev_minor
@@ -738,32 +738,16 @@ class Hypervisor(Host):
             'nohup /bin/nc.traditional -l -p {0} | dd of={1} obs=1048576 &'
             .format(port, device)
         )
-        if transaction:
-            transaction.on_rollback('kill netcat', self.kill_netcat, port)
-        return self.fqdn, port
+        try:
+            yield self.fqdn, port
+        except BaseException:
+            self.kill_netcat(port)
+            raise
 
-    def device_to_netcat(self, device, size, listener, transaction=None):
+    def device_to_netcat(self, device, size, listener):
         # Using DD lowers load on device with big enough Block Size
         self.run(
             'dd if={0} ibs=1048576 | pv -f -s {1} '
             '| /bin/nc.traditional -q 1 {2} {3}'
             .format(device, size, *listener)
         )
-
-    def start_drbd(self, vm, peer):
-        # Ensure that current domain name is used, this might be non-FQDN
-        # one on source Hypervisor.
-        self.host_drbd = DRBD(self, vm, master_role=True)
-        self.peer_drbd = DRBD(peer, vm)
-
-        with Transaction() as transaction:
-            self.host_drbd.start(self.peer_drbd, transaction)
-            self.peer_drbd.start(self.host_drbd, transaction)
-
-    def wait_for_sync(self):
-        self.host_drbd.wait_for_sync()
-        self.peer_drbd.wait_for_sync()
-
-    def stop_drbd(self):
-        self.host_drbd.stop()
-        self.peer_drbd.stop()
