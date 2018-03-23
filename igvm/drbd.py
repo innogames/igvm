@@ -1,7 +1,11 @@
 import logging
-from StringIO import StringIO
+
 from time import sleep
 
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 
 log = logging.getLogger(__name__)
 
@@ -113,7 +117,8 @@ class DRBD(object):
             '         no-disk-flushes;\n'
             '         no-md-flushes;\n'
             '         no-disk-barrier;\n'
-            # Try maximum speed immediately, no need for the slow-start protocol
+            # Try maximum speed immediately, no need for the slow-start
+            # protocol
             '         c-max-rate 750M;\n'
             '         resync-rate 750M;\n'
             '    }}\n'
@@ -130,7 +135,7 @@ class DRBD(object):
             self.tx.on_rollback(
                 'Remove configuration file', self.hv.run,
                 'rm /etc/drbd.d/{}.res'.format(self.vm_name)
-          )
+            )
 
     def get_host_config(self):
         return (
