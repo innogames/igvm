@@ -147,15 +147,17 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
 
     # Could also have been set in serveradmin already.
     if not vm.hypervisor:
-        vm.set_best_hypervisor(
+        vm.hypervisor = vm.get_best_hypervisor(
             ['online', 'online_reserved'] if ignore_reserved else ['online']
         )
+        vm.dataset_obj['xen_host'] = vm.hypervisor.dataset_obj['hostname']
 
     vm.build(
         localimage=localimage,
         runpuppet=not nopuppet,
         postboot=postboot,
     )
+    vm.dataset_obj.commit()
 
 
 @with_fabric_settings   # NOQA: C901

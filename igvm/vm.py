@@ -552,13 +552,3 @@ class VM(Host):
             return ranking.hypervisor
 
         raise VMError('Cannot find a hypervisor')
-
-    def set_best_hypervisor(self, hv_states=['online']):
-        """Set best hypervisor
-
-        Find the best or another hypervisor for the given virtual machine.
-        """
-        self.hypervisor = self.get_best_hypervisor(hv_states)
-        logging.info('Setting hypervisor to {}'.format(self.hypervisor))
-        self.dataset_obj['xen_host'] = self.hypervisor.dataset_obj['hostname']
-        self.dataset_obj.commit()
