@@ -101,36 +101,36 @@ class DRBD(object):
     def build_config(self, peer, transaction=None):
         fd = BytesIO()
         fd.write(
-            b'resource {dev} {{\n'
-            b'    net {{\n'
-            b'        protocol A;\n'
+            'resource {dev} {{\n'
+            '    net {{\n'
+            '        protocol A;\n'
             # max-buffers vs MB/s
             # 4k-150, 8k-233, 12k-330, 16K-397, 24k-561, 32k-700
             # 32k seems jumpy and might end up at as low aw 250MB/s
-            b'        max-buffers 24k;\n'
+            '        max-buffers 24k;\n'
             # Buffer sizes don't seem to make any difference, at least within
             # one datacenter.
-            b'#        sndbuf-size 2048k;\n'
-            b'#        rcvbuf-size 2048k;\n'
-            b'    }}\n'
+            '#        sndbuf-size 2048k;\n'
+            '#        rcvbuf-size 2048k;\n'
+            '    }}\n'
             # We don't care for flushes and barriers - we are replicating one
             # way only and if things fail, we will just replicate them again.
-            b'    disk {{\n'
-            b'         no-disk-flushes;\n'
-            b'         no-md-flushes;\n'
-            b'         no-disk-barrier;\n'
+            '    disk {{\n'
+            '         no-disk-flushes;\n'
+            '         no-md-flushes;\n'
+            '         no-disk-barrier;\n'
             # Try maximum speed immediately, no need for the slow-start
-            b'         c-max-rate 750M;\n'
-            b'         resync-rate 750M;\n'
-            b'    }}\n'
-            b'{src_host}\n'
-            b'{dst_host}\n'
-            b'}}\n'
+            '         c-max-rate 750M;\n'
+            '         resync-rate 750M;\n'
+            '    }}\n'
+            '{src_host}\n'
+            '{dst_host}\n'
+            '}}\n'
             .format(
                 dev=self.vm_name,
                 src_host=self.get_host_config(),
                 dst_host=peer.get_host_config(),
-            )
+            ).encode()
         )
         self.hv.put('/etc/drbd.d/{}.res'.format(self.vm_name), fd, '0640')
         if transaction:

@@ -216,16 +216,14 @@ def migrate_live(source, destination, vm, domain):
     # Unfortunately, virsh provides a global timeout, but what we need it to
     # timeout if it is catching up the dirtied memory.  To be in this stage,
     # it should have coped the initial disk and memory and changes on them.
-    timeout = round(
-        sum((
-            # We assume the disk can be copied at 33 MB/s;
-            vm.dataset_obj['disk_size_gib'] * 1024 / 33,
-            # the memory at 100 MB/s;
-            vm.dataset_obj['memory'] / 100,
-            # and 5 minutes more for other operations.
-            5 * 60,
-        ))
-    )
+    timeout = sum((
+        # We assume the disk can be copied at 33 MB/s;
+        vm.dataset_obj['disk_size_gib'] * 1024 // 33,
+        # the memory at 100 MB/s;
+        vm.dataset_obj['memory'] // 100,
+        # and 5 minutes more for other operations.
+        5 * 60,
+    ))
 
     migrate_cmd = (
         'virsh migrate'
