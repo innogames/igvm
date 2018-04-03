@@ -65,7 +65,7 @@ class OtherVMs(object):
                 other_vm[a] == vm.dataset_obj[a]
                 for a in self.attributes
             ):
-                result = 1
+                result += 1
 
         return result
 
