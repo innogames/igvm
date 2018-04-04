@@ -218,9 +218,9 @@ def migrate_live(source, destination, vm, domain):
     # it should have coped the initial disk and memory and changes on them.
     timeout = sum((
         # We assume the disk can be copied at 33 MB/s;
-        vm.dataset_obj['disk_size_gib'] * 1024 / 33,
+        vm.dataset_obj['disk_size_gib'] * 1024 // 33,
         # the memory at 100 MB/s;
-        vm.dataset_obj['memory'] / 100,
+        vm.dataset_obj['memory'] // 100,
         # and 5 minutes more for other operations.
         5 * 60,
     ))
