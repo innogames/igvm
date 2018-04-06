@@ -484,15 +484,22 @@ class VM(Host):
                 )
 
         self.block_autostart()
+
+        # Run puppet in debug mode, if the igvm log level is DEBUG
+        puppet_debug = ''
+        if log.getEffectiveLevel() <= 10:
+            puppet_debug = '--debug --verbose'
+
         self.run(
-            '/usr/bin/puppet agent -v --fqdn={} --server={} --ca_server={} '
+            '/usr/bin/puppet agent --fqdn={} --server={} --ca_server={} '
             '--no-report --waitforcert=60 --onetime --no-daemonize '
             '--skip_tags=chroot_unsafe && touch /tmp/puppet_success '
-            '| tee {} ; test -f /tmp/puppet_success'
+            '{} | tee {} ; test -f /tmp/puppet_success'
             .format(
                 self.fqdn,
                 self.dataset_obj['puppet_master'],
                 self.dataset_obj['puppet_ca'],
+                puppet_debug,
                 '/var/log/puppetrun_igvm',
             )
         )
