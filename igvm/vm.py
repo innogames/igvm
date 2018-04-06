@@ -384,7 +384,7 @@ class VM(Host):
         self.check_serveradmin_config()
 
         fd = BytesIO()
-        fd.write(new_fqdn)
+        fd.write(bytes(new_fqdn, 'utf-8'))
         self.put('/etc/hostname', fd)
         self.put('/etc/mailname', fd)
 
