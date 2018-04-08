@@ -559,7 +559,7 @@ def _get_vm(hostname, ignore_reserved=False):
     if dataset_obj['xen_host']:
         hypervisor = Hypervisor(dataset_obj['xen_host'])
 
-        # XXX: Ugly hack until adminapi support modifying joined objects
+        # XXX: Ugly hack until adminapi supports modifying joined objects
         dict.__setitem__(
             dataset_obj, 'xen_host', dataset_obj['xen_host']['hostname']
         )
