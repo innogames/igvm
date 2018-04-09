@@ -257,8 +257,9 @@ class VM(Host):
         contents = self.read_file('/proc/meminfo')
         result = {}
         for line in contents.splitlines():
+            # XXX: What are we really expecting in here?
             try:
-                key, value = [tok.strip() for tok in line.split(':')]
+                key, value = map(str.strip, line.decode().split(':'))
             except IndexError:
                 continue
             result[key] = value
