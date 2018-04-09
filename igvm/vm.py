@@ -532,35 +532,8 @@ class VM(Host):
 
         log.debug('Evaluating hypervisors...')
 
-        selected_hypervisor = None
-        index = len(HYPERVISOR_PREFERENCES)
-        hypervisor_count = 0
-
         # We use decorate-sort-undecorate pattern to get preferred hypervisors.
         for ranking in sorted(HypervisorRanking(self, h) for h in hypervisors):
-
-            # We care to keep track of the preference indexes only to provide
-            # good logging.
-            new_index = ranking.get_last_preference_index()
-            if new_index < index:
-                if hypervisor_count:
-                    log.warning(
-                        '{} hypervisors are equally preferred by only first '
-                        '{} preferences:  {}'
-                        .format(hypervisor_count, index, ', '.join(
-                            map(repr, HYPERVISOR_PREFERENCES[:index])
-                        ))
-                    )
-                index = new_index
-            hypervisor_count += 1
-
-            if selected_hypervisor:
-                # We shortcut logging when it wouldn't provide much value.
-                # This condition would always be false for the next
-                # hypervisors, if it is false for the selected one.
-                if hypervisor_count * 2 < index:
-                    break
-                continue
 
             # The actual resources are not checked during hypervisor ranking
             # for performance.  We need to validate the hypervisor using
@@ -574,36 +547,16 @@ class VM(Host):
                 )
                 continue
 
-            selected_hypervisor = ranking.hypervisor
+            index = ranking.get_last_preference_index()
             log.info(
                 'Hypervisor "{}" selected with decisive preference {!r} '
                 'after checking {} preferences.'
                 .format(
-                    selected_hypervisor,
+                    ranking.hypervisor,
                     HYPERVISOR_PREFERENCES[index],
                     index,
                 )
             )
-        else:
-            log.warning(
-                'All {} hypervisors are equally preferred by only first '
-                '{} preferences.'
-                .format(hypervisor_count, index, ', '.join(
-                    map(repr, HYPERVISOR_PREFERENCES[:index])
-                ))
-            )
+            return ranking.hypervisor
 
-        if not selected_hypervisor:
-            raise VMError('Cannot find a hypervisor')
-
-        return selected_hypervisor
-
-    def set_best_hypervisor(self, hv_states=['online']):
-        """Set best hypervisor
-
-        Find the best or another hypervisor for the given virtual machine.
-        """
-        self.hypervisor = self.get_best_hypervisor(hv_states)
-        logging.info('Setting hypervisor to {}'.format(self.hypervisor))
-        self.dataset_obj['xen_host'] = self.hypervisor.dataset_obj['hostname']
-        self.dataset_obj.commit()
+        raise VMError('Cannot find a hypervisor')
