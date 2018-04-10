@@ -341,8 +341,10 @@ class Hypervisor(Host):
     def validate_image_checksum(self, image):
         """Compares the local image checksum against the checksum returned by
         foreman."""
+
+        image_file = '{}/{}'.format(IMAGE_PATH, image)
         local_hash = self.run(
-            'md5sum {}/{}'.format(IMAGE_PATH, image)
+            "flock -x -w 30 {0} -c 'md5sum {0}'".format(image_file)
         ).split()[0]
 
         url = IGVM_IMAGE_MD5_URL.format(image=image)
@@ -358,27 +360,25 @@ class Hypervisor(Host):
 
     def download_image(self, image):
         if (
-            self.file_exists('{}/{}'.format(IMAGE_PATH, image)) and not
+            not self.file_exists('{}/{}'.format(IMAGE_PATH, image)) or not
             self.validate_image_checksum(image)
         ):
-            log.warning('Image validation failed, downloading latest version')
-            self.run('rm -f {}/{}'.format(IMAGE_PATH, image))
-
-        if not self.file_exists('{}/{}'.format(IMAGE_PATH, image)):
             url = IGVM_IMAGE_URL.format(image=image)
-            self.run('wget -P {} -nv {}'.format(IMAGE_PATH, url))
+            image_file = '{}/{}'.format(IMAGE_PATH, image)
+            self.run(
+                "flock -x -w 30 {0} -c 'rm -f {0} || true; wget -P {1} -nv "
+                "{2}'".format(image_file, IMAGE_PATH, url))
 
     def extract_image(self, image, target_dir):
+        image_file = '{}/{}'.format(IMAGE_PATH, image)
         if self.dataset_obj['os'] == 'squeeze':
             self.run(
-                'tar xfz {}/{} -C {}'.format(IMAGE_PATH, image, target_dir)
-            )
+                "flock -x -w 30 {0} -c 'tar xfz {0} -C {1}'".format(
+                    image_file, target_dir))
         else:
             self.run(
-                "tar --xattrs --xattrs-include='*' -xzf {}/{} -C {}".format(
-                    IMAGE_PATH, image, target_dir
-                )
-            )
+                "flock -x -w 30 {0} -c 'tar --xattrs --xattrs-include=\'*\' "
+                "-xzf {0} -C {1}'".format(image_file, target_dir))
 
     def mount_vm_storage(self, vm, transaction=None):
         """Mount VM filesystem on host and return mount point."""
