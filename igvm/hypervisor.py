@@ -39,6 +39,8 @@ from igvm.settings import (
     IGVM_IMAGE_URL,
     IGVM_IMAGE_MD5_URL,
     IMAGE_PATH,
+    MIGRATE_COMMANDS,
+    KVM_HWMODEL_TO_CPUMODEL,
 )
 from igvm.transaction import Transaction
 from igvm.utils.backoff import retry_wait_backoff
@@ -123,7 +125,7 @@ class Hypervisor(Host):
 
         return max_mem
 
-    def check_vm(self, vm):
+    def check_vm(self, vm, offline):
         """Check whether a VM can run on this hypervisor"""
         if self.dataset_obj['state'] not in ['online', 'online_reserved']:
             raise InvalidStateError(
@@ -154,6 +156,31 @@ class Hypervisor(Host):
                 .format(free_mib, vm.dataset_obj['memory'])
             )
 
+        if not offline:
+            # Compatbile OS?
+            os_pair = (vm.hypervisor.dataset_obj['os'], self.dataset_obj['os'])
+            if os_pair not in MIGRATE_COMMANDS:
+                raise HypervisorError(
+                    '{} to {} migration is not supported online.'
+                    .format(*os_pair))
+
+            # Compatible CPU model?
+            hw_pair = (
+                vm.hypervisor.dataset_obj['hardware_model'],
+                self.dataset_obj['hardware_model'],
+            )
+            cpu_pair = [
+                arch
+                for arch, models in KVM_HWMODEL_TO_CPUMODEL.items()
+                for model in hw_pair
+                if model in models
+            ]
+            if cpu_pair[0] != cpu_pair[1]:
+                raise HypervisorError(
+                    '{} to {} migration is not supported online.'
+                    .format(*hw_pair)
+                )
+
         # Enough disk?
         free_disk_space = self.get_free_disk_size_gib()
         vm_disk_size = float(vm.dataset_obj['disk_size_gib'])
@@ -163,8 +190,6 @@ class Hypervisor(Host):
                 ' {} GiB reserved'
                 .format(VG_NAME, RESERVED_DISK)
             )
-
-        # TODO: CPU model
 
         # Proper VLAN?
         self.vlan_for_vm(vm)
@@ -451,22 +476,6 @@ class Hypervisor(Host):
         the guest OS"""
         return 'vda1'
 
-    def check_migration(self, vm, hypervisor, offline):
-        """Check whether a VM can be migrated to the given hypervisor"""
-
-        if self.fqdn == hypervisor.fqdn:
-            raise HypervisorError(
-                'Source and destination Hypervisor is the same "{0}"!'
-                .format(self.fqdn)
-            )
-
-        # Online migration only works with the same VLAN
-        if not offline and self.vlan_for_vm(vm) != hypervisor.vlan_for_vm(vm):
-            raise HypervisorError(
-                'Online migration is not possible with the current network '
-                'configuration (different VLAN).'
-            )
-
     def migrate_vm(
         self, vm, target_hypervisor, offline, offline_transport, transaction,
     ):
@@ -476,7 +485,6 @@ class Hypervisor(Host):
                 .format(offline_transport)
             )
 
-        self.check_migration(vm, target_hypervisor, offline)
         domain = self._get_domain(vm)
         if offline:
             target_hypervisor.create_vm_storage(vm, vm.fqdn, transaction)

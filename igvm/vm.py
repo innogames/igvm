@@ -326,7 +326,7 @@ class VM(Host):
         self._set_ip(self.dataset_obj['intern_ip'])
 
         # Can VM run on given hypervisor?
-        self.hypervisor.check_vm(self)
+        self.hypervisor.check_vm(self, offline=True)
 
         if not runpuppet or self.dataset_obj['puppet_disabled']:
             log.warn(
@@ -518,7 +518,7 @@ class VM(Host):
     def copy_postboot_script(self, script):
         self.put('/buildvm-postboot', script, '0755')
 
-    def get_best_hypervisor(self, hv_states=['online']):
+    def get_best_hypervisor(self, hv_states=['online'], offline=False):
         """Get best hypervisor
 
         Get the best hypervisor and return it rather then directly setting it.
@@ -539,7 +539,7 @@ class VM(Host):
             # for performance.  We need to validate the hypervisor using
             # the actual values before the final decision.
             try:
-                ranking.hypervisor.check_vm(self)
+                ranking.hypervisor.check_vm(self, offline)
             except HypervisorError as error:
                 log.warning(
                     'Preferred hypervisor "{}" is skipped:  {}'
