@@ -495,7 +495,7 @@ def host_info(vm_hostname):
     max_key_len = max(len(k) for k in info.keys())
     for category, keys in categories:
         # Handle 'Other' section by defaulting to all keys
-        keys = keys or info.keys()
+        keys = list(keys or info.keys())
 
         # Any info available for the category?
         if not any(k in info for k in keys):

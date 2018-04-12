@@ -141,12 +141,12 @@ class DRBD(object):
 
     def get_host_config(self):
         return (
-            b'    on {host} {{\n'
-            b'        address   {addr}:{port};\n'
-            b'        device    /dev/drbd{dm_minor};\n'
-            b'        disk      /dev/{disk};\n'
-            b'        meta-disk /dev/{vg_name}/{meta_disk};\n'
-            b'    }}'
+            '    on {host} {{\n'
+            '        address   {addr}:{port};\n'
+            '        device    /dev/drbd{dm_minor};\n'
+            '        disk      /dev/{disk};\n'
+            '        meta-disk /dev/{vg_name}/{meta_disk};\n'
+            '    }}'
             .format(
                 host=self.hv.dataset_obj['hostname'],
                 addr=self.hv.dataset_obj['intern_ip'],
@@ -202,7 +202,7 @@ class DRBD(object):
             'dmsetup load /dev/{}/{} --table "0 {} linear /dev/drbd{} 0"'
             .format(
                 self.vg_name, self.lv_name,
-                dev_size / 512,
+                dev_size // 512,
                 self.get_device_minor(),
             )
         )
@@ -245,12 +245,13 @@ class DRBD(object):
         while show_progress:
             lines = iter(self.hv.read_file('/proc/drbd').splitlines())
             for line in lines:
+                line = line.decode()
                 if '{}: cs:'.format(self.get_device_minor()) in line:
                     if 'ds:UpToDate/UpToDate' in line:
                         show_progress = False
                     try:
-                        lines.next()
-                        line = lines.next()
+                        next(lines)
+                        line = next(lines).decode()
                     except StopIteration:
                         show_progress = False
                     else:
