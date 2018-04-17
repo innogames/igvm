@@ -98,7 +98,7 @@ def cmd(cmd, *args, **kwargs):
     escaped_args = [quote(str(arg)) for arg in args]
 
     escaped_kwargs = {}
-    for key, value in kwargs.iteritems():
+    for key, value in kwargs.items():
         escaped_kwargs[key] = quote(str(value))
 
     return cmd.format(*escaped_args, **escaped_kwargs)
@@ -258,7 +258,7 @@ class BuildTest(IGVMTest):
 
     def test_postboot(self):
         with NamedTemporaryFile() as fd:
-            fd.write('echo hello > /root/postboot_result')
+            fd.write('echo hello > /root/postboot_result'.encode())
             fd.flush()
 
             buildvm(VM_HOSTNAME, postboot=fd.name)
