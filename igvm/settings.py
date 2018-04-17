@@ -3,6 +3,8 @@
 Copyright (c) 2018, InnoGames GmbH
 """
 
+from os import environ
+
 from igvm.hypervisor_preferences import (
     HashDifference,
     HypervisorAttributeValue,
@@ -74,8 +76,12 @@ MIGRATE_COMMANDS = {
 # It will be padded with the last three octets of the internal IP address.
 MAC_ADDRESS_PREFIX = (0xCA, 0xFE, 0x01)
 
-FOREMAN_IMAGE_URL = 'http://aw-foreman.ig.local:8080/{image}'
-FOREMAN_IMAGE_MD5_URL = 'http://aw-foreman.ig.local:8080/{image}.md5'
+IGVM_IMAGE_URL = environ.get(
+    'IGVM_IMAGE_URL',
+    # XXX: This default is deprecated, let's set it in puppet.
+    'http://aw-foreman.ig.local:8080/{image}'
+)
+IGVM_IMAGE_MD5_URL = IGVM_IMAGE_URL + '.md5'
 
 IMAGE_PATH = '/tmp'
 
