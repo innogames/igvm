@@ -151,8 +151,8 @@ class Hypervisor(Host):
         free_mib = self.free_vm_memory()
         if vm.dataset_obj['memory'] > free_mib:
             raise HypervisorError(
-                'Not enough memory.  Destination Hypervisor has {} MiB but VM '
-                'requires {} MiB '
+                'Not enough memory. '
+                'Destination Hypervisor has {:.2f} MiB but VM requires {} MiB '
                 .format(free_mib, vm.dataset_obj['memory'])
             )
 
