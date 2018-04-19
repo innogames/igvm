@@ -8,3 +8,6 @@ build/
 dist/
 igvm.egg-info/
 venv/
+.pytest_cache/
+.ropeproject/
+results.xml
