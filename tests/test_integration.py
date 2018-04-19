@@ -42,6 +42,7 @@ from igvm.settings import (
     IMAGE_PATH,
 )
 from igvm.utils.units import parse_size
+from fabric.network import disconnect_all
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -92,6 +93,7 @@ def tearDownModule():
     for obj in query:
         obj.delete()
     query.commit()
+    disconnect_all()  # Will hang on Jessie + Python3
 
 
 def cmd(cmd, *args, **kwargs):
