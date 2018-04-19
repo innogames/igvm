@@ -512,7 +512,7 @@ class Hypervisor(Host):
     def total_vm_memory(self):
         """Get amount of memory in MiB available to hypervisor"""
         # Start with what OS sees as total memory (not installed memory)
-        total_mib = self.conn().getMemoryStats(-1)['total'] / 1024
+        total_mib = self.conn().getMemoryStats(-1)['total'] // 1024
         # Always keep some extra memory free for Hypervisor
         total_mib -= HOST_RESERVED_MEMORY
         return total_mib
