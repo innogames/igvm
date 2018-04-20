@@ -36,8 +36,8 @@ from igvm.settings import (
     HOST_RESERVED_MEMORY,
     VG_NAME,
     RESERVED_DISK,
-    FOREMAN_IMAGE_URL,
-    FOREMAN_IMAGE_MD5_URL,
+    IGVM_IMAGE_URL,
+    IGVM_IMAGE_MD5_URL,
     IMAGE_PATH,
 )
 from igvm.transaction import Transaction
@@ -320,7 +320,7 @@ class Hypervisor(Host):
             'md5sum {}/{}'.format(IMAGE_PATH, image)
         ).split()[0]
 
-        url = FOREMAN_IMAGE_MD5_URL.format(image=image)
+        url = IGVM_IMAGE_MD5_URL.format(image=image)
         try:
             remote_hash = urlopen(url, timeout=2).read().split()[0]
         except URLError as e:
@@ -340,7 +340,7 @@ class Hypervisor(Host):
             self.run('rm -f {}/{}'.format(IMAGE_PATH, image))
 
         if not self.file_exists('{}/{}'.format(IMAGE_PATH, image)):
-            url = FOREMAN_IMAGE_URL.format(image=image)
+            url = IGVM_IMAGE_URL.format(image=image)
             self.run('wget -P {} -nv {}'.format(IMAGE_PATH, url))
 
     def extract_image(self, image, target_dir):
