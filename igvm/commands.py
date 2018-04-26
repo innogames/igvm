@@ -148,7 +148,8 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
     # Could also have been set in serveradmin already.
     if not vm.hypervisor:
         vm.hypervisor = vm.get_best_hypervisor(
-            ['online', 'online_reserved'] if ignore_reserved else ['online']
+            ['online', 'online_reserved'] if ignore_reserved else ['online'],
+            True
         )
         vm.dataset_obj['xen_host'] = vm.hypervisor.dataset_obj['hostname']
 
@@ -172,9 +173,12 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
         hypervisor = _get_hypervisor(
             hypervisor_hostname, ignore_reserved=ignore_reserved
         )
+        if vm.hypervisor.fqdn == hypervisor.fqdn:
+            raise IGVMError('Source and destination Hypervisor is the same!')
     else:
         hypervisor = vm.get_best_hypervisor(
-            ['online', 'online_reserved'] if ignore_reserved else ['online']
+            ['online', 'online_reserved'] if ignore_reserved else ['online'],
+            offline
         )
 
     was_running = vm.is_running()
@@ -194,29 +198,17 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
             'Changing IP requires a Puppet run, pass --runpuppet.'
         )
 
-    source_hv_os = vm.hypervisor.dataset_obj['os']
-    destination_hv_os = hypervisor.dataset_obj['os']
-    if (
-        not offline and
-        (source_hv_os, destination_hv_os) not in MIGRATE_COMMANDS
-    ):
-        raise IGVMError(
-            'Online migration from {} to {} is not supported!'
-            .format(source_hv_os, destination_hv_os)
-        )
+    # Validate destination hypervisor can run the VM (needs to happen after
+    # setting new IP!)
+    hypervisor.check_vm(vm, offline)
 
     # Require VM to be in sync with serveradmin
     _check_attributes(vm)
 
     vm.check_serveradmin_config()
-    vm.hypervisor.check_migration(vm, hypervisor, offline)
 
     if newip:
         vm._set_ip(newip)
-
-    # Validate destination hypervisor can run the VM (needs to happen after
-    # setting new IP!)
-    hypervisor.check_vm(vm)
 
     with Transaction() as transaction:
         # Commit previously changed IP address.
