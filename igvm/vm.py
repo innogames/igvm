@@ -312,8 +312,7 @@ class VM(Host):
             result['status'] = 'new'
         return result
 
-    def build(self, localimage=None, runpuppet=True, debug_puppet=False,
-              postboot=None):
+    def build(self, localimage=None, run_puppet=True, debug_puppet=False, postboot=None):
         """Builds a VM."""
         hypervisor = self.hypervisor
         self.check_serveradmin_config()
@@ -329,7 +328,7 @@ class VM(Host):
         # Can VM run on given hypervisor?
         self.hypervisor.check_vm(self, offline=True)
 
-        if not runpuppet or self.dataset_obj['puppet_disabled']:
+        if not run_puppet or self.dataset_obj['puppet_disabled']:
             log.warn(
                 'Puppet is disabled on the VM.  It will not receive network '
                 'configuration.  Expect things to go south.'
@@ -346,7 +345,7 @@ class VM(Host):
 
             self.prepare_vm()
 
-            if runpuppet:
+            if run_puppet:
                 self.run_puppet(clear_cert=True, debug=debug_puppet)
 
             if postboot is not None:

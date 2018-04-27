@@ -614,7 +614,7 @@ class MigrationTest(IGVMTest):
             self.new_hv_name,
             offline=True,
             newip=new_address,
-            runpuppet=True,
+            run_puppet=True,
         )
 
         obj = Query({'hostname': VM_HOSTNAME}, ['intern_ip']).get()
@@ -624,7 +624,7 @@ class MigrationTest(IGVMTest):
 
     def test_reject_online_with_puppet(self):
         with self.assertRaises(IGVMError):
-            migratevm(VM_HOSTNAME, self.new_hv_name, runpuppet=True)
+            migratevm(VM_HOSTNAME, self.new_hv_name, run_puppet=True)
 
     def test_rollback_netcat(self):
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
@@ -636,7 +636,7 @@ class MigrationTest(IGVMTest):
                 VM_HOSTNAME,
                 self.new_hv_name,
                 offline=True,
-                runpuppet=True,
+                run_puppet=True,
                 offline_transport='netcat',
             )
 
@@ -653,7 +653,7 @@ class MigrationTest(IGVMTest):
                 VM_HOSTNAME,
                 self.new_hv_name,
                 offline=True,
-                runpuppet=True,
+                run_puppet=True,
                 offline_transport='drbd',
             )
 

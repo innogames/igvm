@@ -136,7 +136,7 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
 
 
 @with_fabric_settings
-def vm_build(vm_hostname, localimage=None, nopuppet=False, debug_puppet=False,
+def vm_build(vm_hostname, localimage=None, run_puppet=True, debug_puppet=False,
              postboot=None, ignore_reserved=False):
     """Create a VM and start it
 
@@ -155,7 +155,7 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, debug_puppet=False,
 
     vm.build(
         localimage=localimage,
-        runpuppet=not nopuppet,
+        run_puppet=run_puppet,
         debug_puppet=debug_puppet,
         postboot=postboot,
     )
@@ -164,7 +164,7 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, debug_puppet=False,
 
 @with_fabric_settings   # NOQA: C901
 def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
-               runpuppet=False, debug_puppet=False, maintenance=False,
+               run_puppet=False, debug_puppet=False, maintenance=False,
                offline=False, offline_transport='drbd', ignore_reserved=False):
     """Migrate a VM to a new hypervisor."""
     vm = _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
@@ -191,12 +191,12 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
     if not offline and newip:
         raise IGVMError('Online migration cannot change IP address.')
 
-    if not offline and runpuppet:
+    if not offline and run_puppet:
         raise IGVMError('Online migration cannot run Puppet.')
 
-    if not runpuppet and newip:
+    if not run_puppet and newip:
         raise IGVMError(
-            'Changing IP requires a Puppet run, pass --runpuppet.'
+            'Changing IP requires a Puppet run, pass --run-puppet.'
         )
 
     # Validate destination hypervisor can run the VM (needs to happen after
@@ -234,7 +234,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
             vm.hypervisor = previous_hypervisor
         transaction.on_rollback('reset hypervisor', _reset_hypervisor)
 
-        if runpuppet:
+        if run_puppet:
             hypervisor.mount_vm_storage(vm, transaction)
             vm.run_puppet(debug=debug_puppet)
             hypervisor.umount_vm_storage(vm)
