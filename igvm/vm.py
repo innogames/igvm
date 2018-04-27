@@ -470,7 +470,7 @@ class VM(Host):
         self.run('/bin/chmod 0600 /swap')
         self.run('/sbin/mkswap /swap')
 
-    def run_puppet(self, clear_cert):
+    def run_puppet(self, clear_cert=False):
         """Runs Puppet in chroot on the hypervisor."""
 
         if clear_cert:
