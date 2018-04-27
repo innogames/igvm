@@ -111,6 +111,11 @@ def parse_args():
         help='Skip running puppet in chroot before powering up',
     )
     subparser.add_argument(
+        '--debug-puppet',
+        action='store_true',
+        help='Run puppet in debug mode',
+    )
+    subparser.add_argument(
         '--ignore-reserved',
         dest='ignore_reserved',
         action='store_true',
@@ -141,6 +146,11 @@ def parse_args():
         '--runpuppet',
         action='store_true',
         help='Run puppet in chroot before powering up',
+    )
+    subparser.add_argument(
+        '--debug-puppet',
+        action='store_true',
+        help='Run puppet in debug mode',
     )
     subparser.add_argument(
         '--maintenance',

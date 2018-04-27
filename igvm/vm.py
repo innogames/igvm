@@ -312,7 +312,8 @@ class VM(Host):
             result['status'] = 'new'
         return result
 
-    def build(self, localimage=None, runpuppet=True, postboot=None):
+    def build(self, localimage=None, runpuppet=True, debug_puppet=False,
+              postboot=None):
         """Builds a VM."""
         hypervisor = self.hypervisor
         self.check_serveradmin_config()
@@ -346,7 +347,7 @@ class VM(Host):
             self.prepare_vm()
 
             if runpuppet:
-                self.run_puppet(clear_cert=True)
+                self.run_puppet(clear_cert=True, debug=debug_puppet)
 
             if postboot is not None:
                 self.copy_postboot_script(postboot)
@@ -470,7 +471,7 @@ class VM(Host):
         self.run('/bin/chmod 0600 /swap')
         self.run('/sbin/mkswap /swap')
 
-    def run_puppet(self, clear_cert=False):
+    def run_puppet(self, clear_cert=False, debug=False):
         """Runs Puppet in chroot on the hypervisor."""
 
         if clear_cert:
@@ -485,22 +486,16 @@ class VM(Host):
                 )
 
         self.block_autostart()
-
-        # Run puppet in debug mode, if the igvm log level is DEBUG
-        puppet_debug = ''
-        if log.getEffectiveLevel() <= 10:
-            puppet_debug = '--debug --verbose'
-
         self.run(
             '/usr/bin/puppet agent --fqdn={} --server={} --ca_server={} '
             '--no-report --waitforcert=60 --onetime --no-daemonize '
-            '--skip_tags=chroot_unsafe {} && touch /tmp/puppet_success '
-            '| tee {} ; test -f /tmp/puppet_success'
+            '--skip_tags=chroot_unsafe --verbose {} && touch '
+            '/tmp/puppet_success | tee {} ; test -f /tmp/puppet_success'
             .format(
                 self.fqdn,
                 self.dataset_obj['puppet_master'],
                 self.dataset_obj['puppet_ca'],
-                puppet_debug,
+                '--debug' if debug else '',
                 '/var/log/puppetrun_igvm',
             )
         )

@@ -136,8 +136,8 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
 
 
 @with_fabric_settings
-def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
-             ignore_reserved=False):
+def vm_build(vm_hostname, localimage=None, nopuppet=False, debug_puppet=False,
+             postboot=None, ignore_reserved=False):
     """Create a VM and start it
 
     Puppet in run once to configure baseline networking.
@@ -156,6 +156,7 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
     vm.build(
         localimage=localimage,
         runpuppet=not nopuppet,
+        debug_puppet=debug_puppet,
         postboot=postboot,
     )
     vm.dataset_obj.commit()
@@ -163,8 +164,8 @@ def vm_build(vm_hostname, localimage=None, nopuppet=False, postboot=None,
 
 @with_fabric_settings   # NOQA: C901
 def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
-               runpuppet=False, maintenance=False, offline=False,
-               ignore_reserved=False, offline_transport='drbd'):
+               runpuppet=False, debug_puppet=False, maintenance=False,
+               offline=False, offline_transport='drbd', ignore_reserved=False):
     """Migrate a VM to a new hypervisor."""
     vm = _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
 
@@ -235,7 +236,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
 
         if runpuppet:
             hypervisor.mount_vm_storage(vm, transaction)
-            vm.run_puppet()
+            vm.run_puppet(debug=debug_puppet)
             hypervisor.umount_vm_storage(vm)
 
         if offline and was_running:
