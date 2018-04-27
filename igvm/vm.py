@@ -495,7 +495,7 @@ class VM(Host):
             '/usr/bin/puppet agent --fqdn={} --server={} --ca_server={} '
             '--no-report --waitforcert=60 --onetime --no-daemonize '
             '--skip_tags=chroot_unsafe {} && touch /tmp/puppet_success '
-            'tee {} ; test -f /tmp/puppet_success'
+            '| tee {} ; test -f /tmp/puppet_success'
             .format(
                 self.fqdn,
                 self.dataset_obj['puppet_master'],
