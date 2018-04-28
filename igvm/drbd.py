@@ -61,7 +61,7 @@ class DRBD(object):
 
         # 256MiB of metadata is fine up to 7TiB of synced storage.
         self.hv.run(
-            'lvcreate -n {} -L256M {}'
+            'lvcreate -y -n {} -L256M {}'
             .format(self.meta_disk, self.vg_name)
         )
         if transaction:
