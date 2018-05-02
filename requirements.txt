@@ -1,7 +1,7 @@
-ipaddress
+git+https://github.com/innogames/serveradmin.git
 netaddr
 cffi
-paramiko==1.18
-fabric==1.13.1
-libvirt-python==1.2.9
+paramiko
+Fabric3
+libvirt-python
 jinja2
