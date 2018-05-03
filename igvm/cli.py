@@ -106,9 +106,15 @@ def parse_args():
         help='Run postboot_script on the guest after first boot',
     )
     subparser.add_argument(
-        '--nopuppet',
-        action='store_true',
+        '--skip-puppet',
+        action='store_false',
+        dest='run_puppet',
         help='Skip running puppet in chroot before powering up',
+    )
+    subparser.add_argument(
+        '--debug-puppet',
+        action='store_true',
+        help='Run puppet in debug mode',
     )
     subparser.add_argument(
         '--ignore-reserved',
@@ -138,9 +144,14 @@ def parse_args():
         help='IP address to move VM to, in case you migrate between VLANs',
     )
     subparser.add_argument(
-        '--runpuppet',
+        '--run-puppet',
         action='store_true',
         help='Run puppet in chroot before powering up',
+    )
+    subparser.add_argument(
+        '--debug-puppet',
+        action='store_true',
+        help='Run puppet in debug mode',
     )
     subparser.add_argument(
         '--maintenance',
