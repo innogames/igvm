@@ -372,20 +372,11 @@ class VM(Host):
 
     def rename(self, new_hostname):
         """Rename the VM"""
-        new_fqdn = (
-            new_hostname
-            if new_hostname.endswith('.ig.local')
-            else new_hostname + '.ig.local'
-        )
-
-        if new_fqdn == self.fqdn:
-            raise ConfigError('The VM already named as "{}"'.format(self.fqdn))
-
         self.dataset_obj['hostname'] = new_hostname
         self.check_serveradmin_config()
 
         fd = BytesIO()
-        fd.write(bytes(new_fqdn, 'utf-8'))
+        fd.write(bytes(new_hostname, 'utf-8'))
         self.put('/etc/hostname', fd)
         self.put('/etc/mailname', fd)
 
@@ -394,8 +385,8 @@ class VM(Host):
             for line in self.run('cat /etc/hosts').splitlines()
             if not line.startswith(str(self.dataset_obj['intern_ip']))
         ]
-        hosts_file.append('{0}\t{1}\t{2}'.format(
-            self.dataset_obj['intern_ip'], new_fqdn, new_hostname
+        hosts_file.append('{0}\t{1}'.format(
+            self.dataset_obj['intern_ip'], new_hostname
         ))
         self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
 
