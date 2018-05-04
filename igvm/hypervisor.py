@@ -103,8 +103,11 @@ class Hypervisor(Host):
         # happen if VLAN is removed on Serveradmin so that nobody creates
         # new VMs on given hypervisor, but the existing ones must be moved out.
         if (
-            vm.dataset_obj['xen_host'] != self.dataset_obj['hostname'] and
-            vm_vlan not in vlans
+            self.dataset_obj['hostname'] not in [
+                vm.dataset_obj['hypervisor'],
+                # XXX: Deprecated attribute xen_host
+                vm.dataset_obj['xen_host'],
+            ] and vm_vlan not in vlans
         ):
             raise HypervisorError(
                 'Hypervisor "{}" does not support VLAN {}.'
