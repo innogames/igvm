@@ -76,12 +76,12 @@ MIGRATE_COMMANDS = {
 # It will be padded with the last three octets of the internal IP address.
 MAC_ADDRESS_PREFIX = (0xCA, 0xFE, 0x01)
 
-IGVM_IMAGE_URL = environ.get(
-    'IGVM_IMAGE_URL',
-    # XXX: This default is deprecated, let's set it in puppet.
-    'http://aw-foreman.ig.local:8080/{image}'
-)
-IGVM_IMAGE_MD5_URL = IGVM_IMAGE_URL + '.md5'
+try:
+    IGVM_IMAGE_URL = environ['IGVM_IMAGE_URL']
+    IGVM_IMAGE_MD5_URL = IGVM_IMAGE_URL + '.md5'
+except KeyError:
+    print('Please set the IGVM_IMAGE_URL environment variable')
+    raise
 
 IMAGE_PATH = '/tmp'
 
