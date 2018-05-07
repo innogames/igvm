@@ -151,6 +151,8 @@ def vm_build(vm_hostname, localimage=None, run_puppet=True, debug_puppet=False,
             ['online', 'online_reserved'] if ignore_reserved else ['online'],
             True
         )
+        vm.dataset_obj['hypervisor'] = vm.hypervisor.dataset_obj['hostname']
+        # XXX: Deprecated attribute xen_host
         vm.dataset_obj['xen_host'] = vm.hypervisor.dataset_obj['hostname']
 
     vm.build(
@@ -244,6 +246,8 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
         vm.reset_state()
 
         # Update Serveradmin
+        vm.dataset_obj['hypervisor'] = hypervisor.dataset_obj['hostname']
+        # XXX: Deprecated attribute xen_host
         vm.dataset_obj['xen_host'] = hypervisor.dataset_obj['hostname']
         vm.dataset_obj.commit()
 
@@ -545,15 +549,15 @@ def _get_vm(hostname, ignore_reserved=False):
             'Server "{0}" is online_reserved.'.format(dataset_obj['hostname'])
         )
 
-    if dataset_obj['xen_host']:
-        hypervisor = Hypervisor(dataset_obj['xen_host'])
+    hypervisor = None
+    for hv_attr in ['xen_host', 'hypervisor']:
+        if dataset_obj[hv_attr]:
+            hypervisor = Hypervisor(dataset_obj[hv_attr])
 
-        # XXX: Ugly hack until adminapi supports modifying joined objects
-        dict.__setitem__(
-            dataset_obj, 'xen_host', dataset_obj['xen_host']['hostname']
-        )
-    else:
-        hypervisor = None
+            # XXX: Ugly hack until adminapi supports modifying joined objects
+            dict.__setitem__(
+                dataset_obj, hv_attr, dataset_obj[hv_attr]['hostname']
+            )
 
     return VM(dataset_obj, hypervisor)
 

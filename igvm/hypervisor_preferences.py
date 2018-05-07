@@ -110,7 +110,7 @@ class OverAllocation(object):
         return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
-        # New VM has no xen_host attribute yet.
+        # New VM has no hypervisor attribute yet.
         if not vm.hypervisor:
             return False
 

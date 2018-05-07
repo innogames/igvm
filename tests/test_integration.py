@@ -125,7 +125,7 @@ class IGVMTest(TestCase):
             'os',
             'environment',
             'no_monitoring',
-            'xen_host',
+            'hypervisor',
             'repositories',
             'puppet_environment',
         ]).get()
@@ -138,7 +138,7 @@ class IGVMTest(TestCase):
         obj['os'] = 'jessie'
         obj['environment'] = 'testing'
         obj['no_monitoring'] = True
-        obj['xen_host'] = None
+        obj['hypervisor'] = None
         obj['repositories'] = [
             'int:basejessie:stable',
             'int:innogames:stable jessie',
@@ -168,7 +168,7 @@ class IGVMTest(TestCase):
         vm = _get_vm(VM_HOSTNAME)
 
         for hv in HYPERVISORS:
-            if hv.dataset_obj['hostname'] == vm.dataset_obj['xen_host']:
+            if hv.dataset_obj['hostname'] == vm.dataset_obj['hypervisor']:
                 # Is it on correct HV?
                 self.assertEqual(hv.vm_defined(vm), True)
                 self.assertEqual(hv.vm_running(vm), True)
@@ -187,7 +187,7 @@ class IGVMTest(TestCase):
         vm = _get_vm(VM_HOSTNAME)
 
         if not hv_name:
-            hv_name = vm.dataset_obj['xen_host']
+            hv_name = vm.dataset_obj['hypervisor']
 
         for hv in HYPERVISORS:
             if hv.dataset_obj['hostname'] == hv_name:
@@ -201,8 +201,8 @@ class BuildTest(IGVMTest):
     def setUp(self):
         super(BuildTest, self).setUp()
         # Normally build tests happen on the 1st HV
-        obj = Query({'hostname': VM_HOSTNAME}, ['xen_host']).get()
-        obj['xen_host'] = HYPERVISORS[0].dataset_obj['hostname']
+        obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
+        obj['hypervisor'] = HYPERVISORS[0].dataset_obj['hostname']
         obj.commit()
         self.vm = _get_vm(VM_HOSTNAME)
 
@@ -213,8 +213,8 @@ class BuildTest(IGVMTest):
     def test_build_auto_find_hypervisor(self):
         # HV is configured for all BuildTest class tests by default.
         # But this test requires it unconfigured.
-        obj = Query({'hostname': VM_HOSTNAME}, ['xen_host']).get()
-        obj['xen_host'] = None
+        obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
+        obj['hypervisor'] = None
         obj.commit()
         buildvm(VM_HOSTNAME)
         self.check_vm_present()
@@ -344,8 +344,8 @@ class CommandTest(IGVMTest):
     def setUp(self):
         super(CommandTest, self).setUp()
         # For every command test build a VM on the 1st HV
-        obj = Query({'hostname': VM_HOSTNAME}, ['xen_host']).get()
-        obj['xen_host'] = HYPERVISORS[0].dataset_obj['hostname']
+        obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
+        obj['hypervisor'] = HYPERVISORS[0].dataset_obj['hostname']
         obj.commit()
         buildvm(VM_HOSTNAME)
         self.check_vm_present()
@@ -545,8 +545,8 @@ class MigrationTest(IGVMTest):
     def setUp(self):
         super(MigrationTest, self).setUp()
         # Every migration gets a freshly built VM on the 1st HV
-        obj = Query({'hostname': VM_HOSTNAME}, ['xen_host']).get()
-        obj['xen_host'] = HYPERVISORS[0].dataset_obj['hostname']
+        obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
+        obj['hypervisor'] = HYPERVISORS[0].dataset_obj['hostname']
         obj.commit()
         buildvm(VM_HOSTNAME)
         # And is performed to the 2nd HV
@@ -561,7 +561,6 @@ class MigrationTest(IGVMTest):
         # auto find means no target HV is specified
         migratevm(VM_HOSTNAME)
         self.check_vm_present()
-
 
     def test_offline_migration_netcat(self):
         migratevm(
