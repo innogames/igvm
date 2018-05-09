@@ -253,6 +253,10 @@ class DRBD(object):
                         next(lines)
                         line = next(lines).decode()
                     except StopIteration:
+                        log.warning(
+                            'Could not find progress bar, '
+                            'migrating without it!'
+                        )
                         show_progress = False
                     else:
                         log.info(line)
@@ -262,7 +266,8 @@ class DRBD(object):
                 show_progress = False
             sleep(1)
 
-        # Just in case perform standard waiting
+        # Progress bar does not determine if disks were synced.
+        # Wait for sync to be reported by DRBD.
         self.hv.run('drbdsetup wait-sync {}'.format(self.get_device_minor()))
 
     def stop(self):
