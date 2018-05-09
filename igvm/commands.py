@@ -222,11 +222,9 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
                 'newip warning', log.info, '--newip is not rolled back'
             )
 
-        if maintenance or offline:
-            vm.set_state('maintenance', transaction=transaction)
-
         vm.hypervisor.migrate_vm(
-            vm, hypervisor, offline, offline_transport, transaction
+            vm, hypervisor, maintenance, offline, offline_transport,
+            transaction,
         )
 
         previous_hypervisor = vm.hypervisor
