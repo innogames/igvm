@@ -480,7 +480,8 @@ class Hypervisor(Host):
         return 'vda1'
 
     def migrate_vm(
-        self, vm, target_hypervisor, offline, offline_transport, transaction,
+        self, vm, target_hypervisor, maintenance, offline, offline_transport,
+        transaction,
     ):
         if offline_transport not in ['netcat', 'drbd']:
             raise StorageError(
@@ -496,12 +497,16 @@ class Hypervisor(Host):
                 self.start_drbd(vm, target_hypervisor)
                 try:
                     self.wait_for_sync()
+                    if maintenance or offline:
+                        vm.set_state('maintenance', transaction=transaction)
                     if vm.is_running():
                         vm.shutdown(transaction)
                 finally:
                     self.stop_drbd()
 
             elif offline_transport == 'netcat':
+                if maintenance or offline:
+                    vm.set_state('maintenance', transaction=transaction)
                 if vm.is_running():
                     vm.shutdown(transaction)
                 with Transaction() as subtransaction:

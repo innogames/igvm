@@ -220,6 +220,9 @@ class VM(Host):
             waitmsg='Waiting for SSH to respond',
         )
         if not host_up:
+            # If there is a network or booting error VM must be destroyed
+            # if starting has failed.
+            self.hypervisor.stop_vm_force(self)
             raise VMError('The server is not reachable with SSH')
 
         if transaction:
