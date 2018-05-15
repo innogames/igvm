@@ -97,10 +97,6 @@ def parse_args():
         help='Hostname of the guest system',
     )
     subparser.add_argument(
-        '--localimage',
-        help='Image file for for installation from local fs',
-    )
-    subparser.add_argument(
         '--postboot',
         metavar='postboot_script',
         help='Run postboot_script on the guest after first boot',

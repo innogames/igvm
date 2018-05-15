@@ -136,8 +136,8 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
 
 
 @with_fabric_settings
-def vm_build(vm_hostname, localimage=None, run_puppet=True, debug_puppet=False,
-             postboot=None, ignore_reserved=False):
+def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
+             ignore_reserved=False):
     """Create a VM and start it
 
     Puppet in run once to configure baseline networking.
@@ -156,7 +156,6 @@ def vm_build(vm_hostname, localimage=None, run_puppet=True, debug_puppet=False,
         vm.dataset_obj['xen_host'] = vm.hypervisor.dataset_obj['hostname']
 
     vm.build(
-        localimage=localimage,
         run_puppet=run_puppet,
         debug_puppet=debug_puppet,
         postboot=postboot,
