@@ -339,8 +339,7 @@ class VM(Host):
             self.hypervisor.create_vm_storage(self, self.fqdn, transaction)
             mount_path = self.hypervisor.format_vm_storage(self, transaction)
 
-            self.hypervisor.download_image(image)
-            self.hypervisor.extract_image(image, mount_path)
+            self.hypervisor.download_and_extract_image(image, mount_path)
 
             self.prepare_vm()
 

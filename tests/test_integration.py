@@ -267,27 +267,6 @@ class BuildTest(IGVMTest):
 
         self.check_vm_absent()
 
-    def test_image_corruption(self):
-        """Test re-downloading of broken image"""
-        obj = Query({'hostname': VM_HOSTNAME}, ['os']).get()
-        image = '{}/{}-base.tar.gz'.format(IMAGE_PATH, obj['os'])
-        self.vm.hypervisor.run(cmd('test -f {}', image))
-
-        self.vm.hypervisor.run(
-            cmd('dd if=/dev/urandom of={} bs=1M count=10 seek=5', image)
-        )
-
-        buildvm(VM_HOSTNAME)
-        self.check_vm_present()
-
-    def test_image_missing(self):
-        obj = Query({'hostname': VM_HOSTNAME}, ['os']).get()
-        image = '{}/{}-base.tar.gz'.format(IMAGE_PATH, obj['os'])
-        self.vm.hypervisor.run(cmd('rm -f {}', image))
-
-        buildvm(VM_HOSTNAME)
-        self.check_vm_present()
-
     def test_rebuild(self):
         # VM not built yet, this must fail
         with self.assertRaises(IGVMError):
