@@ -233,31 +233,6 @@ class BuildTest(IGVMTest):
 
         self.check_vm_present()
 
-    def test_local_image(self):
-        # First prepare a local image for testing
-        base_image = 'jessie-base.tar.gz'
-        local_image = 'jessie-localimage.tar.gz'
-        local_extract = '{}/localimage'.format(IMAGE_PATH)
-
-        self.vm.hypervisor.run('rm -rf {} || true'.format(local_extract))
-        self.vm.hypervisor.download_image(base_image)
-        self.vm.hypervisor.run('mkdir {}/localimage'.format(IMAGE_PATH))
-        self.vm.hypervisor.extract_image(base_image, local_extract)
-        self.vm.hypervisor.run(
-            'echo 42 > {}/root/local_image_canary'.format(local_extract)
-        )
-        self.vm.hypervisor.run(
-            'tar --remove-files -zcf {}/{} -C {} .'
-            .format(IMAGE_PATH, local_image, local_extract)
-        )
-
-        buildvm(VM_HOSTNAME, localimage=local_image)
-
-        self.check_vm_present()
-
-        output = self.vm.run('md5sum /root/local_image_canary')
-        self.assertIn('50a2fabfdd276f573ff97ace8b11c5f4', output)
-
     def test_postboot(self):
         with NamedTemporaryFile() as fd:
             fd.write('echo hello > /root/postboot_result'.encode())
@@ -291,27 +266,6 @@ class BuildTest(IGVMTest):
             buildvm(VM_HOSTNAME)
 
         self.check_vm_absent()
-
-    def test_image_corruption(self):
-        """Test re-downloading of broken image"""
-        obj = Query({'hostname': VM_HOSTNAME}, ['os']).get()
-        image = '{}/{}-base.tar.gz'.format(IMAGE_PATH, obj['os'])
-        self.vm.hypervisor.run(cmd('test -f {}', image))
-
-        self.vm.hypervisor.run(
-            cmd('dd if=/dev/urandom of={} bs=1M count=10 seek=5', image)
-        )
-
-        buildvm(VM_HOSTNAME)
-        self.check_vm_present()
-
-    def test_image_missing(self):
-        obj = Query({'hostname': VM_HOSTNAME}, ['os']).get()
-        image = '{}/{}-base.tar.gz'.format(IMAGE_PATH, obj['os'])
-        self.vm.hypervisor.run(cmd('rm -f {}', image))
-
-        buildvm(VM_HOSTNAME)
-        self.check_vm_present()
 
     def test_rebuild(self):
         # VM not built yet, this must fail

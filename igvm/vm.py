@@ -315,15 +315,12 @@ class VM(Host):
             result['status'] = 'new'
         return result
 
-    def build(self, localimage=None, run_puppet=True, debug_puppet=False, postboot=None):
+    def build(self, run_puppet=True, debug_puppet=False, postboot=None):
         """Builds a VM."""
         hypervisor = self.hypervisor
         self.check_serveradmin_config()
 
-        if localimage is not None:
-            image = localimage
-        else:
-            image = self.dataset_obj['os'] + '-base.tar.gz'
+        image = self.dataset_obj['os'] + '-base.tar.gz'
 
         # Populate initial networking attributes.
         self._set_ip(self.dataset_obj['intern_ip'])
@@ -342,9 +339,7 @@ class VM(Host):
             self.hypervisor.create_vm_storage(self, self.fqdn, transaction)
             mount_path = self.hypervisor.format_vm_storage(self, transaction)
 
-            if not localimage:
-                self.hypervisor.download_image(image)
-            self.hypervisor.extract_image(image, mount_path)
+            self.hypervisor.download_and_extract_image(image, mount_path)
 
             self.prepare_vm()
 

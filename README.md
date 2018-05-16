@@ -35,15 +35,13 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
       hypervisor
 
 ```python
-def vm_build(vm_hostname, localimage=None, run_puppet=True, debug_puppet=False,
-             postboot=None, ignore_reserved=False):
+def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,          
+             ignore_reserved=False):
 ```
 
 * Mandatory:
     * vm_hostname - string, hostname of virtual machine
 * Optional:
-    * localimage - image on filesystem of HV to use as base for VM, if no image
-      is given, one based on os Admintool parameter will be used
     * run_puppet - boolean, run chrooted puppet after VM image is extracted
     * debug_puppet - boolean, run puppet with --debug
     * postboot - extra command to run after machine is booted

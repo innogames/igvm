@@ -341,47 +341,31 @@ class Hypervisor(Host):
         self.format_storage(self.vm_disk_path(vm.fqdn))
         return self.mount_vm_storage(vm, transaction)
 
-    def validate_image_checksum(self, image):
-        """Compares the local image checksum against the checksum returned by
-        foreman."""
-        local_hash = self.run(
-            'md5sum {}/{}'.format(IMAGE_PATH, image)
-        ).split()[0]
+    def download_and_extract_image(self, image, target_dir):
+        """Download image, verify its checsum and extract it
 
-        url = IGVM_IMAGE_MD5_URL.format(image=image)
-        try:
-            remote_hash = urlopen(url, timeout=2).read().split()[0]
-        except URLError as e:
-            log.warning(
-                'Failed to fetch image checksum at {}: {}'.format(url, e)
+        All operations must be performed with locking, so that parallel
+        running igvm won't touch eachothers' images.
+        """
+
+        self.run(
+            '( '
+            'set -e ; '
+            'flock -w 120 9 ; '
+            'curl -o {img_path}/{img_file}.md5 {md5_url} ; '
+            'sed -i \'s_ /.*/_{img_path}/_\' {img_path}/{img_file}.md5 ; '
+            'md5sum -c {img_path}/{img_file}.md5 || '
+            'curl -o {img_path}/{img_file} {img_url} ; '
+            'tar --xattrs --xattrs-include=\'*\' -xzf {img_path}/{img_file} '
+            '-C {dst_path} ;'
+            ') 9>/tmp/igvm_image.lock'.format(
+                img_path=IMAGE_PATH,
+                img_file=image,
+                img_url=IGVM_IMAGE_URL.format(image=image),
+                md5_url=IGVM_IMAGE_MD5_URL.format(image=image),
+                dst_path=target_dir,
             )
-            return False
-
-        return local_hash == remote_hash
-
-    def download_image(self, image):
-        if (
-            self.file_exists('{}/{}'.format(IMAGE_PATH, image)) and not
-            self.validate_image_checksum(image)
-        ):
-            log.warning('Image validation failed, downloading latest version')
-            self.run('rm -f {}/{}'.format(IMAGE_PATH, image))
-
-        if not self.file_exists('{}/{}'.format(IMAGE_PATH, image)):
-            url = IGVM_IMAGE_URL.format(image=image)
-            self.run('wget -P {} -nv {}'.format(IMAGE_PATH, url))
-
-    def extract_image(self, image, target_dir):
-        if self.dataset_obj['os'] == 'squeeze':
-            self.run(
-                'tar xfz {}/{} -C {}'.format(IMAGE_PATH, image, target_dir)
-            )
-        else:
-            self.run(
-                "tar --xattrs --xattrs-include='*' -xzf {}/{} -C {}".format(
-                    IMAGE_PATH, image, target_dir
-                )
-            )
+        )
 
     def mount_vm_storage(self, vm, transaction=None):
         """Mount VM filesystem on host and return mount point."""
@@ -694,7 +678,6 @@ class Hypervisor(Host):
         self.run('umount {0}'.format(device_or_path))
 
     def remove_temp(self, mount_path):
-
         self.run('rmdir {0}'.format(mount_path))
 
     def format_storage(self, device):
