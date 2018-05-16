@@ -454,7 +454,8 @@ class Hypervisor(Host):
         domain = self._find_domain(vm)
         if not domain:
             raise HypervisorError(
-                'Unable to find domain "{}".'.format(vm.fqdn)
+                'Unable to find domain "{}" on hypervisor "{}".'
+                .format(vm.fqdn, self.fqdn)
             )
         return domain
 

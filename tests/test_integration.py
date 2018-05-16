@@ -21,6 +21,7 @@ from igvm.commands import (
     host_info,
     mem_set,
     vcpu_set,
+    vm_build,
     vm_delete,
     vm_rebuild,
     vm_restart,
@@ -268,30 +269,23 @@ class BuildTest(IGVMTest):
         self.check_vm_absent()
 
     def test_rebuild(self):
-        # VM not built yet, this must fail
+        vm_build(VM_HOSTNAME)
+
+        # Build the VM again, this must fail, as it is already built
         with self.assertRaises(IGVMError):
-            vm_rebuild(VM_HOSTNAME)
+            vm_build(VM_HOSTNAME)
 
-        # Now really build it
-        self.vm.build()
-        self.check_vm_present()
-
+        # Create files on VM to check later if the VM was really rebuilt
         self.vm.run('touch /root/initial_canary')
         self.vm.run('test -f /root/initial_canary')
 
-        # Rebuild online VM, this must fail
-        with self.assertRaises(IGVMError):
-            vm_rebuild(VM_HOSTNAME)
-
-        self.vm.shutdown()
-
-        # Finally do a working rebuild
-        vm_rebuild(VM_HOSTNAME)
+        # Now stop it and rebuild it
+        vm_stop(VM_HOSTNAME)
+        vm_build(VM_HOSTNAME, rebuild=True)
         self.check_vm_present()
 
-        # The VM was rebuild and thus test file must be gone
-        with self.assertRaises(IGVMError):
-            self.vm.run('test -f /root/initial_canary')
+        # The VM was rebuild and thus the test file must be gone
+        self.vm.run('test ! -f /root/initial_canary')
 
 
 class CommandTest(IGVMTest):

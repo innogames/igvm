@@ -137,7 +137,7 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
 
 @with_fabric_settings
 def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
-             ignore_reserved=False):
+             ignore_reserved=False, rebuild=False):
     """Create a VM and start it
 
     Puppet in run once to configure baseline networking.
@@ -154,6 +154,12 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
         vm.dataset_obj['hypervisor'] = vm.hypervisor.dataset_obj['hostname']
         # XXX: Deprecated attribute xen_host
         vm.dataset_obj['xen_host'] = vm.hypervisor.dataset_obj['hostname']
+
+    if vm.hypervisor.vm_defined(vm) and vm.is_running():
+        raise InvalidStateError('"{}" is still running.'.format(vm.fqdn))
+
+    if rebuild and vm.hypervisor.vm_defined(vm):
+        vm.hypervisor.delete_vm(vm)
 
     vm.build(
         run_puppet=run_puppet,
@@ -254,22 +260,6 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
 
 
 @with_fabric_settings
-def vm_rebuild(vm_hostname, force=False):
-    """Destroy and reinstall a VM"""
-    vm = _get_vm(vm_hostname, ignore_reserved=True)
-    _check_defined(vm)
-
-    if vm.is_running():
-        if force:
-            vm.hypervisor.stop_vm_force(vm)
-        else:
-            raise InvalidStateError('"{}" is still running.'.format(vm.fqdn))
-
-    vm.hypervisor.delete_vm(vm)
-    vm.build()
-
-
-@with_fabric_settings
 def vm_start(vm_hostname):
     """Start a VM"""
     vm = _get_vm(vm_hostname)
@@ -324,13 +314,8 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
 
 
 @with_fabric_settings
-def vm_delete(vm_hostname, force=False, retire=False):
+def vm_delete(vm_hostname, retire=False):
     """Delete the VM from the hypervisor and from serveradmin
-
-    If force is True the VM will be deleted even though it is still running on
-    its hypervisor. Furthermore force will delete the serveradmin object, even
-    if the VM doesn't have a hypervisor set in serveradmin or it has not yet
-    been created on the defined hypervisor.
 
     If retire is True the VM will not be deleted from serveradmin but it's
     state will be updated to 'retired'.
@@ -338,16 +323,12 @@ def vm_delete(vm_hostname, force=False, retire=False):
 
     vm = _get_vm(vm_hostname, ignore_reserved=True)
     # Make sure the VM has a hypervisor and that it is defined on it.
-    # Abort if the VM has not been defined and force is not True.
-    _check_defined(vm, fail_hard=not force)
+    # Abort if the VM has not been defined.
+    _check_defined(vm)
 
-    # Make sure the VM is shut down.
-    # Abort if the VM is not shut down and force is not True.
+    # Make sure the VM is shut down, abort if it is not.
     if vm.hypervisor and vm.hypervisor.vm_defined(vm) and vm.is_running():
-        if force:
-            vm.hypervisor.stop_vm_force(vm)
-        else:
-            raise InvalidStateError('"{}" is still running.'.format(vm.fqdn))
+        raise InvalidStateError('"{}" is still running.'.format(vm.fqdn))
 
     # Delete the VM from its hypervisor if required.
     if vm.hypervisor and vm.hypervisor.vm_defined(vm):
