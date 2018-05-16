@@ -15,7 +15,6 @@ from uuid import uuid4
 from adminapi.dataset import Query
 from fabric.api import env
 
-from igvm.buildvm import buildvm
 from igvm.commands import (
     disk_set,
     host_info,
@@ -23,7 +22,6 @@ from igvm.commands import (
     vcpu_set,
     vm_build,
     vm_delete,
-    vm_rebuild,
     vm_restart,
     vm_start,
     vm_stop,
@@ -208,7 +206,7 @@ class BuildTest(IGVMTest):
         self.vm = _get_vm(VM_HOSTNAME)
 
     def test_build(self):
-        buildvm(VM_HOSTNAME)
+        vm_build(VM_HOSTNAME)
         self.check_vm_present()
 
     def test_build_auto_find_hypervisor(self):
@@ -217,7 +215,7 @@ class BuildTest(IGVMTest):
         obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
         obj['hypervisor'] = None
         obj.commit()
-        buildvm(VM_HOSTNAME)
+        vm_build(VM_HOSTNAME)
         self.check_vm_present()
 
     def test_build_stretch(self):
@@ -230,7 +228,7 @@ class BuildTest(IGVMTest):
             ]
         })
         obj.commit()
-        buildvm(VM_HOSTNAME)
+        vm_build(VM_HOSTNAME)
 
         self.check_vm_present()
 
@@ -239,14 +237,14 @@ class BuildTest(IGVMTest):
             fd.write('echo hello > /root/postboot_result'.encode())
             fd.flush()
 
-            buildvm(VM_HOSTNAME, postboot=fd.name)
+            vm_build(VM_HOSTNAME, postboot=fd.name)
             self.check_vm_present()
 
             output = self.vm.run('cat /root/postboot_result')
             self.assertIn('hello', output)
 
     def test_delete(self):
-        buildvm(VM_HOSTNAME)
+        vm_build(VM_HOSTNAME)
         self.check_vm_present()
 
         # Fails while VM is powered on
@@ -264,7 +262,7 @@ class BuildTest(IGVMTest):
         obj.commit()
 
         with self.assertRaises(IGVMError):
-            buildvm(VM_HOSTNAME)
+            vm_build(VM_HOSTNAME)
 
         self.check_vm_absent()
 
@@ -295,7 +293,7 @@ class CommandTest(IGVMTest):
         obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
         obj['hypervisor'] = HYPERVISORS[0].dataset_obj['hostname']
         obj.commit()
-        buildvm(VM_HOSTNAME)
+        vm_build(VM_HOSTNAME)
         self.check_vm_present()
         self.vm = _get_vm(VM_HOSTNAME)  # For contacting VM and HV over shell
 
@@ -496,7 +494,7 @@ class MigrationTest(IGVMTest):
         obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
         obj['hypervisor'] = HYPERVISORS[0].dataset_obj['hostname']
         obj.commit()
-        buildvm(VM_HOSTNAME)
+        vm_build(VM_HOSTNAME)
         # And is performed to the 2nd HV
         # Of course apart from migrations to automatically selected HVs
         self.new_hv_name = HYPERVISORS[1].dataset_obj['hostname']
