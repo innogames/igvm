@@ -24,6 +24,7 @@ from igvm.kvm import (
     set_memory,
     set_vcpus,
 )
+from igvm.libvirt import get_virtconn
 from igvm.settings import (
     HOST_RESERVED_MEMORY,
     VG_NAME,
@@ -36,7 +37,6 @@ from igvm.settings import (
 )
 from igvm.transaction import Transaction
 from igvm.utils.backoff import retry_wait_backoff
-from igvm.utils.virtutils import get_virtconn
 
 log = logging.getLogger(__name__)
 

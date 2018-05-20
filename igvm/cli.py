@@ -24,7 +24,7 @@ from igvm.commands import (
     vm_stop,
     vm_sync,
 )
-from igvm.utils.virtutils import close_virtconns
+from igvm.libvirt import close_virtconns
 
 
 class ColorFormatters():
