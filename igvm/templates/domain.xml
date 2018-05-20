@@ -1,12 +1,12 @@
 <domain type='kvm'>
-  <name>{{ fqdn }}</name>
+  <name>{{ name }}</name>
   <uuid>{{ props.uuid }}</uuid>
 {% if props.mem_hotplug %}
   <maxMemory slots='16' unit='MiB'>{{ props.max_mem }}</maxMemory>
 {% endif %}
   <memory unit='MiB'>{{ memory }}</memory>
   <currentMemory unit='MiB'>{{ memory }}</currentMemory>
-  
+
   <!-- Don't put placement attribute unless NUMA settings are set! -->
   <vcpu current='{{ num_cpu }}'>{{ props.max_cpus }}</vcpu>
 

@@ -351,8 +351,8 @@ def generate_domain_xml(hypervisor, vm):
     vlan_network = hypervisor.get_vlan_network(vm.dataset_obj['intern_ip'])
 
     config = {
-        'disk_device': '/dev/{}/{}'.format(VG_NAME, vm.fqdn),
-        'fqdn': vm.fqdn,
+        'name': vm.uid_name,
+        'disk_device': hypervisor.vm_lv_get(vm)['path'],
         'memory': vm.dataset_obj['memory'],
         'num_cpu': vm.dataset_obj['num_cpu'],
         'props': props,

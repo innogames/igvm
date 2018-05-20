@@ -41,6 +41,22 @@ class Host(object):
     def __eq__(self, other):
         return isinstance(other, Host) and self.fqdn == other.fqdn
 
+    @property
+    def uid_name(self):
+        """Name readable by both humans and machines
+
+        Don't just assume this is the current domain or lv name of a VM. The
+        whole point of these names is that hostnames may change while
+        object_id may not.
+        """
+        return '{}_{}'.format(
+            self.dataset_obj['object_id'],
+            self.dataset_obj['hostname'])
+
+    def match_uid_name(self, uid_name):
+        """Check if a given uid_name matches this host"""
+        return uid_name.split('_', 1)[0] == str(self.dataset_obj['object_id'])
+
     def fabric_settings(self, *args, **kwargs):
         """Builds a fabric context manager to run commands on this host."""
         settings = COMMON_FABRIC_SETTINGS.copy()
