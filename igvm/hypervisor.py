@@ -36,7 +36,7 @@ from igvm.settings import (
     KVM_HWMODEL_TO_CPUMODEL,
 )
 from igvm.transaction import Transaction
-from igvm.utils.backoff import retry_wait_backoff
+from igvm.utils import retry_wait_backoff
 
 log = logging.getLogger(__name__)
 

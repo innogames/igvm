@@ -12,7 +12,7 @@ from igvm import VERSION
 setup(
     name='igvm',
     version='.'.join(str(v) for v in VERSION),
-    packages=['igvm', 'igvm.utils'],
+    packages=['igvm'],
     entry_points={
         'console_scripts': [
             'igvm=igvm.cli:main',
