@@ -17,11 +17,7 @@ from igvm.exceptions import (
 )
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
-from igvm.settings import (
-    HYPERVISOR_ATTRIBUTES,
-    MIGRATE_COMMANDS,
-    VM_ATTRIBUTES,
-)
+from igvm.settings import HYPERVISOR_ATTRIBUTES, VM_ATTRIBUTES
 from igvm.transaction import Transaction
 from igvm.utils.units import parse_size
 from igvm.vm import VM
