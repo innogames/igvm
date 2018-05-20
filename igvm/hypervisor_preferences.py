@@ -6,7 +6,7 @@ the same preference is compared with each other.  Smaller values mark
 hypervisors as more preferred.  Keep in mind that for booleans false
 is less than true.
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 # NOTE: This module only has simple classes.  We try to keep them reusable,
 # even though most of them are not reused.  Some of the classes are so simple,

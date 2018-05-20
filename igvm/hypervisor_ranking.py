@@ -1,6 +1,6 @@
 """igvm - Hypervisor Ranking
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 from igvm.settings import HYPERVISOR_PREFERENCES

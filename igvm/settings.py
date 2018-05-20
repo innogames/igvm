@@ -1,6 +1,6 @@
 """igvm - Settings
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 from os import environ

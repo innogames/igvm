@@ -1,6 +1,6 @@
 """igvm - Host Model
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 from io import BytesIO

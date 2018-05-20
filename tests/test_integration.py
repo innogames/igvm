@@ -1,6 +1,6 @@
 """igvm - Integration Tests
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 from __future__ import print_function

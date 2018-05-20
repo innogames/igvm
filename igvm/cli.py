@@ -1,6 +1,6 @@
 """igvm - The command line interface
 
-Copyright (c) 2017, InnoGames GmbH
+Copyright (c) 2017 InnoGames GmbH
 """
 
 from __future__ import print_function

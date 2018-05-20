@@ -1,6 +1,6 @@
 """igvm - Hypervisor Model
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
