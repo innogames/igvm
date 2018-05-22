@@ -5,11 +5,6 @@ Copyright (c) 2018, InnoGames GmbH
 
 import logging
 import math
-try:
-    from urllib.error import URLError
-    from urllib.request import urlopen
-except ImportError:
-    from urllib2 import urlopen, URLError
 
 from libvirt import VIR_DOMAIN_SHUTOFF
 
