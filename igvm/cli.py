@@ -18,7 +18,6 @@ from igvm.commands import (
     vcpu_set,
     vm_delete,
     vm_migrate,
-    vm_rebuild,
     vm_rename,
     vm_restart,
     vm_start,
@@ -117,6 +116,12 @@ def parse_args():
         dest='ignore_reserved',
         action='store_true',
         help='Force build on a Host which has the state online_reserved',
+    )
+    subparser.add_argument(
+        '--rebuild',
+        dest='rebuild',
+        action='store_true',
+        help='Rebuild already defined VM or build it if not defined',
     )
 
     subparser = subparsers.add_parser(
@@ -302,11 +307,6 @@ def parse_args():
         help='Hostname of the guest system',
     )
     subparser.add_argument(
-        '--force',
-        action='store_true',
-        help='Shutdown VM if running',
-    )
-    subparser.add_argument(
         '--retire',
         action='store_true',
         help='Set VM state to "retired" on Serveradmin instead of deleting',
@@ -330,21 +330,6 @@ def parse_args():
     subparser.add_argument(
         'vm_hostname',
         help='Hostname of the guest system',
-    )
-
-    subparser = subparsers.add_parser(
-        'rebuild',
-        description=vm_rebuild.__doc__,
-    )
-    subparser.set_defaults(func=vm_rebuild)
-    subparser.add_argument(
-        'vm_hostname',
-        help='Hostname of the guest system',
-    )
-    subparser.add_argument(
-        '--force',
-        action='store_true',
-        help='Shutdown VM, if running',
     )
 
     subparser = subparsers.add_parser(
