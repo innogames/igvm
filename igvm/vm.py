@@ -32,7 +32,6 @@ from igvm.settings import (
     HYPERVISOR_PREFERENCES,
 )
 from igvm.transaction import Transaction
-from igvm.utils.network import get_network_config
 from igvm.utils.portping import wait_until
 from igvm.utils.template import upload_template
 from igvm.utils.units import parse_size
@@ -66,17 +65,11 @@ class VM(Host):
         # dataset_obj['intern_ip'] is ip_address!
         # So convert the type.
         self.dataset_obj['intern_ip'] = ip_address(new_ip)
-        self.network_config = get_network_config(self.dataset_obj)
 
         if old_ip != new_ip:
             log.info(
-                '"{0}" networking changed to IP address {1}, VLAN {2} ({3}).'
-                .format(
-                    self.fqdn,
-                    new_ip,
-                    self.network_config['vlan_name'],
-                    self.network_config['vlan_tag'],
-                )
+                '"{0}" networking changed to IP address {1}.'
+                .format(self.fqdn, new_ip)
             )
 
     def vm_host(self):
