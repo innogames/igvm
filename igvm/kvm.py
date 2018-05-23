@@ -348,6 +348,7 @@ def generate_domain_xml(hypervisor, vm):
     #       VM, instead the VM is updated to the latest settings.
     #       Every KVM setting should be configurable via Serveradmin anyway.
     props = DomainProperties(hypervisor, vm)
+    vlan_network = hypervisor.get_vlan_network(vm.dataset_obj['intern_ip'])
 
     config = {
         'disk_device': '/dev/{}/{}'.format(VG_NAME, vm.fqdn),
@@ -355,7 +356,7 @@ def generate_domain_xml(hypervisor, vm):
         'memory': vm.dataset_obj['memory'],
         'num_cpu': vm.dataset_obj['num_cpu'],
         'props': props,
-        'vlan_tag': hypervisor.vlan_for_vm(vm),
+        'vlan_tag': vlan_network['vlan_tag'],
     }
 
     jenv = Environment(loader=PackageLoader('igvm', 'templates'))
