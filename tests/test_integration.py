@@ -165,34 +165,36 @@ class IGVMTest(TestCase):
 
     def check_vm_present(self):
         # Operate on fresh object
-        vm = _get_vm(VM_HOSTNAME)
+        with _get_vm(VM_HOSTNAME) as vm:
 
-        for hv in HYPERVISORS:
-            if hv.dataset_obj['hostname'] == vm.dataset_obj['hypervisor']:
-                # Is it on correct HV?
-                self.assertEqual(hv.vm_defined(vm), True)
-                self.assertEqual(hv.vm_running(vm), True)
-            else:
-                # Is it gone from other HVs after migration?
-                self.assertEqual(hv.vm_defined(vm), False)
-                hv.run('test ! -b /dev/{}/{}'.format(VG_NAME, vm.fqdn))
+            for hv in HYPERVISORS:
+                if hv.dataset_obj['hostname'] == vm.dataset_obj['hypervisor']:
+                    # Is it on correct HV?
+                    self.assertEqual(hv.vm_defined(vm), True)
+                    self.assertEqual(hv.vm_running(vm), True)
+                else:
+                    # Is it gone from other HVs after migration?
+                    self.assertEqual(hv.vm_defined(vm), False)
+                    hv.run('test ! -b /dev/{}/{}'.format(VG_NAME, vm.fqdn))
 
-        # Is VM itself alive and fine?
-        fqdn = vm.run('hostname -f').strip()
-        self.assertEqual(fqdn, vm.fqdn)
-        self.assertEqual(vm.dataset_obj.is_dirty(), False)
+            # Is VM itself alive and fine?
+            fqdn = vm.run('hostname -f').strip()
+            self.assertEqual(fqdn, vm.fqdn)
+            self.assertEqual(vm.dataset_obj.is_dirty(), False)
 
     def check_vm_absent(self, hv_name=None):
         # Operate on fresh object
-        vm = _get_vm(VM_HOSTNAME)
+        with _get_vm(VM_HOSTNAME) as vm:
+            if not hv_name:
+                hv_name = vm.dataset_obj['hypervisor']
 
-        if not hv_name:
-            hv_name = vm.dataset_obj['hypervisor']
+            if not hv_name:
+                hv_name = vm.dataset_obj['hypervisor']
 
-        for hv in HYPERVISORS:
-            if hv.dataset_obj['hostname'] == hv_name:
-                self.assertEqual(hv.vm_defined(vm), False)
-                hv.run('test ! -b /dev/{}/{}'.format(VG_NAME, vm.fqdn))
+            for hv in HYPERVISORS:
+                if hv.dataset_obj['hostname'] == hv_name:
+                    self.assertEqual(hv.vm_defined(vm), False)
+                    hv.run('test ! -b /dev/{}/{}'.format(VG_NAME, vm.fqdn))
 
 
 class BuildTest(IGVMTest):
@@ -204,7 +206,9 @@ class BuildTest(IGVMTest):
         obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
         obj['hypervisor'] = HYPERVISORS[0].dataset_obj['hostname']
         obj.commit()
-        self.vm = _get_vm(VM_HOSTNAME)
+        with _get_vm(VM_HOSTNAME) as vm:
+            # For contacting VM over shell
+            self.vm = vm
 
     def test_build(self):
         vm_build(VM_HOSTNAME)
@@ -296,7 +300,9 @@ class CommandTest(IGVMTest):
         obj.commit()
         vm_build(VM_HOSTNAME)
         self.check_vm_present()
-        self.vm = _get_vm(VM_HOSTNAME)  # For contacting VM and HV over shell
+        with _get_vm(VM_HOSTNAME) as vm:
+            # For contacting VM over shell
+            self.vm = vm
 
     def test_start_stop(self):
         # Doesn't fail, but should print a message
@@ -565,7 +571,8 @@ class MigrationTest(IGVMTest):
 
         obj = Query({'hostname': VM_HOSTNAME}, ['intern_ip']).get()
         self.assertEqual(obj['intern_ip'], new_address)
-        _get_vm(VM_HOSTNAME).run(cmd('ip a | grep {}', new_address))
+        with _get_vm(VM_HOSTNAME) as vm:
+            vm.run(cmd('ip a | grep {}', new_address))
         self.check_vm_present()
 
     def test_reject_online_with_puppet(self):

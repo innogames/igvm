@@ -11,8 +11,10 @@ from fabric.contrib import files
 from uuid import uuid4
 
 from paramiko import transport
-from igvm.exceptions import RemoteCommandError
+from igvm.exceptions import RemoteCommandError, InvalidStateError
 from igvm.settings import COMMON_FABRIC_SETTINGS
+
+from adminapi.dataset import DatasetError
 
 
 def with_fabric_settings(fn):
@@ -134,3 +136,23 @@ class Host(object):
                 'mv {0} {1} ; chmod {2} {1}'
                 .format(tempfile, remote_path, mode)
             )
+
+    def acquire_lock(self, allow_fail=False):
+        if self.dataset_obj['igvm_locked']:
+            raise InvalidStateError(
+                'Server "{0}" is already being worked on by another igvm'
+                .format(self.dataset_obj['hostname'])
+            )
+
+        self.dataset_obj['igvm_locked'] = True
+        try:
+            self.dataset_obj.commit()
+        except DatasetError:
+            raise InvalidStateError(
+                'Server "{0}" is already being worked on by another igvm'
+                .format(self.dataset_obj['hostname'])
+            )
+
+    def release_lock(self):
+        self.dataset_obj['igvm_locked'] = False
+        self.dataset_obj.commit()
