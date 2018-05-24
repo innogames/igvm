@@ -1,6 +1,6 @@
 """igvm - Hypervisor Model
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
@@ -24,6 +24,7 @@ from igvm.kvm import (
     set_memory,
     set_vcpus,
 )
+from igvm.libvirt import get_virtconn
 from igvm.settings import (
     HOST_RESERVED_MEMORY,
     VG_NAME,
@@ -35,8 +36,7 @@ from igvm.settings import (
     KVM_HWMODEL_TO_CPUMODEL,
 )
 from igvm.transaction import Transaction
-from igvm.utils.backoff import retry_wait_backoff
-from igvm.utils.virtutils import get_virtconn
+from igvm.utils import retry_wait_backoff
 
 log = logging.getLogger(__name__)
 

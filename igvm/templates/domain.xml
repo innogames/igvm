@@ -10,13 +10,6 @@
   <!-- Don't put placement attribute unless NUMA settings are set! -->
   <vcpu current='{{ num_cpu }}'>{{ props.max_cpus }}</vcpu>
 
-  <!-- These are filled by KVM hooks in managevm/utils/kvm.py. -->
-  <!-- Disabled for now, without hooks this will break.
-  <cpu></cpu>
-  <cputune></cputune>
-  <numatune></numatune>
-  -->
-
   <os>
     <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>
 {% if props.boot_type == 'debian' %}

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """igvm - Setup
 
-Copyright (c) 2017, InnoGames GmbH
+Copyright (c) 2017 InnoGames GmbH
 """
 
 from setuptools import setup
@@ -12,7 +12,7 @@ from igvm import VERSION
 setup(
     name='igvm',
     version='.'.join(str(v) for v in VERSION),
-    packages=['igvm', 'igvm.utils'],
+    packages=['igvm'],
     entry_points={
         'console_scripts': [
             'igvm=igvm.cli:main',

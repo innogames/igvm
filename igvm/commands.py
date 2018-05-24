@@ -1,6 +1,6 @@
 """igvm - Command Routines
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
@@ -19,7 +19,7 @@ from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.settings import HYPERVISOR_ATTRIBUTES, VM_ATTRIBUTES
 from igvm.transaction import Transaction
-from igvm.utils.units import parse_size
+from igvm.utils import parse_size
 from igvm.vm import VM
 
 log = logging.getLogger(__name__)

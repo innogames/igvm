@@ -1,6 +1,6 @@
 """igvm - KVM Utilities
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
@@ -25,7 +25,7 @@ from igvm.settings import (
     VG_NAME,
     MIGRATE_COMMANDS,
 )
-from igvm.utils.units import parse_size
+from igvm.utils import parse_size
 
 from jinja2 import Environment, PackageLoader
 

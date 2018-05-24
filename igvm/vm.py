@@ -1,6 +1,6 @@
 """igvm - VM Model
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
@@ -32,9 +32,7 @@ from igvm.settings import (
     HYPERVISOR_PREFERENCES,
 )
 from igvm.transaction import Transaction
-from igvm.utils.portping import wait_until
-from igvm.utils.template import upload_template
-from igvm.utils.units import parse_size
+from igvm.utils import parse_size, upload_template, wait_until
 
 log = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 """igvm - The command line interface
 
-Copyright (c) 2017, InnoGames GmbH
+Copyright (c) 2017 InnoGames GmbH
 """
 
 from __future__ import print_function
@@ -24,7 +24,7 @@ from igvm.commands import (
     vm_stop,
     vm_sync,
 )
-from igvm.utils.virtutils import close_virtconns
+from igvm.libvirt import close_virtconns
 
 
 class ColorFormatters():

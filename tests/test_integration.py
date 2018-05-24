@@ -1,6 +1,6 @@
 """igvm - Integration Tests
 
-Copyright (c) 2018, InnoGames GmbH
+Copyright (c) 2018 InnoGames GmbH
 """
 
 from __future__ import print_function
@@ -40,7 +40,7 @@ from igvm.settings import (
     HYPERVISOR_ATTRIBUTES,
     IMAGE_PATH,
 )
-from igvm.utils.units import parse_size
+from igvm.utils import parse_size
 from fabric.network import disconnect_all
 
 basicConfig(level=INFO)
