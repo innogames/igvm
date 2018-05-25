@@ -6,12 +6,19 @@ the same preference is compared with each other.  Smaller values mark
 hypervisors as more preferred.  Keep in mind that for booleans false
 is less than true.
 
+NOTE: This module contains the preferences as simple class form.  We try
+to keep them reusable, even though most of them are not reused.  Some of
+the classes are so simple, they could as well just be a function but kept
+as classes to have a consistent style.
+
 Copyright (c) 2018 InnoGames GmbH
 """
-# NOTE: This module only has simple classes.  We try to keep them reusable,
-# even though most of them are not reused.  Some of the classes are so simple,
-# they would as well just be a function, but we keep them all as classes
-# to have a consistent style.
+
+from logging import getLogger
+
+from igvm.utils import LazyCompare
+
+log = getLogger(__name__)
 
 
 class InsufficientResource(object):
@@ -136,3 +143,23 @@ class HashDifference(object):
 
     def __call__(self, vm, hv):
         return hash(hv.fqdn) - hash(vm.fqdn)
+
+
+def sorted_hypervisors(preferences, vm, hypervisors):
+    log.debug('Sorting hypervisors by preference...')
+
+    # We use decorate-sort-undecorate pattern to log details about sorting.
+    for comparables, hypervisor in sorted(
+        ([LazyCompare(p, vm, h) for p in preferences], h)
+        for h in hypervisors
+    ):
+        for index, comparable in enumerate(comparables):
+            if not comparable.executed:
+                break
+        log.info(
+            'Hypervisor "{}" selected with decisive preference {!r} '
+            'after checking {} preferences.'
+            .format(hypervisor, comparable.func, index)
+        )
+
+        yield hypervisor

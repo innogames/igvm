@@ -27,7 +27,14 @@ _SIZE_FACTORS = {
 log = logging.getLogger(__name__)
 
 
-class ComparableByKey(object):
+class LazyCompare(object):
+    """Lazily execute the given function to compare its result"""
+    def __init__(self, func, *args):
+        self.func = func
+        self.args = args
+        self.executed = False
+        self.result = None
+
     def __lt__(self, other):
         return self.sort_key() < other.sort_key()
 
@@ -42,15 +49,6 @@ class ComparableByKey(object):
 
     def __gt__(self, other):
         return self.sort_key() > other.sort_key()
-
-
-class LazyCompare(ComparableByKey):
-    """Lazily execute the given function to compare its result"""
-    def __init__(self, func, *args):
-        self.func = func
-        self.args = args
-        self.executed = False
-        self.result = None
 
     def sort_key(self):
         if not self.executed:

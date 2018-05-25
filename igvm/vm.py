@@ -11,26 +11,12 @@ from fabric.api import cd, get, put, run, settings
 from hashlib import sha1, sha256
 from io import BytesIO
 from ipaddress import ip_address
-from os import environ
 from re import compile as re_compile
 from uuid import uuid4
 
-from adminapi.dataset import Query
-from adminapi.filters import Any
-
-from igvm.exceptions import (
-    ConfigError,
-    HypervisorError,
-    RemoteCommandError,
-)
+from igvm.exceptions import ConfigError, RemoteCommandError
 from igvm.host import Host
-from igvm.hypervisor import Hypervisor
-from igvm.hypervisor_ranking import HypervisorRanking
-from igvm.settings import (
-    DEFAULT_SWAP_SIZE,
-    HYPERVISOR_ATTRIBUTES,
-    HYPERVISOR_PREFERENCES,
-)
+from igvm.settings import DEFAULT_SWAP_SIZE
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, upload_template, wait_until
 
@@ -491,46 +477,3 @@ class VM(Host):
 
     def copy_postboot_script(self, script):
         self.put('/buildvm-postboot', script, '0755')
-
-    def get_best_hypervisor(self, hv_states=['online'], offline=False):
-        """Get best hypervisor
-
-        Get the best hypervisor and return it rather then directly setting it.
-        """
-        hypervisors = (Hypervisor(o) for o in Query({
-            'servertype': 'hypervisor',
-            'environment': environ.get('IGVM_MODE', 'production'),
-            'vlan_networks': self.dataset_obj['route_network'],
-            'state': Any(*hv_states),
-        }, HYPERVISOR_ATTRIBUTES))
-
-        log.debug('Evaluating hypervisors...')
-
-        # We use decorate-sort-undecorate pattern to get preferred hypervisors.
-        for ranking in sorted(HypervisorRanking(self, h) for h in hypervisors):
-            index = ranking.get_last_preference_index()
-            log.info(
-                'Hypervisor "{}" selected with decisive preference {!r} '
-                'after checking {} preferences.'
-                .format(
-                    ranking.hypervisor,
-                    HYPERVISOR_PREFERENCES[index],
-                    index,
-                )
-            )
-
-            # The actual resources are not checked during hypervisor ranking
-            # for performance.  We need to validate the hypervisor using
-            # the actual values before the final decision.
-            try:
-                ranking.hypervisor.check_vm(self, offline)
-            except HypervisorError as error:
-                log.warning(
-                    'Preferred hypervisor "{}" is skipped:  {}'
-                    .format(ranking.hypervisor, error)
-                )
-                continue
-
-            return ranking.hypervisor
-
-        raise VMError('Cannot find a hypervisor')
