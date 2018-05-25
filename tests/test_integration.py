@@ -148,17 +148,17 @@ class IGVMTest(TestCase):
 
     def tearDown(self):
         """Clean up all HVs after every test"""
+
+        vm_obj = Query({'hostname': VM_HOSTNAME}, ['hostname']).get()
+        uid_name = '{}_{}'.format(vm_obj['object_id'], vm_obj['hostname'])
+
         for hv in HYPERVISORS:
             hv.run(
                 'virsh destroy {vm}; '
-                'virsh undefine {vm}'
-                .format(vm=VM_HOSTNAME),
-                warn_only=True,
-            )
-            hv.run(
+                'virsh undefine {vm}; '
                 'umount /dev/xen-data/{vm}; '
                 'lvremove -f /dev/xen-data/{vm}'
-                .format(vm=VM_HOSTNAME),
+                .format(vm=uid_name),
                 warn_only=True,
             )
 
