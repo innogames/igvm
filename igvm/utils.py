@@ -28,7 +28,11 @@ log = logging.getLogger(__name__)
 
 
 class LazyCompare(object):
-    """Lazily execute the given function to compare its result"""
+    """Lazily execute the given function to compare its result
+
+    We are also handling Nones in here assuming that they are less than
+    anything else.
+    """
     def __init__(self, func, *args):
         self.func = func
         self.args = args
@@ -54,7 +58,7 @@ class LazyCompare(object):
         if not self.executed:
             self.executes = True
             self.result = self.func(*self.args)
-        return self.result
+        return (self.result is not None, self.result)
 
 
 def retry_wait_backoff(fn_check, fail_msg, max_wait=20):

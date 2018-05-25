@@ -1,10 +1,12 @@
 """igvm - Hypervisor Preferences
 
 This module contains preferences to select hypervisors.  Preferences
-return a value of any comparable datatype.  Only the return values of
-the same preference is compared with each other.  Smaller values mark
+return None or a value of any comparable datatype.  Only the return values
+of the same preference is compared with each other.  Smaller values mark
 hypervisors as more preferred.  Keep in mind that for booleans false
-is less than true.
+is less than true.  Nones mark hypervisors more preferred than any value.
+It is useful to some preferences, because they naturally get None for
+brand new hypervisors.
 
 NOTE: This module contains the preferences as simple class form.  We try
 to keep them reusable, even though most of them are not reused.  Some of
