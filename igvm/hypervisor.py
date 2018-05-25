@@ -87,7 +87,7 @@ class Hypervisor(Host):
         """
         with self.fabric_settings():
             self.lv_rename(
-                self.vm_lv_get(vm)['path'],
+                self.vm_lv_get(vm)['name'],
                 vm.uid_name
             )
 
@@ -480,10 +480,8 @@ class Hypervisor(Host):
                 .format(offline_transport)
             )
 
-        domain = self._get_domain(vm)
         if offline:
-            target_hypervisor.create_vm_storage(vm, vm.fqdn, transaction)
-
+            target_hypervisor.create_vm_storage(vm, vm.uid_name, transaction)
             if offline_transport == 'drbd':
                 self.start_drbd(vm, target_hypervisor)
                 try:
@@ -502,10 +500,10 @@ class Hypervisor(Host):
                     vm.shutdown(transaction)
                 with Transaction() as subtransaction:
                     nc_listener = target_hypervisor.netcat_to_device(
-                        self.vm_disk_path(vm.fqdn), subtransaction
+                        target_hypervisor.vm_lv_get(vm)['path'], subtransaction
                     )
                     self.device_to_netcat(
-                        self.vm_disk_path(domain.name()),
+                        self.vm_lv_get(vm)['path'],
                         vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
                         nc_listener,
                         subtransaction,
@@ -513,7 +511,11 @@ class Hypervisor(Host):
 
             target_hypervisor.define_vm(vm, transaction)
         else:
-            target_hypervisor.create_vm_storage(vm, domain.name(), transaction)
+            target_hypervisor.create_vm_storage(
+                vm,
+                vm.hypervisor.vm_lv_get(vm)['name'],
+                transaction
+            )
             migrate_live(self, target_hypervisor, vm, self._get_domain(vm))
 
     def total_vm_memory(self):
@@ -646,14 +648,15 @@ class Hypervisor(Host):
         ))
 
     def lv_remove(self, lv_path):
-        self.run('lvremove -f {0}'.format(lv_path))
+        self.run('lvremove -f {}'.format(lv_path))
 
     def lv_resize(self, lv_path, size_gib):
         """Extend the volume, return the new size"""
-        self.run('lvresize {0} -L {1}g'.format(lv_path, size_gib))
+        self.run('lvresize {} -L {}g'.format(lv_path, size_gib))
 
-    def lv_rename(self, lv_path, new_lv_name):
-        self.run('lvrename {0} {1}'.format(lv_path, new_lv_name))
+    def lv_rename(self, lv_name, new_lv_name):
+        if lv_name != new_lv_name:
+            self.run('lvrename {} {} {}'.format(VG_NAME, lv_name, new_lv_name))
 
     def get_free_disk_size_gib(self, safe=True):
         """Return free disk space as float in GiB"""
@@ -728,10 +731,8 @@ class Hypervisor(Host):
     def start_drbd(self, vm, peer):
         # Ensure that current domain name is used, this might be non-FQDN
         # one on source Hypervisor.
-        domain = self._get_domain(vm)
-
-        self.host_drbd = DRBD(self, VG_NAME, domain.name(), vm.fqdn, True)
-        self.peer_drbd = DRBD(peer, VG_NAME, vm.fqdn, vm.fqdn)
+        self.host_drbd = DRBD(self, vm, master_role=True)
+        self.peer_drbd = DRBD(peer, vm)
 
         with Transaction() as transaction:
             self.host_drbd.start(self.peer_drbd, transaction)

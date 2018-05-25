@@ -11,13 +11,15 @@ log = getLogger(__name__)
 
 
 class DRBD(object):
-    def __init__(self, hv, vg_name, lv_name, vm_name, master_role=False):
+    def __init__(self, hv, vm, master_role=False):
         self.hv = hv
-        self.vg_name = vg_name
-        self.lv_name = lv_name
-        self.vm_name = vm_name
         self.master_role = master_role
-        self.meta_disk = self.vm_name + '_meta'
+
+        lv = vm.hypervisor.vm_lv_get(vm)
+        self.vg_name = lv['vg_name']
+        self.lv_name = lv['name'] if self.master_role else vm.uid_name
+        self.vm_name = vm.fqdn
+        self.meta_disk = vm.fqdn + '_meta'
         self.table_file = '/tmp/{}_{}_table'.format(self.vg_name, self.lv_name)
 
         # Cached properties
@@ -152,7 +154,6 @@ class DRBD(object):
                 addr=self.hv.dataset_obj['intern_ip'],
                 port=self.get_device_port(),
                 dm_minor=self.get_device_minor(),
-                vm_name=self.vm_name,
                 lv_name=self.lv_name,
                 disk=(
                     'mapper/{}_orig'.format(self.lv_name)
