@@ -75,6 +75,22 @@ class Hypervisor(Host):
             .format(vm.fqdn, self.fqdn)
         )
 
+    def vm_lv_update_name(self, vm):
+        """Update the VMs logical volumes name
+
+        While the object_id part of the lv name will always be the same, the
+        hostname can get out of date when it's updated on serveradmin. Calling
+        this method during vm_restart updates it if required.
+
+        Be aware: This can only be done when the VM is shut off and the
+        libvirt domains needs to be redefined afterwards.
+        """
+        with self.fabric_settings():
+            self.lv_rename(
+                self.vm_lv_get(vm)['path'],
+                vm.uid_name
+            )
+
     def vm_mount_path(self, vm):
         """Returns the mount path for a VM or raises HypervisorError if not
         mounted."""
@@ -580,15 +596,12 @@ class Hypervisor(Host):
         domain = self._get_domain(vm)
         self.delete_vm(vm, keep_storage=True)
         if domain.name() != vm.fqdn:
-            with self.fabric_settings():
-                self.lvrename(self.vm_disk_path(domain.name()), vm.fqdn)
+            self.vm_lv_update_name(vm)
         self.define_vm(vm)
 
     def rename_vm(self, vm, new_fqdn):
-        domain = self._get_domain(vm)
         self.delete_vm(vm, keep_storage=True)
-        with self.fabric_settings():
-            self.lvrename(self.vm_disk_path(domain.name()), new_fqdn)
+        self.vm_lv_update_name(vm)
         vm.fqdn = new_fqdn
         self.define_vm(vm)
 
