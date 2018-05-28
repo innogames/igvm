@@ -4,6 +4,7 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
+from os import environ
 
 from adminapi.dataset import Query
 from adminapi.filters import Any, StartsWith
@@ -11,13 +12,19 @@ from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 
 from igvm.exceptions import (
+    HypervisorError,
     IGVMError,
     InconsistentAttributeError,
     InvalidStateError,
 )
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
-from igvm.settings import HYPERVISOR_ATTRIBUTES, VM_ATTRIBUTES
+from igvm.hypervisor_preferences import sorted_hypervisors
+from igvm.settings import (
+    HYPERVISOR_ATTRIBUTES,
+    HYPERVISOR_PREFERENCES,
+    VM_ATTRIBUTES,
+)
 from igvm.transaction import Transaction
 from igvm.utils import parse_size
 from igvm.vm import VM
@@ -143,9 +150,10 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
 
     # Could also have been set in serveradmin already.
     if not vm.hypervisor:
-        vm.hypervisor = vm.get_best_hypervisor(
+        vm.hypervisor = _get_best_hypervisor(
+            vm,
             ['online', 'online_reserved'] if ignore_reserved else ['online'],
-            True
+            True,
         )
         vm.dataset_obj['hypervisor'] = vm.hypervisor.dataset_obj['hostname']
         # XXX: Deprecated attribute xen_host
@@ -180,9 +188,10 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
         if vm.hypervisor.fqdn == hypervisor.fqdn:
             raise IGVMError('Source and destination Hypervisor is the same!')
     else:
-        hypervisor = vm.get_best_hypervisor(
+        hypervisor = _get_best_hypervisor(
+            vm,
             ['online', 'online_reserved'] if ignore_reserved else ['online'],
-            offline
+            offline,
         )
 
     was_running = vm.is_running()
@@ -549,6 +558,32 @@ def _get_hypervisor(hostname, ignore_reserved=False):
         )
 
     return Hypervisor(dataset_obj)
+
+
+def _get_best_hypervisor(vm, hypervisor_states, offline=False):
+    hypervisors = (Hypervisor(o) for o in Query({
+        'servertype': 'hypervisor',
+        'environment': environ.get('IGVM_MODE', 'production'),
+        'vlan_networks': vm.dataset_obj['route_network'],
+        'state': Any(*hypervisor_states),
+    }, HYPERVISOR_ATTRIBUTES))
+
+    for hypervisor in sorted_hypervisors(
+        HYPERVISOR_PREFERENCES, vm, hypervisors
+    ):
+        # The actual resources are not checked during sorting for performance.
+        # We need to validate the hypervisor using the actual values before
+        # the final decision.
+        try:
+            hypervisor.check_vm(vm, offline)
+        except HypervisorError as error:
+            log.warning(
+                'Preferred hypervisor "{}" is skipped:  {}'
+                .format(hypervisor, error)
+            )
+        else:
+            return hypervisor
+    raise IGVMError('Cannot find a hypervisor')
 
 
 def _check_attributes(vm):
