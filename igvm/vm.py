@@ -508,6 +508,16 @@ class VM(Host):
 
         # We use decorate-sort-undecorate pattern to get preferred hypervisors.
         for ranking in sorted(HypervisorRanking(self, h) for h in hypervisors):
+            index = ranking.get_last_preference_index()
+            log.info(
+                'Hypervisor "{}" selected with decisive preference {!r} '
+                'after checking {} preferences.'
+                .format(
+                    ranking.hypervisor,
+                    HYPERVISOR_PREFERENCES[index],
+                    index,
+                )
+            )
 
             # The actual resources are not checked during hypervisor ranking
             # for performance.  We need to validate the hypervisor using
@@ -521,16 +531,6 @@ class VM(Host):
                 )
                 continue
 
-            index = ranking.get_last_preference_index()
-            log.info(
-                'Hypervisor "{}" selected with decisive preference {!r} '
-                'after checking {} preferences.'
-                .format(
-                    ranking.hypervisor,
-                    HYPERVISOR_PREFERENCES[index],
-                    index,
-                )
-            )
             return ranking.hypervisor
 
         raise VMError('Cannot find a hypervisor')
