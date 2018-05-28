@@ -33,6 +33,7 @@ class LazyCompare(object):
     We are also handling Nones in here assuming that they are less than
     anything else.
     """
+
     def __init__(self, func, *args):
         self.func = func
         self.args = args
@@ -56,7 +57,7 @@ class LazyCompare(object):
 
     def sort_key(self):
         if not self.executed:
-            self.executes = True
+            self.executed = True
             self.result = self.func(*self.args)
         return (self.result is not None, self.result)
 
