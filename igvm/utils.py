@@ -9,8 +9,6 @@ import logging
 import socket
 import time
 
-from fabric.api import puts
-
 from igvm.exceptions import TimeoutError
 
 
@@ -97,15 +95,15 @@ def ping_port(ip, port=22, timeout=1):
 
 def wait_until(ip, port=22, timeout=60, waitmsg=None):
     if waitmsg:
-        puts(waitmsg)
+        log.info(waitmsg)
 
     for sec in range(timeout):
         if ping_port(ip, port):
-            puts('Success')
+            log.info('Success')
             return True
 
         if waitmsg:
-            puts('Remaining: {0} secs'.format(timeout - sec))
+            log.info('Remaining: {0} secs'.format(timeout - sec))
         time.sleep(1)
 
     return False
