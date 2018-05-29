@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from adminapi.dataset import Query
 from fabric.api import env
+from fabric.network import disconnect_all
 
 from igvm.commands import (
     disk_set,
@@ -35,13 +36,8 @@ from igvm.exceptions import (
 )
 from igvm.hypervisor import Hypervisor
 from igvm.migratevm import migratevm
-from igvm.settings import (
-    COMMON_FABRIC_SETTINGS,
-    HYPERVISOR_ATTRIBUTES,
-    IMAGE_PATH,
-)
+from igvm.settings import COMMON_FABRIC_SETTINGS, HYPERVISOR_ATTRIBUTES
 from igvm.utils import parse_size
-from fabric.network import disconnect_all
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
