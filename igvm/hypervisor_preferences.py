@@ -78,7 +78,13 @@ class OtherVMs(object):
 
 
 class HypervisorAttributeValue(object):
-    """Return inverse of an attribute value of the hypervisor"""
+    """Return an attribute value of the hypervisor
+
+    We are also handling None in here assuming that it is less than
+    anything else.  This is coincidentally matching with the None comparison
+    on Python 2.  Although our rationale is that those hypervisors being
+    brand new.
+    """
     def __init__(self, attribute):
         self.attribute = attribute
 
@@ -88,11 +94,19 @@ class HypervisorAttributeValue(object):
         return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
-        return hv.dataset_obj[self.attribute]
+        value = hv.dataset_obj[self.attribute]
+
+        return value is not None, value
 
 
 class HypervisorAttributeValueLimit(object):
-    """Compare an attribute value of the hypervisor with the given limit"""
+    """Compare an attribute value of the hypervisor with the given limit
+
+    We are also handling None in here assuming that it is not exceeding
+    the limit.  This is coincidentally matching with the None comparison
+    on Python 2.  Although our rationale is that those hypervisors being
+    brand new.
+    """
     def __init__(self, attribute, limit):
         self.attribute = attribute
         self.limit = limit
@@ -103,7 +117,9 @@ class HypervisorAttributeValueLimit(object):
         return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
-        return hv.dataset_obj[self.attribute] > self.limit
+        value = hv.dataset_obj[self.attribute]
+
+        return value is not None and value > self.limit
 
 
 class OverAllocation(object):
