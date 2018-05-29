@@ -40,8 +40,6 @@ from igvm.utils import parse_size
 
 basicConfig(level=INFO)
 
-environ['IGVM_MODE'] = 'testing'
-
 # Configuration of VMs used for tests
 # Keep in mind that the whole hostname must fit in 64 characters.
 VM_HOSTNAME = 'igvm-{}.test.ig.local'.format(uuid4())
@@ -61,13 +59,13 @@ def setUpModule():
     # created from scratch from Serveradmin data.
     HYPERVISORS = [Hypervisor(o) for o in Query({
         'servertype': 'hypervisor',
-        'environment': 'testing',
+        'environment': environ['ENVIRONMENT'],
         'vlan_networks': vm_route_net,
         'state': 'online',
     }, HYPERVISOR_ATTRIBUTES)]
 
     if len(HYPERVISORS) < 2:
-        raise Exception('Not enough testing hypervisors found')
+        raise Exception('Not enough hypervisors found')
 
     query = Query()
     vm_obj = query.new_object('vm')
@@ -129,7 +127,7 @@ class IGVMTest(TestCase):
         obj['memory'] = 2048
         obj['num_cpu'] = 2
         obj['os'] = 'jessie'
-        obj['environment'] = 'testing'
+        obj['environment'] = environ['ENVIRONMENT'],
         obj['no_monitoring'] = True
         obj['hypervisor'] = None
         obj['repositories'] = [

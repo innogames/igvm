@@ -4,7 +4,6 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
-from os import environ
 
 from adminapi.dataset import Query
 from adminapi.filters import Any, StartsWith
@@ -563,7 +562,7 @@ def _get_hypervisor(hostname, ignore_reserved=False):
 def _get_best_hypervisor(vm, hypervisor_states, offline=False):
     hypervisors = (Hypervisor(o) for o in Query({
         'servertype': 'hypervisor',
-        'environment': environ.get('IGVM_MODE', 'production'),
+        'environment': environ.get('ENVIRONMENT', 'production'),
         'vlan_networks': vm.dataset_obj['route_network'],
         'state': Any(*hypervisor_states),
     }, HYPERVISOR_ATTRIBUTES))
