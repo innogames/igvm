@@ -13,7 +13,6 @@ from unittest import TestCase
 from uuid import uuid4
 
 from adminapi.dataset import Query
-from fabric.api import env
 from fabric.network import disconnect_all
 
 from igvm.commands import (
@@ -36,12 +35,11 @@ from igvm.exceptions import (
 )
 from igvm.hypervisor import Hypervisor
 from igvm.migratevm import migratevm
-from igvm.settings import COMMON_FABRIC_SETTINGS, HYPERVISOR_ATTRIBUTES
+from igvm.settings import HYPERVISOR_ATTRIBUTES
 from igvm.utils import parse_size
 
 basicConfig(level=INFO)
-env.update(COMMON_FABRIC_SETTINGS)
-env['user'] = 'igtesting'  # Enforce user for integration testing process
+
 environ['IGVM_MODE'] = 'testing'
 
 # Configuration of VMs used for tests
