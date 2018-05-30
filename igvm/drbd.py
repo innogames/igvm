@@ -15,7 +15,7 @@ class DRBD(object):
         self.hv = hv
         self.master_role = master_role
 
-        lv = vm.hypervisor.vm_lv_get(vm)
+        lv = vm.hypervisor.get_lv_by_vm(vm)
         self.vg_name = lv['vg_name']
         self.lv_name = lv['name'] if self.master_role else vm.uid_name
         self.vm_name = vm.fqdn

@@ -57,8 +57,8 @@ class Hypervisor(Host):
         # We cannot store these in the VM object due to migrations.
         self._mount_path = {}
 
-    def vm_lv_get(self, vm):
-        """Get a VMs logical volume information"""
+    def get_lv_by_vm(self, vm):
+        """Get logical volume information of a VM"""
         lvs = self.get_logical_volumes()
         domain = self._find_domain(vm)
         for lv in lvs:
@@ -87,7 +87,7 @@ class Hypervisor(Host):
         """
         with self.fabric_settings():
             self.lv_rename(
-                self.vm_lv_get(vm)['name'],
+                self.get_lv_by_vm(vm)['name'],
                 vm.uid_name
             )
 
@@ -317,7 +317,7 @@ class Hypervisor(Host):
         if new_size_gib < vm.dataset_obj['disk_size_gib']:
             raise NotImplementedError('Cannot shrink the disk.')
         with self.fabric_settings():
-            self.lv_resize(self.vm_lv_get(vm)['path'], new_size_gib)
+            self.lv_resize(self.get_lv_by_vm(vm)['path'], new_size_gib)
 
         self._vm_set_disk_size_gib(vm, new_size_gib)
 
@@ -341,7 +341,7 @@ class Hypervisor(Host):
                 .format(vm.fqdn)
             )
 
-        self.format_storage(self.vm_lv_get(vm)['path'])
+        self.format_storage(self.get_lv_by_vm(vm)['path'])
         return self.mount_vm_storage(vm, transaction)
 
     def download_and_extract_image(self, image, target_dir):
@@ -381,7 +381,7 @@ class Hypervisor(Host):
             )
 
         self._mount_path[vm] = self.mount_temp(
-            self.vm_lv_get(vm)['path'], suffix=('-' + vm.fqdn)
+            self.get_lv_by_vm(vm)['path'], suffix=('-' + vm.fqdn)
         )
         if transaction:
             transaction.on_rollback(
@@ -406,7 +406,7 @@ class Hypervisor(Host):
         # Update disk size
         result = {}
         try:
-            lv = self.vm_lv_get(vm)
+            lv = self.get_lv_by_vm(vm)
             result['disk_size_gib'] = int(math.ceil(lv['size_MiB'] / 1024))
         except HypervisorError:
             raise HypervisorError(
@@ -500,10 +500,10 @@ class Hypervisor(Host):
                     vm.shutdown(transaction)
                 with Transaction() as subtransaction:
                     nc_listener = target_hypervisor.netcat_to_device(
-                        target_hypervisor.vm_lv_get(vm)['path'], subtransaction
+                        target_hypervisor.get_lv_by_vm(vm)['path'], subtransaction
                     )
                     self.device_to_netcat(
-                        self.vm_lv_get(vm)['path'],
+                        self.get_lv_by_vm(vm)['path'],
                         vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
                         nc_listener,
                         subtransaction,
@@ -513,7 +513,7 @@ class Hypervisor(Host):
         else:
             target_hypervisor.create_vm_storage(
                 vm,
-                vm.hypervisor.vm_lv_get(vm)['name'],
+                vm.hypervisor.get_lv_by_vm(vm)['name'],
                 transaction
             )
             migrate_live(self, target_hypervisor, vm, self._get_domain(vm))
@@ -545,7 +545,7 @@ class Hypervisor(Host):
         domain = self._get_domain(vm)
         self.run(
             'virsh blockresize --path {} --size {}GiB {}'
-            .format(self.vm_lv_get(vm)['path'], disk_size_gib, domain.name())
+            .format(self.get_lv_by_vm(vm)['path'], disk_size_gib, domain.name())
         )
         vm.run('xfs_growfs /')
 
@@ -587,7 +587,7 @@ class Hypervisor(Host):
                 'Refusing to undefine running VM "{}"'.format(vm.fqdn)
             )
         log.info('Undefining "{}" on "{}"'.format(vm.fqdn, self.fqdn))
-        lv_path = self.vm_lv_get(vm)['path']
+        lv_path = self.get_lv_by_vm(vm)['path']
         domain = self._get_domain(vm)
         if domain.undefine() != 0:
             raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))

@@ -352,7 +352,7 @@ def generate_domain_xml(hypervisor, vm):
 
     config = {
         'name': vm.uid_name,
-        'disk_device': hypervisor.vm_lv_get(vm)['path'],
+        'disk_device': hypervisor.get_lv_by_vm(vm)['path'],
         'memory': vm.dataset_obj['memory'],
         'num_cpu': vm.dataset_obj['num_cpu'],
         'props': props,
