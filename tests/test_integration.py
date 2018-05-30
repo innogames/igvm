@@ -117,6 +117,7 @@ class IGVMTest(TestCase):
         # Serveradmin whenever it needs. Because of that we must never store
         # any igvm objects and query things anew each time.
         obj = Query({'hostname': VM_HOSTNAME}, [
+            'hostname',
             'state',
             'backup_disabled',
             'disk_size_gib',
@@ -126,6 +127,7 @@ class IGVMTest(TestCase):
             'environment',
             'no_monitoring',
             'hypervisor',
+            'xen_host',
             'repositories',
             'puppet_environment',
         ]).get()
@@ -139,6 +141,7 @@ class IGVMTest(TestCase):
         obj['environment'] = 'testing'
         obj['no_monitoring'] = True
         obj['hypervisor'] = None
+        obj['xen_host'] = None
         obj['repositories'] = [
             'int:basejessie:stable',
             'int:innogames:stable jessie',
@@ -146,12 +149,10 @@ class IGVMTest(TestCase):
         obj['puppet_environment'] = None
         obj['backup_disabled'] = True
         obj.commit()
+        self.uid_name = '{}_{}'.format(obj['object_id'], obj['hostname'])
 
     def tearDown(self):
         """Clean up all HVs after every test"""
-
-        vm_obj = Query({'hostname': VM_HOSTNAME}, ['hostname']).get()
-        uid_name = '{}_{}'.format(vm_obj['object_id'], vm_obj['hostname'])
 
         for hv in HYPERVISORS:
             hv.run(
@@ -159,7 +160,7 @@ class IGVMTest(TestCase):
                 'virsh undefine {vm}; '
                 'umount /dev/{vg}/{vm}; '
                 'lvremove -f /dev/{vg}/{vm}'
-                .format(vg=VG_NAME, vm=uid_name),
+                .format(vg=VG_NAME, vm=self.uid_name),
                 warn_only=True,
             )
 
@@ -175,7 +176,10 @@ class IGVMTest(TestCase):
                 else:
                     # Is it gone from other HVs after migration?
                     self.assertEqual(hv.vm_defined(vm), False)
-                    hv.run('test ! -b /dev/{}/{}'.format(VG_NAME, vm.fqdn))
+                    hv.run(
+                        'test ! -b /dev/{}/{}'.format(
+                            VG_NAME, self.uid_name,
+                            ))
 
             # Is VM itself alive and fine?
             fqdn = vm.run('hostname -f').strip()
@@ -188,13 +192,13 @@ class IGVMTest(TestCase):
             if not hv_name:
                 hv_name = vm.dataset_obj['hypervisor']
 
-            if not hv_name:
-                hv_name = vm.dataset_obj['hypervisor']
-
             for hv in HYPERVISORS:
                 if hv.dataset_obj['hostname'] == hv_name:
                     self.assertEqual(hv.vm_defined(vm), False)
-                    hv.run('test ! -b /dev/{}/{}'.format(VG_NAME, vm.fqdn))
+                    hv.run(
+                        'test ! -b /dev/{}/{}'.format(
+                            VG_NAME, self.uid_name,
+                            ))
 
 
 class BuildTest(IGVMTest):
@@ -202,24 +206,11 @@ class BuildTest(IGVMTest):
 
     def setUp(self):
         super(BuildTest, self).setUp()
-        # Normally build tests happen on the 1st HV
-        obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
-        obj['hypervisor'] = HYPERVISORS[0].dataset_obj['hostname']
-        obj.commit()
-        with _get_vm(VM_HOSTNAME) as vm:
-            # For contacting VM over shell
-            self.vm = vm
 
-    def test_build(self):
-        vm_build(VM_HOSTNAME)
-        self.check_vm_present()
+    def tearDown(self):
+        super(BuildTest, self).tearDown()
 
-    def test_build_auto_find_hypervisor(self):
-        # HV is configured for all BuildTest class tests by default.
-        # But this test requires it unconfigured.
-        obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
-        obj['hypervisor'] = None
-        obj.commit()
+    def test_build_jessie(self):
         vm_build(VM_HOSTNAME)
         self.check_vm_present()
 
@@ -245,7 +236,8 @@ class BuildTest(IGVMTest):
             vm_build(VM_HOSTNAME, postboot=fd.name)
             self.check_vm_present()
 
-            output = self.vm.run('cat /root/postboot_result')
+            with _get_vm(VM_HOSTNAME) as vm:
+                output = vm.run('cat /root/postboot_result')
             self.assertIn('hello', output)
 
     def test_delete(self):
@@ -256,7 +248,8 @@ class BuildTest(IGVMTest):
         with self.assertRaises(IGVMError):
             vm_delete(VM_HOSTNAME)
 
-        self.vm.shutdown()
+        with _get_vm(VM_HOSTNAME) as vm:
+            vm.shutdown()
         vm_delete(VM_HOSTNAME, retire=True)
 
         self.check_vm_absent()
@@ -279,8 +272,9 @@ class BuildTest(IGVMTest):
             vm_build(VM_HOSTNAME)
 
         # Create files on VM to check later if the VM was really rebuilt
-        self.vm.run('touch /root/initial_canary')
-        self.vm.run('test -f /root/initial_canary')
+        with _get_vm(VM_HOSTNAME) as vm:
+            vm.run('touch /root/initial_canary')
+            vm.run('test -f /root/initial_canary')
 
         # Now stop it and rebuild it
         vm_stop(VM_HOSTNAME)
@@ -288,21 +282,21 @@ class BuildTest(IGVMTest):
         self.check_vm_present()
 
         # The VM was rebuild and thus the test file must be gone
-        self.vm.run('test ! -f /root/initial_canary')
+        with _get_vm(VM_HOSTNAME) as vm:
+            vm.run('test ! -f /root/initial_canary')
 
 
 class CommandTest(IGVMTest):
     def setUp(self):
         super(CommandTest, self).setUp()
-        # For every command test build a VM on the 1st HV
-        obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
-        obj['hypervisor'] = HYPERVISORS[0].dataset_obj['hostname']
-        obj.commit()
         vm_build(VM_HOSTNAME)
         self.check_vm_present()
         with _get_vm(VM_HOSTNAME) as vm:
             # For contacting VM over shell
             self.vm = vm
+
+    def tearDown(self):
+        super(CommandTest, self).tearDown()
 
     def test_start_stop(self):
         # Doesn't fail, but should print a message
@@ -326,13 +320,13 @@ class CommandTest(IGVMTest):
         self.check_vm_present()
 
     def test_disk_set(self):
-        def _get_hv():
+        def _get_disk_hv():
             return (
                 self.vm.hypervisor.vm_sync_from_hypervisor(self.vm)
                 ['disk_size_gib']
             )
 
-        def _get_vm():
+        def _get_disk_vm():
             return parse_size(
                 self.vm.run("df -h / | tail -n+2 | awk '{ print $2 }'")
                 .strip(),
@@ -342,24 +336,24 @@ class CommandTest(IGVMTest):
         # Initial size same as built
         obj = Query({'hostname': VM_HOSTNAME}, ['disk_size_gib']).get()
         size = obj['disk_size_gib']
-        self.assertEqual(_get_hv(), size)
-        self.assertEqual(_get_vm(), size)
+        self.assertEqual(_get_disk_hv(), size)
+        self.assertEqual(_get_disk_vm(), size)
 
         size = size + 1
         disk_set(VM_HOSTNAME, '+1')
         obj = Query({'hostname': VM_HOSTNAME}, ['disk_size_gib']).get()
 
         self.assertEqual(obj['disk_size_gib'], size)
-        self.assertEqual(_get_hv(), size)
-        self.assertEqual(_get_vm(), size)
+        self.assertEqual(_get_disk_hv(), size)
+        self.assertEqual(_get_disk_vm(), size)
 
         size = 8
         disk_set(VM_HOSTNAME, '{}GB'.format(size))
         obj = Query({'hostname': VM_HOSTNAME}, ['disk_size_gib']).get()
 
         self.assertEqual(obj['disk_size_gib'], size)
-        self.assertEqual(_get_hv(), size)
-        self.assertEqual(_get_vm(), size)
+        self.assertEqual(_get_disk_hv(), size)
+        self.assertEqual(_get_disk_vm(), size)
 
         with self.assertRaises(Warning):
             disk_set(VM_HOSTNAME, '{}GB'.format(size))
@@ -418,24 +412,24 @@ class CommandTest(IGVMTest):
         self.assertEqual(_get_mem_vm() - vm_mem, -1024)
 
     def test_vcpu_set(self):
-        def _get_hv():
+        def _get_cpus_hv():
             data = self.vm.hypervisor.vm_sync_from_hypervisor(self.vm)
             return data['num_cpu']
 
-        def _get_vm():
+        def _get_cpus_vm():
             return int(
                 self.vm.run('cat /proc/cpuinfo | grep vendor_id | wc -l')
                 .strip()
             )
 
         # Online
-        self.assertEqual(_get_hv(), 2)
-        self.assertEqual(_get_vm(), 2)
+        self.assertEqual(_get_cpus_hv(), 2)
+        self.assertEqual(_get_cpus_vm(), 2)
         obj = Query({'hostname': VM_HOSTNAME}, ['num_cpu']).get()
         self.assertEqual(obj['num_cpu'], 2)
         vcpu_set(VM_HOSTNAME, 3)
-        self.assertEqual(_get_hv(), 3)
-        self.assertEqual(_get_vm(), 3)
+        self.assertEqual(_get_cpus_hv(), 3)
+        self.assertEqual(_get_cpus_vm(), 3)
 
         obj = Query({'hostname': VM_HOSTNAME}, ['num_cpu']).get()
         self.assertEqual(obj['num_cpu'], 3)
@@ -449,8 +443,8 @@ class CommandTest(IGVMTest):
 
         # Offline
         vcpu_set(VM_HOSTNAME, 2, offline=True)
-        self.assertEqual(_get_hv(), 2)
-        self.assertEqual(_get_vm(), 2)
+        self.assertEqual(_get_cpus_hv(), 2)
+        self.assertEqual(_get_cpus_vm(), 2)
 
         # Impossible amount
         with self.assertRaises(IGVMError):
@@ -497,34 +491,26 @@ class CommandTest(IGVMTest):
 class MigrationTest(IGVMTest):
     def setUp(self):
         super(MigrationTest, self).setUp()
-        # Every migration gets a freshly built VM on the 1st HV
-        obj = Query({'hostname': VM_HOSTNAME}, ['hypervisor']).get()
-        obj['hypervisor'] = HYPERVISORS[0].dataset_obj['hostname']
-        obj.commit()
         vm_build(VM_HOSTNAME)
-        # And is performed to the 2nd HV
-        # Of course apart from migrations to automatically selected HVs
-        self.new_hv_name = HYPERVISORS[1].dataset_obj['hostname']
+        with _get_vm(VM_HOSTNAME) as vm:
+            self.old_hv_name = vm.hypervisor.dataset_obj['hostname']
 
     def test_online_migration(self):
-        migratevm(VM_HOSTNAME, self.new_hv_name)
-        self.check_vm_present()
-
-    def test_online_migration_auto_find_hypervisor(self):
-        # auto find means no target HV is specified
         migratevm(VM_HOSTNAME)
         self.check_vm_present()
 
     def test_offline_migration_netcat(self):
         migratevm(
-            VM_HOSTNAME, self.new_hv_name, offline=True,
+            VM_HOSTNAME,
+            offline=True,
             offline_transport='netcat',
         )
         self.check_vm_present()
 
     def test_offline_migration_drbd(self):
         migratevm(
-            VM_HOSTNAME, self.new_hv_name, offline=True,
+            VM_HOSTNAME,
+            offline=True,
             offline_transport='drbd',
         )
 
@@ -536,19 +522,18 @@ class MigrationTest(IGVMTest):
         obj.commit()
 
         with self.assertRaises(InconsistentAttributeError):
-            migratevm(VM_HOSTNAME, self.new_hv_name)
+            migratevm(VM_HOSTNAME)
 
     def test_reject_online_with_new_ip(self):
         with self.assertRaises(IGVMError):
             # Fake IP address is fine, this is a failing test.
-            migratevm(VM_HOSTNAME, self.new_hv_name, newip='1.2.3.4')
+            migratevm(VM_HOSTNAME, newip='1.2.3.4')
 
     def test_reject_new_ip_without_puppet(self):
         with self.assertRaises(IGVMError):
             # Fake IP address is fine, this is a failing test.
             migratevm(
                 VM_HOSTNAME,
-                self.new_hv_name,
                 offline=True,
                 newip='1.2.3.4',
             )
@@ -563,7 +548,6 @@ class MigrationTest(IGVMTest):
 
         migratevm(
             VM_HOSTNAME,
-            self.new_hv_name,
             offline=True,
             newip=new_address,
             run_puppet=True,
@@ -577,7 +561,7 @@ class MigrationTest(IGVMTest):
 
     def test_reject_online_with_puppet(self):
         with self.assertRaises(IGVMError):
-            migratevm(VM_HOSTNAME, self.new_hv_name, run_puppet=True)
+            migratevm(VM_HOSTNAME, run_puppet=True)
 
     def test_rollback_netcat(self):
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
@@ -587,14 +571,12 @@ class MigrationTest(IGVMTest):
         with self.assertRaises(IGVMError):
             migratevm(
                 VM_HOSTNAME,
-                self.new_hv_name,
                 offline=True,
                 run_puppet=True,
                 offline_transport='netcat',
             )
 
         self.check_vm_present()
-        self.check_vm_absent(self.new_hv_name)
 
     def test_rollback_drbd(self):
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
@@ -604,11 +586,9 @@ class MigrationTest(IGVMTest):
         with self.assertRaises(IGVMError):
             migratevm(
                 VM_HOSTNAME,
-                self.new_hv_name,
                 offline=True,
                 run_puppet=True,
                 offline_transport='drbd',
             )
 
         self.check_vm_present()
-        self.check_vm_absent(self.new_hv_name)
