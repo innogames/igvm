@@ -139,8 +139,6 @@ VM_ATTRIBUTES = [
     'route_network',
     'sshfp',
     'state',
-    # XXX: Deprecated attribute xen_host
-    {'xen_host': HYPERVISOR_ATTRIBUTES},
     {'hypervisor': HYPERVISOR_ATTRIBUTES},
 ]
 
