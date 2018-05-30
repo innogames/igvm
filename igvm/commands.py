@@ -312,6 +312,7 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
         vm.shutdown()
 
     if not no_redefine:
+        vm.hypervisor.vm_lv_update_name(vm)
         vm.hypervisor.redefine_vm(vm)
 
     vm.start()

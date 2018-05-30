@@ -39,6 +39,7 @@ from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
     HYPERVISOR_ATTRIBUTES,
     IMAGE_PATH,
+    VG_NAME,
 )
 from igvm.utils import parse_size
 from fabric.network import disconnect_all
@@ -148,17 +149,17 @@ class IGVMTest(TestCase):
 
     def tearDown(self):
         """Clean up all HVs after every test"""
+
+        vm_obj = Query({'hostname': VM_HOSTNAME}, ['hostname']).get()
+        uid_name = '{}_{}'.format(vm_obj['object_id'], vm_obj['hostname'])
+
         for hv in HYPERVISORS:
             hv.run(
                 'virsh destroy {vm}; '
-                'virsh undefine {vm}'
-                .format(vm=VM_HOSTNAME),
-                warn_only=True,
-            )
-            hv.run(
-                'umount /dev/xen-data/{vm}; '
-                'lvremove -f /dev/xen-data/{vm}'
-                .format(vm=VM_HOSTNAME),
+                'virsh undefine {vm}; '
+                'umount /dev/{vg}/{vm}; '
+                'lvremove -f /dev/{vg}/{vm}'
+                .format(vg=VG_NAME, vm=uid_name),
                 warn_only=True,
             )
 
@@ -174,7 +175,7 @@ class IGVMTest(TestCase):
             else:
                 # Is it gone from other HVs after migration?
                 self.assertEqual(hv.vm_defined(vm), False)
-                hv.run('test ! -b /dev/xen-data/{}'.format(vm.fqdn))
+                hv.run('test ! -b /dev/{}/{}'.format(VG_NAME, vm.fqdn))
 
         # Is VM itself alive and fine?
         fqdn = vm.run('hostname -f').strip()
@@ -191,7 +192,7 @@ class IGVMTest(TestCase):
         for hv in HYPERVISORS:
             if hv.dataset_obj['hostname'] == hv_name:
                 self.assertEqual(hv.vm_defined(vm), False)
-                hv.run('test ! -b /dev/xen-data/{}'.format(vm.fqdn))
+                hv.run('test ! -b /dev/{}/{}'.format(VG_NAME, vm.fqdn))
 
 
 class BuildTest(IGVMTest):
