@@ -70,7 +70,7 @@ class Hypervisor(Host):
             ):
                 return lv
 
-        raise HypervisorError(
+        raise StorageError(
             'No existing LV found for VM "{}" on "{}".'
             .format(vm.fqdn, self.fqdn)
         )
