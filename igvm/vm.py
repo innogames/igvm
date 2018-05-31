@@ -4,10 +4,12 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
+import os
 import time
 
 from base64 import b64decode
 from fabric.api import cd, get, put, run, settings
+from fabric.contrib.files import upload_template
 from hashlib import sha1, sha256
 from io import BytesIO
 from ipaddress import ip_address
@@ -18,7 +20,7 @@ from igvm.exceptions import ConfigError, RemoteCommandError
 from igvm.host import Host
 from igvm.settings import DEFAULT_SWAP_SIZE
 from igvm.transaction import Transaction
-from igvm.utils import parse_size, upload_template, wait_until
+from igvm.utils import parse_size, wait_until
 
 log = logging.getLogger(__name__)
 
@@ -102,9 +104,16 @@ class VM(Host):
 
     def upload_template(self, filename, destination, context=None):
         """" Same as Fabric's template() but works on mounted or running vm """
+        template_dir = os.path.join(os.path.dirname(__file__), 'templates')
         with self.vm_host():
             return upload_template(
-                filename, self.vm_path(destination), context
+                filename,
+                self.vm_path(destination),
+                context,
+                backup=False,
+                use_jinja=True,
+                template_dir=template_dir,
+                use_sudo=True,
             )
 
     def get(self, remote_path, local_path):

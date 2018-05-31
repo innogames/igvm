@@ -6,12 +6,8 @@ Copyright (c) 2018 InnoGames GmbH
 from __future__ import division
 
 import logging
-import os
 import socket
 import time
-
-from fabric.api import puts
-from fabric.contrib.files import upload_template as _upload_template
 
 from igvm.exceptions import TimeoutError
 
@@ -99,32 +95,18 @@ def ping_port(ip, port=22, timeout=1):
 
 def wait_until(ip, port=22, timeout=60, waitmsg=None):
     if waitmsg:
-        puts(waitmsg)
+        log.info(waitmsg)
 
     for sec in range(timeout):
         if ping_port(ip, port):
-            puts('Success')
+            log.info('Success')
             return True
 
         if waitmsg:
-            puts('Remaining: {0} secs'.format(timeout - sec))
+            log.info('Remaining: {0} secs'.format(timeout - sec))
         time.sleep(1)
 
     return False
-
-
-def upload_template(filename, destination, context=None):
-    template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-
-    _upload_template(
-        filename,
-        destination,
-        context,
-        backup=False,
-        use_jinja=True,
-        template_dir=template_dir,
-        use_sudo=True,
-    )
 
 
 def parse_size(text, unit):
