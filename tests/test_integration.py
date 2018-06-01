@@ -23,6 +23,7 @@ from igvm.commands import (
     vcpu_set,
     vm_build,
     vm_delete,
+    vm_migrate,
     vm_restart,
     vm_start,
     vm_stop,
@@ -35,11 +36,9 @@ from igvm.exceptions import (
     InconsistentAttributeError,
 )
 from igvm.hypervisor import Hypervisor
-from igvm.migratevm import migratevm
 from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
     HYPERVISOR_ATTRIBUTES,
-    IMAGE_PATH,
     VG_NAME,
 )
 from igvm.utils import parse_size
@@ -182,9 +181,8 @@ class IGVMTest(TestCase):
                     # Is it gone from other HVs after migration?
                     self.assertEqual(hv.vm_defined(vm), False)
                     hv.run(
-                        'test ! -b /dev/{}/{}'.format(
-                            VG_NAME, self.uid_name,
-                            ))
+                        'test ! -b /dev/{}/{}'.format(VG_NAME, self.uid_name)
+                    )
 
             # Is VM itself alive and fine?
             fqdn = vm.run('hostname -f').strip()
@@ -201,9 +199,8 @@ class IGVMTest(TestCase):
                 if hv.dataset_obj['hostname'] == hv_name:
                     self.assertEqual(hv.vm_defined(vm), False)
                     hv.run(
-                        'test ! -b /dev/{}/{}'.format(
-                            VG_NAME, self.uid_name,
-                            ))
+                        'test ! -b /dev/{}/{}'.format(VG_NAME, self.uid_name)
+                    )
 
 
 class BuildTest(IGVMTest):
@@ -501,11 +498,11 @@ class MigrationTest(IGVMTest):
             self.old_hv_name = vm.hypervisor.dataset_obj['hostname']
 
     def test_online_migration(self):
-        migratevm(VM_HOSTNAME)
+        vm_migrate(VM_HOSTNAME)
         self.check_vm_present()
 
     def test_offline_migration_netcat(self):
-        migratevm(
+        vm_migrate(
             VM_HOSTNAME,
             offline=True,
             offline_transport='netcat',
@@ -513,7 +510,7 @@ class MigrationTest(IGVMTest):
         self.check_vm_present()
 
     def test_offline_migration_drbd(self):
-        migratevm(
+        vm_migrate(
             VM_HOSTNAME,
             offline=True,
             offline_transport='drbd',
@@ -527,17 +524,17 @@ class MigrationTest(IGVMTest):
         obj.commit()
 
         with self.assertRaises(InconsistentAttributeError):
-            migratevm(VM_HOSTNAME)
+            vm_migrate(VM_HOSTNAME)
 
     def test_reject_online_with_new_ip(self):
         with self.assertRaises(IGVMError):
             # Fake IP address is fine, this is a failing test.
-            migratevm(VM_HOSTNAME, newip='1.2.3.4')
+            vm_migrate(VM_HOSTNAME, newip='1.2.3.4')
 
     def test_reject_new_ip_without_puppet(self):
         with self.assertRaises(IGVMError):
             # Fake IP address is fine, this is a failing test.
-            migratevm(
+            vm_migrate(
                 VM_HOSTNAME,
                 offline=True,
                 newip='1.2.3.4',
@@ -551,7 +548,7 @@ class MigrationTest(IGVMTest):
             Query({'hostname': VM_NET}, ['intern_ip']).get_free_ip_addrs()
         )
 
-        migratevm(
+        vm_migrate(
             VM_HOSTNAME,
             offline=True,
             newip=new_address,
@@ -566,7 +563,7 @@ class MigrationTest(IGVMTest):
 
     def test_reject_online_with_puppet(self):
         with self.assertRaises(IGVMError):
-            migratevm(VM_HOSTNAME, run_puppet=True)
+            vm_migrate(VM_HOSTNAME, run_puppet=True)
 
     def test_rollback_netcat(self):
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
@@ -574,7 +571,7 @@ class MigrationTest(IGVMTest):
         obj.commit()
 
         with self.assertRaises(IGVMError):
-            migratevm(
+            vm_migrate(
                 VM_HOSTNAME,
                 offline=True,
                 run_puppet=True,
@@ -589,7 +586,7 @@ class MigrationTest(IGVMTest):
         obj.commit()
 
         with self.assertRaises(IGVMError):
-            migratevm(
+            vm_migrate(
                 VM_HOSTNAME,
                 offline=True,
                 run_puppet=True,

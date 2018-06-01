@@ -10,12 +10,12 @@ import time
 
 from fabric.network import disconnect_all
 
-from igvm.buildvm import buildvm
 from igvm.commands import (
     disk_set,
     host_info,
     mem_set,
     vcpu_set,
+    vm_build,
     vm_delete,
     vm_migrate,
     vm_rename,
@@ -88,9 +88,9 @@ def parse_args():
 
     subparser = subparsers.add_parser(
         'build',
-        description=buildvm.__doc__,
+        description=vm_build.__doc__,
     )
-    subparser.set_defaults(func=buildvm)
+    subparser.set_defaults(func=vm_build)
     subparser.add_argument(
         'vm_hostname',
         help='Hostname of the guest system',

@@ -249,9 +249,8 @@ def migrate_live(source, destination, vm, domain):
         ' --timeout {timeout}'
     )
 
-    # Append OS-specific migration commands.
-    # They might not exist for some combinations but this should have
-    # been already tested in migratevm.py.
+    # Append OS-specific migration commands.  They might not exist for some
+    # combinations but this should have already been checked by the caller.
     migrate_cmd += MIGRATE_COMMANDS.get(
         (source.dataset_obj['os'], destination.dataset_obj['os'])
     )
