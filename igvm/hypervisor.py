@@ -5,6 +5,7 @@ Copyright (c) 2018 InnoGames GmbH
 
 import logging
 import math
+from time import sleep
 
 from libvirt import VIR_DOMAIN_SHUTOFF
 
@@ -675,12 +676,35 @@ class Hypervisor(Host):
         return vg_size_gib
 
     def mount_temp(self, device, suffix=''):
+        """Mounts given device into temporary path"""
         mount_dir = self.run('mktemp -d --suffix {}'.format(suffix))
         self.run('mount {0} {1}'.format(device, mount_dir))
         return mount_dir
 
     def umount_temp(self, device_or_path):
-        self.run('umount {0}'.format(device_or_path))
+        """Unmounts a device or path
+
+        Sometimes it is impossible to immediately umount a directory due to
+        a process still holding it open. It happens often when igvm is stopped.
+        Underlying process such as mkswap or puppetrun won't die immediately.
+        """
+
+        retry = 10
+        for i in range(0, retry):
+            if i > 0:
+                log.warning(
+                    'Umounting {} failed, attempting again in a moment. '
+                    '{} attempts left.'.format(
+                        device_or_path,
+                        retry - i,
+                        ))
+                sleep(1)
+            res = self.run(
+                'umount {0}'.format(device_or_path),
+                warn_only=(i < retry-1),
+            )
+            if res.succeeded:
+                return
 
     def remove_temp(self, mount_path):
         self.run('rmdir {0}'.format(mount_path))
