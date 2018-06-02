@@ -155,14 +155,9 @@ def parse_args():
         help='Run puppet in debug mode',
     )
     subparser.add_argument(
-        '--maintenance',
-        action='store_true',
-        help='Set state to maintenance',
-    )
-    subparser.add_argument(
         '--offline',
         action='store_true',
-        help='Force offline migration, also implies --maintenance',
+        help='Force offline migration',
     )
     subparser.add_argument(
         '--ignore-reserved',
@@ -173,7 +168,9 @@ def parse_args():
     subparser.add_argument(
         '--offline-transport',
         default='drbd',
-        help='Specify drbd (default) or netcat transport to migrate disk image',
+        help=(
+            'Specify drbd (default) or netcat transport to migrate disk image'
+        ),
     )
     subparser = subparsers.add_parser(
         'disk-set',
