@@ -1,12 +1,10 @@
 """igvm - Hypervisor Preferences
 
-This module contains preferences to select hypervisors.  Preferences
-return None or a value of any comparable datatype.  Only the return values
-of the same preference is compared with each other.  Smaller values mark
-hypervisors as more preferred.  Keep in mind that for booleans false
-is less than true.  Nones mark hypervisors more preferred than any value.
-It is useful to some preferences, because they naturally get None for
-brand new hypervisors.
+This module contains preferences to select hypervisors.  Preferences return
+a value of any comparable datatype.  Only the return values of the same
+preference is compared with each other.  Smaller values mark hypervisors
+as more preferred.  Keep in mind that for booleans false is less than true.
+See sorted_hypervisors() function below for the details of sorting.
 
 NOTE: This module contains the preferences as simple class form.  We try
 to keep them reusable, even though most of them are not reused.  Some of
@@ -80,7 +78,13 @@ class OtherVMs(object):
 
 
 class HypervisorAttributeValue(object):
-    """Return inverse of an attribute value of the hypervisor"""
+    """Return an attribute value of the hypervisor
+
+    We are also handling None in here assuming that it is less than
+    anything else.  This is coincidentally matching with the None comparison
+    on Python 2.  Although our rationale is that those hypervisors being
+    brand new.
+    """
     def __init__(self, attribute):
         self.attribute = attribute
 
@@ -90,11 +94,19 @@ class HypervisorAttributeValue(object):
         return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
-        return hv.dataset_obj[self.attribute]
+        value = hv.dataset_obj[self.attribute]
+
+        return value is not None, value
 
 
 class HypervisorAttributeValueLimit(object):
-    """Compare an attribute value of the hypervisor with the given limit"""
+    """Compare an attribute value of the hypervisor with the given limit
+
+    We are also handling None in here assuming that it is not exceeding
+    the limit.  This is coincidentally matching with the None comparison
+    on Python 2.  Although our rationale is that those hypervisors being
+    brand new.
+    """
     def __init__(self, attribute, limit):
         self.attribute = attribute
         self.limit = limit
@@ -105,7 +117,9 @@ class HypervisorAttributeValueLimit(object):
         return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
-        return hv.dataset_obj[self.attribute] > self.limit
+        value = hv.dataset_obj[self.attribute]
+
+        return value is not None and value > self.limit
 
 
 class OverAllocation(object):
@@ -148,6 +162,28 @@ class HashDifference(object):
 
 
 def sorted_hypervisors(preferences, vm, hypervisors):
+    """Sort the hypervisor by their preference
+
+    The most preferred ones will be yielded first.  The caller may then verify
+    and use the hypervisors.  For sorting, we simply put the results
+    of the preferences to any array for every hypervisor, and let Python
+    sort the arrays.  Unlikely semantically-low-level programming languages
+    like C, Python can compare arrays alright.  It would recursively compare
+    the elements of the arrays with each other, and stop when they differ.
+
+    As we know that most of the time it wouldn't be necessary to compare
+    all elements of the arrays with each other, we don't need to prepare
+    the results of the preferences for every hypervisor.  We use LazyCompare
+    class to let them be prepared lazily.  When Python needs to compare
+    and element of the array first time, the preference is going to be
+    executed for that hypervisor by LazyCompare.
+
+    The LazyCompare optimization has one other benefit of bring more
+    visibility about selection.  After the sorting is done, we can check
+    which preferences are actually executed for the selected hypervisor,
+    and log which preference caused this hypervisor to be sorted before
+    the next one.
+    """
     log.debug('Sorting hypervisors by preference...')
 
     # We use decorate-sort-undecorate pattern to log details about sorting.
