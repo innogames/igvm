@@ -156,8 +156,6 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
             True,
         )
         vm.dataset_obj['hypervisor'] = vm.hypervisor.dataset_obj['hostname']
-        # XXX: Deprecated attribute xen_host
-        vm.dataset_obj['xen_host'] = vm.hypervisor.dataset_obj['hostname']
 
     if vm.hypervisor.vm_defined(vm) and vm.is_running():
         raise InvalidStateError('"{}" is still running.'.format(vm.fqdn))
@@ -255,8 +253,6 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
 
         # Update Serveradmin
         vm.dataset_obj['hypervisor'] = hypervisor.dataset_obj['hostname']
-        # XXX: Deprecated attribute xen_host
-        vm.dataset_obj['xen_host'] = hypervisor.dataset_obj['hostname']
         vm.dataset_obj.commit()
 
     # If removing the existing VM fails we shouldn't risk undoing the newly
@@ -534,14 +530,13 @@ def _get_vm(hostname, ignore_reserved=False):
         )
 
     hypervisor = None
-    for hv_attr in ['xen_host', 'hypervisor']:
-        if dataset_obj[hv_attr]:
-            hypervisor = Hypervisor(dataset_obj[hv_attr])
+    if dataset_obj['hypervisor']:
+        hypervisor = Hypervisor(dataset_obj['hypervisor'])
 
-            # XXX: Ugly hack until adminapi supports modifying joined objects
-            dict.__setitem__(
-                dataset_obj, hv_attr, dataset_obj[hv_attr]['hostname']
-            )
+        # XXX: Ugly hack until adminapi supports modifying joined objects
+        dict.__setitem__(
+            dataset_obj, 'hypervisor', dataset_obj['hypervisor']['hostname']
+        )
 
     return VM(dataset_obj, hypervisor)
 
