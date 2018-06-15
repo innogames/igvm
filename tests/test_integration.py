@@ -127,7 +127,6 @@ class IGVMTest(TestCase):
             'environment',
             'no_monitoring',
             'hypervisor',
-            'xen_host',
             'repositories',
             'puppet_environment',
         ]).get()
@@ -141,7 +140,6 @@ class IGVMTest(TestCase):
         obj['environment'] = 'testing'
         obj['no_monitoring'] = True
         obj['hypervisor'] = None
-        obj['xen_host'] = None
         obj['repositories'] = [
             'int:basejessie:stable',
             'int:innogames:stable jessie',
