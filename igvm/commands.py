@@ -353,7 +353,7 @@ def vm_delete(vm_hostname, retire=False):
     state will be updated to 'retired'.
     """
 
-    with _get_vm(vm_hostname, ignore_reserved=True) as vm:
+    with _get_vm(vm_hostname, ignore_reserved=True, unlock=retire) as vm:
         # Make sure the VM has a hypervisor and that it is defined on it.
         # Abort if the VM has not been defined.
         _check_defined(vm)
@@ -546,7 +546,7 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
 
 
 @contextmanager
-def _get_vm(hostname, ignore_reserved=False):
+def _get_vm(hostname, ignore_reserved=False, unlock=True):
     """Get a server from Serveradmin by hostname to return VM object
 
     The function is accepting hostnames in any length as long as it resolves
@@ -574,11 +574,17 @@ def _get_vm(hostname, ignore_reserved=False):
 
     try:
         yield vm
-    finally:
+    except Exception:
+        VM(vm_query(), hypervisor).release_lock()
+        raise
+    else:
         # We re-fetch the VM because we can't risk commiting any other changes
         # to the VM than unlocking. There can be changes from failed things,
         # like setting memory.
-        VM(vm_query(), hypervisor).release_lock()
+        # Most operations require unlocking, the only exception is deleting of
+        # a VM. After object is deleted, it can't be unlocked.
+        if unlock:
+            VM(vm_query(), hypervisor).release_lock()
 
 
 @contextmanager
