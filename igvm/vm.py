@@ -460,19 +460,32 @@ class VM(Host):
                 )
 
         self.block_autostart()
-        self.run(
-            '/usr/bin/puppet agent --fqdn={} --server={} --ca_server={} '
-            '--no-report --waitforcert=60 --onetime --no-daemonize '
-            '--skip_tags=chroot_unsafe --verbose {} && touch '
-            '/tmp/puppet_success | tee {} ; test -f /tmp/puppet_success'
-            .format(
-                self.fqdn,
-                self.dataset_obj['puppet_master'],
-                self.dataset_obj['puppet_ca'],
-                '--debug' if debug else '',
-                '/var/log/puppetrun_igvm',
+        try:
+            self.run(
+                '/usr/bin/puppet agent --fqdn={} --server={} --ca_server={} '
+                '--no-report --waitforcert=60 --onetime --no-daemonize '
+                '--skip_tags=chroot_unsafe --verbose {} && touch '
+                '/tmp/puppet_success | tee {} ; test -f /tmp/puppet_success'
+                .format(
+                    self.fqdn,
+                    self.dataset_obj['puppet_master'],
+                    self.dataset_obj['puppet_ca'],
+                    '--debug' if debug else '',
+                    '/var/log/puppetrun_igvm',
+                )
             )
-        )
+        except KeyboardInterrupt:
+            # Why is killing of Puppet necessary?
+            # Fabric does not seem to pass signals to remote commands. So after
+            # killing igvm with ctrl+c during puppetrun, it is never killed.
+            # It keeps the mounted FS in use making it impossible to rollback
+            # LV creation.
+            self.hypervisor.run(
+                'pkill -9 -f "^/opt/puppetlabs/puppet/bin/ruby '
+                '/usr/bin/puppet agent --fqdn={}" || true'
+                .format(self.fqdn),
+            )
+            raise
 
         self.unblock_autostart()
 
