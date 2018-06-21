@@ -11,6 +11,7 @@ from adminapi.dataset import Query
 from adminapi.filters import Any, StartsWith
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
+from libvirt import libvirtError
 
 from igvm.exceptions import (
     HypervisorError,
@@ -632,6 +633,13 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
 
         try:
             hypervisor.check_vm(vm, offline)
+        except libvirtError as error:
+            hypervisor.release_lock()
+            log.warning(
+                'Preferred hypervisor "{}" is skipped: {}'
+                .format(hypervisor, error)
+            )
+            continue
         except HypervisorError as error:
             hypervisor.release_lock()
             log.warning(
