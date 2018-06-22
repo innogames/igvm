@@ -602,12 +602,13 @@ def _get_hypervisor(hostname, ignore_reserved=False):
         )
 
     hypervisor = Hypervisor(dataset_obj)
-    hypervisor.acquire_lock()
+    # hypervisor.acquire_lock()
 
     try:
         yield hypervisor
     finally:
-        hypervisor.release_lock()
+        pass
+        # hypervisor.release_lock()
 
 
 @contextmanager
@@ -626,7 +627,8 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
         # We need to validate the hypervisor using the actual values before
         # the final decision.
         try:
-            hypervisor.acquire_lock()
+            # hypervisor.acquire_lock()
+            pass
         except InvalidStateError as error:
             log.warning(error)
             continue
@@ -634,14 +636,14 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
         try:
             hypervisor.check_vm(vm, offline)
         except libvirtError as error:
-            hypervisor.release_lock()
+            # hypervisor.release_lock()
             log.warning(
                 'Preferred hypervisor "{}" is skipped: {}'
                 .format(hypervisor, error)
             )
             continue
         except HypervisorError as error:
-            hypervisor.release_lock()
+            # hypervisor.release_lock()
             log.warning(
                 'Preferred hypervisor "{}" is skipped: {}'
                 .format(hypervisor, error)
@@ -651,7 +653,8 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
         try:
             yield hypervisor
         finally:
-            hypervisor.release_lock()
+            pass
+            # hypervisor.release_lock()
         break
     else:
         raise IGVMError('Cannot find a hypervisor')
@@ -659,12 +662,13 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
 
 @contextmanager
 def _lock_hv(hv):
-    hv.acquire_lock()
+    # hv.acquire_lock()
 
     try:
         yield hv
     finally:
-        hv.release_lock()
+        pass
+        # hv.release_lock()
 
 
 def _check_attributes(vm):
