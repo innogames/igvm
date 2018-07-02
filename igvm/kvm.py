@@ -9,6 +9,7 @@ import time
 from uuid import uuid4
 from xml.dom import minidom
 from xml.etree import ElementTree
+from time import sleep
 
 from libvirt import (
     VIR_DOMAIN_VCPU_MAXIMUM,
@@ -182,10 +183,13 @@ def set_vcpus(hypervisor, vm, domain, num_cpu):
     # Properly pin all new VCPUs
     _live_repin_cpus(domain, props, hypervisor.dataset_obj['num_cpu'])
 
-    # Activate all CPUs in the guest
+    # TODO: make it detect CPUs, not just wait time
+    log.info('KVM: Waiting 10 seconds for new CPUs to show in guest')
+    sleep(10)
     log.info('KVM: Activating new CPUs in guest')
+    # If CPUs are already online, this will fail. So || true.
     vm.run(
-        'echo 1 | tee /sys/devices/system/cpu/cpu*/online'
+        'echo 1 | tee /sys/devices/system/cpu/cpu*/online || true'
     )
 
 
@@ -298,6 +302,11 @@ def set_memory(hypervisor, vm, domain):
         assert add_memory % (128 * props.num_nodes) == 0
         _attach_memory_dimms(vm, domain, props, add_memory)
 
+        # TODO: make it detect modules, not just wait time
+        log.info(
+            'KVM: Waiting 10 seconds for new memory modules to show in guest'
+        )
+        sleep(10)
         log.info('KVM: Activating new DIMMs in guest')
         # If modules are already online, this will fail. So || true.
         vm.run(
