@@ -22,6 +22,7 @@ COMMON_FABRIC_SETTINGS = dict(
     shell='/bin/sh -c',
     timeout=5,
     connection_attempts=1,
+    linewise=True,
 )
 
 # Swap size in MiB
