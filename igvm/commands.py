@@ -58,7 +58,6 @@ def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
         vm = es.enter_context(
             _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
         )
-        es.enter_context(_lock_hv(vm.hypervisor))
 
         _check_defined(vm)
 
@@ -92,7 +91,6 @@ def mem_set(vm_hostname, size, offline=False, ignore_reserved=False):
         vm = es.enter_context(
             _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
         )
-        es.enter_context(_lock_hv(vm.hypervisor))
 
         _check_defined(vm)
 
@@ -134,7 +132,6 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
         vm = es.enter_context(
             _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
         )
-        es.enter_context(_lock_hv(vm.hypervisor))
 
         _check_defined(vm)
 
@@ -326,7 +323,6 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
     """
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(vm_hostname, ignore_reserved=True))
-        es.enter_context(_lock_hv(vm.hypervisor))
 
         _check_defined(vm)
 
@@ -662,13 +658,11 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
 
 @contextmanager
 def _lock_hv(hv):
-    # hv.acquire_lock()
-
+    hv.acquire_lock()
     try:
         yield hv
     finally:
-        pass
-        # hv.release_lock()
+        hv.release_lock()
 
 
 def _check_attributes(vm):
