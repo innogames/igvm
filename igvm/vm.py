@@ -462,7 +462,8 @@ class VM(Host):
         self.block_autostart()
         try:
             self.run(
-                '( /usr/bin/puppet agent --fqdn={} --server={} --ca_server={} '
+                '( /opt/puppetlabs/puppet/bin/puppet agent '
+                '--fqdn={} --server={} --ca_server={} '
                 '--no-report --waitforcert=60 --onetime --no-daemonize '
                 '--skip_tags=chroot_unsafe --verbose {} && touch '
                 '/tmp/puppet_success ) | tee {} ; test -f /tmp/puppet_success'
