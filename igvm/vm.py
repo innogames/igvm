@@ -322,7 +322,7 @@ class VM(Host):
 
         with Transaction() as transaction:
             # Perform operations on the hypervisor
-            self.hypervisor.create_vm_storage(self, self.uid_name, transaction)
+            self.hypervisor.create_vm_storage(self, transaction)
             mount_path = self.hypervisor.format_vm_storage(self, transaction)
 
             self.hypervisor.download_and_extract_image(image, mount_path)

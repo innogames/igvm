@@ -34,9 +34,9 @@
   <on_crash>destroy</on_crash>
   <devices>
     <emulator>/usr/bin/kvm</emulator>
-    <disk type='block' device='disk'>
+    <disk type='volume' device='disk'>
       <driver name='qemu' type='raw' cache='none' io='native'/>
-      <source dev='{{ disk_device }}'/>
+      <source pool='{{ disk_pool }}' volume='{{disk_volume}}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
     <controller type='pci' index='0' model='pci-root'/>

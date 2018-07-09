@@ -161,6 +161,7 @@ class IGVMTest(TestCase):
                 .format(vg=VG_NAME, vm=self.uid_name),
                 warn_only=True,
             )
+            hv.storage_pool.refresh()
 
     def check_vm_present(self):
         # Operate on fresh object

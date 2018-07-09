@@ -15,9 +15,10 @@ class DRBD(object):
         self.hv = hv
         self.master_role = master_role
 
-        lv = vm.hypervisor.get_lv_by_vm(vm)
-        self.vg_name = lv['vg_name']
-        self.lv_name = lv['name'] if self.master_role else vm.uid_name
+        lv = vm.hypervisor.get_volume_by_vm(vm).path()
+        lv_name = lv.split('/')
+        self.vg_name = lv_name[2]
+        self.lv_name = lv_name[3] if self.master_role else vm.uid_name
         self.vm_name = vm.fqdn
         self.meta_disk = vm.fqdn + '_meta'
         self.table_file = '/tmp/{}_{}_table'.format(self.vg_name, self.lv_name)
