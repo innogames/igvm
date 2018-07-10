@@ -293,7 +293,7 @@ def set_memory(hypervisor, vm, domain):
             return
         except libvirtError:
             log.info(
-                'virsh setmem failed, falling back to hotplug'
+                'Adding memory via ballooning failed, falling back to hotplug'
             )
 
     if props.mem_hotplug:
