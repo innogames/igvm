@@ -6,6 +6,7 @@ Copyright (c) 2018 InnoGames GmbH
 from __future__ import print_function
 
 from logging import INFO, basicConfig
+from libvirt import VIR_DOMAIN_RUNNING
 from os import environ
 from pipes import quote
 from tempfile import NamedTemporaryFile
@@ -153,15 +154,20 @@ class IGVMTest(TestCase):
         """Clean up all HVs after every test"""
 
         for hv in HYPERVISORS:
-            hv.run(
-                'virsh destroy {vm}; '
-                'virsh undefine {vm}; '
-                'umount /dev/{vg}/{vm}; '
-                'lvremove -f /dev/{vg}/{vm}'
-                .format(vg=VG_NAME, vm=self.uid_name),
-                warn_only=True,
-            )
             hv.storage_pool.refresh()
+            for domain in hv.conn().listAllDomains():
+                if domain.name() == self.uid_name:
+                    if domain.state()[0] == VIR_DOMAIN_RUNNING:
+                        domain.destroy()
+                    domain.undefine()
+            for vol_name in hv.storage_pool.listVolumes():
+                if vol_name == self.uid_name:
+                    hv.run(
+                        'mount | grep -q "/dev/{vg}/{vm}" && '
+                        ' umount /dev/{vg}/{vm} || true;'
+                        .format(vg=VG_NAME, vm=self.uid_name)
+                    )
+                    hv.storage_pool.storageVolLookupByName(vol_name).delete()
 
     def check_vm_present(self):
         # Operate on fresh object
