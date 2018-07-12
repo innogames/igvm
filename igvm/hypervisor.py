@@ -57,22 +57,22 @@ class Hypervisor(Host):
         # Store per-VM path information
         # We cannot store these in the VM object due to migrations.
         self._mount_path = {}
+        self.storage_pool = self.conn().storagePoolLookupByName(VG_NAME)
 
-    def get_lv_by_vm(self, vm):
+    def get_volume_by_vm(self, vm):
         """Get logical volume information of a VM"""
-        lvs = self.get_logical_volumes()
         domain = self._find_domain(vm)
-        for lv in lvs:
+        for vol_name in self.storage_pool.listVolumes():
             if (
                 # Match the LV based on the object_id encoded within its name
-                vm.match_uid_name(lv['name']) or
+                vm.match_uid_name(vol_name) or
                 # XXX: Deprecated matching for LVs w/o an uid_name
-                domain and lv['name'] == domain.name()
+                domain and vol_name == domain.name()
             ):
-                return lv
+                return self.storage_pool.storageVolLookupByName(vol_name)
 
         raise StorageError(
-            'No existing LV found for VM "{}" on "{}".'
+            'No existing storage volume found for VM "{}" on "{}".'
             .format(vm.fqdn, self.fqdn)
         )
 
@@ -86,11 +86,17 @@ class Hypervisor(Host):
         Be aware: This can only be done when the VM is shut off and the
         libvirt domains needs to be redefined afterwards.
         """
+        old_name = self.get_volume_by_vm(vm).name()
+        new_name = vm.uid_name
         with self.fabric_settings():
-            self.lv_rename(
-                self.get_lv_by_vm(vm)['name'],
-                vm.uid_name
-            )
+            if old_name != new_name:
+                self.run(
+                    'lvrename {} {}'.format(
+                        self.get_volume_by_vm(vm).path(),
+                        vm.uid_name
+                    )
+                )
+                self.storage_pool.refresh()
 
     def vm_mount_path(self, vm):
         """Returns the mount path for a VM or raises HypervisorError if not
@@ -317,21 +323,42 @@ class Hypervisor(Host):
         """Changes disk size of a VM."""
         if new_size_gib < vm.dataset_obj['disk_size_gib']:
             raise NotImplementedError('Cannot shrink the disk.')
-        with self.fabric_settings():
-            self.lv_resize(self.get_lv_by_vm(vm)['path'], new_size_gib)
+        volume = self.get_volume_by_vm(vm)
+        # There is no resize function in version of libvirt
+        # available in Debian 9.
+        self.run('lvresize {} -L {}g'.format(volume.path(), new_size_gib))
+        self.storage_pool.refresh()
+        self._get_domain(vm).blockResize(
+            'vda',
+            new_size_gib * 1024 ** 2,  # Yes, it is in KiB
+        )
+        vm.run('xfs_growfs /')
 
-        self._vm_set_disk_size_gib(vm, new_size_gib)
-
-    def create_vm_storage(self, vm, lv_name, transaction=None):
+    def create_vm_storage(self, vm, transaction=None, vol_name=None):
         """Allocate storage for a VM. Returns the disk path."""
+        vol_name = vm.uid_name if vol_name is None else vol_name
+        volume_xml = """
+            <volume>
+                <name>{name}</name>
+                <allocation unit="G">{size}</allocation>
+                <capacity unit="G">{size}</capacity>
+            </volume>
+        """.format(
+            name=vol_name,
+            size=vm.dataset_obj['disk_size_gib'],
+        )
 
-        self.lv_create(lv_name, vm.dataset_obj['disk_size_gib'])
-        if transaction:
-            transaction.on_rollback(
-                'destroy storage',
-                self.lv_remove,
-                '/dev/{}/{}'.format(VG_NAME, lv_name),
+        volume = self.storage_pool.createXML(volume_xml, 0)
+        if volume is None:
+            raise StorageError(
+                'Failed to create storage volume {}/{}'.format(
+                    self.storage_pool.name(),
+                    vol_name,
+                )
             )
+
+        if transaction:
+            transaction.on_rollback('destroy storage', volume.delete)
 
     def format_vm_storage(self, vm, transaction=None):
         """Create new filesystem for VM and mount it. Returns mount path."""
@@ -342,7 +369,7 @@ class Hypervisor(Host):
                 .format(vm.fqdn)
             )
 
-        self.format_storage(self.get_lv_by_vm(vm)['path'])
+        self.format_storage(self.get_volume_by_vm(vm).path())
         return self.mount_vm_storage(vm, transaction)
 
     def download_and_extract_image(self, image, target_dir):
@@ -382,7 +409,7 @@ class Hypervisor(Host):
             )
 
         self._mount_path[vm] = self.mount_temp(
-            self.get_lv_by_vm(vm)['path'], suffix=('-' + vm.fqdn)
+            self.get_volume_by_vm(vm).path(), suffix=('-' + vm.fqdn)
         )
         if transaction:
             transaction.on_rollback(
@@ -407,8 +434,8 @@ class Hypervisor(Host):
         # Update disk size
         result = {}
         try:
-            lv = self.get_lv_by_vm(vm)
-            result['disk_size_gib'] = int(math.ceil(lv['size_MiB'] / 1024))
+            vol_size = self.get_volume_by_vm(vm).info()[1]
+            result['disk_size_gib'] = int(math.ceil(vol_size / 1024 ** 3))
         except HypervisorError:
             raise HypervisorError(
                 'Unable to find source LV and determine its size.'
@@ -482,7 +509,7 @@ class Hypervisor(Host):
             )
 
         if offline:
-            target_hypervisor.create_vm_storage(vm, vm.uid_name, transaction)
+            target_hypervisor.create_vm_storage(vm, transaction)
             if offline_transport == 'drbd':
                 self.start_drbd(vm, target_hypervisor)
                 try:
@@ -501,21 +528,22 @@ class Hypervisor(Host):
                     vm.shutdown(transaction)
                 with Transaction() as subtransaction:
                     nc_listener = target_hypervisor.netcat_to_device(
-                        target_hypervisor.get_lv_by_vm(vm)['path'], subtransaction
+                        target_hypervisor.get_volume_by_vm(vm).path(),
+                        subtransaction
                     )
                     self.device_to_netcat(
-                        self.get_lv_by_vm(vm)['path'],
+                        self.get_volume_by_vm(vm).path(),
                         vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
                         nc_listener,
                         subtransaction,
                     )
-
             target_hypervisor.define_vm(vm, transaction)
         else:
+            # For online migrations always use same volume name as VM
+            # already has.
             target_hypervisor.create_vm_storage(
-                vm,
-                vm.hypervisor.get_lv_by_vm(vm)['name'],
-                transaction
+                vm, transaction,
+                vm.hypervisor.get_volume_by_vm(vm).name(),
             )
             migrate_live(self, target_hypervisor, vm, self._get_domain(vm))
 
@@ -540,15 +568,6 @@ class Hypervisor(Host):
             used_kib += dom.info()[2]
         free_mib = total_mib - used_kib / 1024
         return free_mib
-
-    def _vm_set_disk_size_gib(self, vm, disk_size_gib):
-        # TODO: Use libvirt
-        domain = self._get_domain(vm)
-        self.run(
-            'virsh blockresize --path {} --size {}GiB {}'
-            .format(self.get_lv_by_vm(vm)['path'], disk_size_gib, domain.name())
-        )
-        vm.run('xfs_growfs /')
 
     def start_vm(self, vm):
         log.info('Starting "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
@@ -588,12 +607,12 @@ class Hypervisor(Host):
                 'Refusing to undefine running VM "{}"'.format(vm.fqdn)
             )
         log.info('Undefining "{}" on "{}"'.format(vm.fqdn, self.fqdn))
-        lv_path = self.get_lv_by_vm(vm)['path']
+
         domain = self._get_domain(vm)
         if domain.undefine() != 0:
             raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
         if not keep_storage:
-            self.lv_remove(lv_path)
+            self.get_volume_by_vm(vm).delete()
 
     def redefine_vm(self, vm):
         domain = self._get_domain(vm)
@@ -624,55 +643,13 @@ class Hypervisor(Host):
         props = DomainProperties.from_running(self, vm, self._get_domain(vm))
         return props.info()
 
-    def get_logical_volumes(self):
-        lvolumes = []
-        lvs = self.run(
-            'lvs --noheadings -o name,vg_name,lv_size --unit b --nosuffix'
-            ' 2>/dev/null',
-            silent=True
-        )
-        for lv_line in lvs.splitlines():
-            lv_name, vg_name, lv_size = lv_line.split()
-            lvolumes.append({
-                'path': '/dev/{}/{}'.format(vg_name, lv_name),
-                'name': lv_name,
-                'vg_name': vg_name,
-                'size_MiB': math.ceil(float(lv_size) / 1024 ** 2),
-            })
-        return lvolumes
-
-    def lv_create(self, lv_name, size_gib):
-        self.run('lvcreate -y -L {}g -n {} {}'.format(
-            size_gib,
-            lv_name,
-            VG_NAME,
-        ))
-
-    def lv_remove(self, lv_path):
-        self.run('lvremove -f {}'.format(lv_path))
-
-    def lv_resize(self, lv_path, size_gib):
-        """Extend the volume, return the new size"""
-        self.run('lvresize {} -L {}g'.format(lv_path, size_gib))
-
-    def lv_rename(self, lv_name, new_lv_name):
-        if lv_name != new_lv_name:
-            self.run('lvrename {} {} {}'.format(VG_NAME, lv_name, new_lv_name))
-
     def get_free_disk_size_gib(self, safe=True):
         """Return free disk space as float in GiB"""
-        vgs_line = self.run(
-            'vgs --noheadings -o vg_name,vg_free --units b --nosuffix {0}'
-            ' 2>/dev/null'
-            .format(VG_NAME),
-            silent=True,
-        )
-        vg_name, vg_size_gib = vgs_line.split()
+        pool_info = self.storage_pool.info()
         # Floor instead of ceil because we check free instead of used space
-        vg_size_gib = math.floor(float(vg_size_gib) / 1024 ** 3)
+        vg_size_gib = math.floor(float(pool_info[3]) / 1024 ** 3)
         if safe is True:
             vg_size_gib -= RESERVED_DISK
-        assert vg_name == VG_NAME
         return vg_size_gib
 
     def mount_temp(self, device, suffix=''):

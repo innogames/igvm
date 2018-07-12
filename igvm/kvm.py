@@ -293,7 +293,7 @@ def set_memory(hypervisor, vm, domain):
             return
         except libvirtError:
             log.info(
-                'virsh setmem failed, falling back to hotplug'
+                'Adding memory via ballooning failed, falling back to hotplug'
             )
 
     if props.mem_hotplug:
@@ -361,7 +361,8 @@ def generate_domain_xml(hypervisor, vm):
 
     config = {
         'name': vm.uid_name,
-        'disk_device': hypervisor.get_lv_by_vm(vm)['path'],
+        'disk_pool': VG_NAME,
+        'disk_volume': hypervisor.get_volume_by_vm(vm).name(),
         'memory': vm.dataset_obj['memory'],
         'num_cpu': vm.dataset_obj['num_cpu'],
         'props': props,
