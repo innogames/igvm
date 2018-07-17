@@ -608,11 +608,13 @@ class Hypervisor(Host):
             )
         log.info('Undefining "{}" on "{}"'.format(vm.fqdn, self.fqdn))
 
-        domain = self._get_domain(vm)
-        if domain.undefine() != 0:
-            raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
         if not keep_storage:
+            # XXX: get_volume_by_vm depends on domain names to find legacy
+            # domains w/o an uid_name.  The order is therefore important.
             self.get_volume_by_vm(vm).delete()
+
+        if self._get_domain(vm).undefine() != 0:
+            raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
 
     def redefine_vm(self, vm):
         domain = self._get_domain(vm)

@@ -208,7 +208,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
             if vm.hypervisor.fqdn == hypervisor.fqdn:
                 raise IGVMError(
                     'Source and destination Hypervisor is the same!'
-                    )
+                )
         else:
             hypervisor = es.enter_context(_get_best_hypervisor(
                 vm,
