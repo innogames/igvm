@@ -181,7 +181,7 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
             )
 
         if rebuild and vm.hypervisor.vm_defined(vm):
-            vm.hypervisor.delete_vm(vm)
+            vm.hypervisor.undefine_vm(vm)
 
         vm.build(
             run_puppet=run_puppet,
@@ -208,7 +208,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
             if vm.hypervisor.fqdn == hypervisor.fqdn:
                 raise IGVMError(
                     'Source and destination Hypervisor is the same!'
-                    )
+                )
         else:
             hypervisor = es.enter_context(_get_best_hypervisor(
                 vm,
@@ -282,7 +282,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
 
         # If removing the existing VM fails we shouldn't risk undoing the newly
         # migrated one.
-        previous_hypervisor.delete_vm(vm)
+        previous_hypervisor.undefine_vm(vm)
 
 
 @with_fabric_settings
@@ -335,7 +335,6 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
             vm.shutdown()
 
         if not no_redefine:
-            vm.hypervisor.vm_lv_update_name(vm)
             vm.hypervisor.redefine_vm(vm)
 
         vm.start()
@@ -361,7 +360,7 @@ def vm_delete(vm_hostname, retire=False):
 
         # Delete the VM from its hypervisor if required.
         if vm.hypervisor and vm.hypervisor.vm_defined(vm):
-            vm.hypervisor.delete_vm(vm)
+            vm.hypervisor.undefine_vm(vm)
 
         # Delete the serveradmin object of this VM
         # or update its state to 'retired' if retire is True.

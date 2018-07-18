@@ -376,7 +376,7 @@ class VM(Host):
 
         with Transaction() as transaction:
             self.shutdown(transaction=transaction)
-            self.hypervisor.rename_vm(self, new_hostname)
+            self.hypervisor.redefine_vm(self, new_fqdn=new_hostname)
 
             self.dataset_obj.commit()
 
