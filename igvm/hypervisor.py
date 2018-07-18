@@ -616,17 +616,14 @@ class Hypervisor(Host):
         if self._get_domain(vm).undefine() != 0:
             raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
 
-    def redefine_vm(self, vm):
-        domain = self._get_domain(vm)
-        self.undefine_vm(vm, keep_storage=True)
-        if domain.name() != vm.fqdn:
-            self.vm_lv_update_name(vm)
-        self.define_vm(vm)
-
-    def rename_vm(self, vm, new_fqdn):
-        self.undefine_vm(vm, keep_storage=True)
+    def redefine_vm(self, vm, new_fqdn=None):
+        # XXX: vm_lv_update_name depends on domain names to find legacy domains
+        # w/o an uid_name.  The order is therefore important.
         self.vm_lv_update_name(vm)
-        vm.fqdn = new_fqdn
+        self.undefine_vm(vm, keep_storage=True)
+        # XXX: undefine_vm depends on vm.fqdn beeing the old name for finding
+        # legacy domains w/o an uid_name.  The order is therefore important.
+        vm.fqdn = new_fqdn or vm.fqdn
         self.define_vm(vm)
 
     def _vm_sync_from_hypervisor(self, vm, result):
