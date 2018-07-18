@@ -8,6 +8,7 @@ import math
 from time import sleep
 
 from libvirt import VIR_DOMAIN_SHUTOFF
+from xml.etree import ElementTree
 
 from igvm.exceptions import (
     ConfigError,
@@ -58,6 +59,18 @@ class Hypervisor(Host):
         # We cannot store these in the VM object due to migrations.
         self._mount_path = {}
         self.storage_pool = self.conn().storagePoolLookupByName(VG_NAME)
+        self.storage_type = ElementTree.fromstring(
+            self.storage_pool.XMLDesc()
+        ).attrib['type']
+
+        if (
+            self.storage_type not in HOST_RESERVED_MEMORY or
+            self.storage_type not in RESERVED_DISK
+        ):
+            raise HypervisorError(
+                'Unsupported storage type {} on hypervisor {}'
+                .format(self.storage_type, self.dataset_obj['hostname'])
+            )
 
     def get_volume_by_vm(self, vm):
         """Get logical volume information of a VM"""
@@ -195,7 +208,7 @@ class Hypervisor(Host):
             raise HypervisorError(
                 'Not enough free space in VG {} to build VM while keeping'
                 ' {} GiB reserved'
-                .format(VG_NAME, RESERVED_DISK)
+                .format(VG_NAME, RESERVED_DISK[self.storage_type])
             )
 
         # Proper VLAN?
@@ -324,10 +337,15 @@ class Hypervisor(Host):
         if new_size_gib < vm.dataset_obj['disk_size_gib']:
             raise NotImplementedError('Cannot shrink the disk.')
         volume = self.get_volume_by_vm(vm)
-        # There is no resize function in version of libvirt
-        # available in Debian 9.
-        self.run('lvresize {} -L {}g'.format(volume.path(), new_size_gib))
-        self.storage_pool.refresh()
+        if self.storage_type == 'logical':
+            # There is no resize function in version of libvirt
+            # available in Debian 9.
+            self.run('lvresize {} -L {}g'.format(volume.path(), new_size_gib))
+            self.storage_pool.refresh()
+        else:
+            raise NotImplementedError(
+                'Storage volume resizing is supported only on LVM storage!'
+            )
         self._get_domain(vm).blockResize(
             'vda',
             new_size_gib * 1024 ** 2,  # Yes, it is in KiB
@@ -511,6 +529,14 @@ class Hypervisor(Host):
         if offline:
             target_hypervisor.create_vm_storage(vm, transaction)
             if offline_transport == 'drbd':
+                if (
+                    self.storage_type != 'logical' or
+                    target_hypervisor.storage_type != 'logical'
+                ):
+                    raise NotImplementedError(
+                        'DRBD migration is supported only between hypervisors '
+                        ' using LVM storage!'
+                    )
                 self.start_drbd(vm, target_hypervisor)
                 try:
                     self.wait_for_sync()
@@ -552,7 +578,7 @@ class Hypervisor(Host):
         # Start with what OS sees as total memory (not installed memory)
         total_mib = self.conn().getMemoryStats(-1)['total'] // 1024
         # Always keep some extra memory free for Hypervisor
-        total_mib -= HOST_RESERVED_MEMORY
+        total_mib -= HOST_RESERVED_MEMORY[self.storage_type]
         return total_mib
 
     def free_vm_memory(self):
@@ -648,7 +674,7 @@ class Hypervisor(Host):
         # Floor instead of ceil because we check free instead of used space
         vg_size_gib = math.floor(float(pool_info[3]) / 1024 ** 3)
         if safe is True:
-            vg_size_gib -= RESERVED_DISK
+            vg_size_gib -= RESERVED_DISK[self.storage_type]
         return vg_size_gib
 
     def mount_temp(self, device, suffix=''):

@@ -29,11 +29,18 @@ DEFAULT_SWAP_SIZE = 1024
 
 
 VG_NAME = 'xen-data'
-RESERVED_DISK = 5.0
-
+# Reserved pool space on Hypervisor
+# TODO: this could be a percent value, at least for ZFS.
+RESERVED_DISK = {
+    'logical': 5.0,
+    'zfs': 2 * 1024,
+ }
 
 # Reserved memory for host OS in MiB
-HOST_RESERVED_MEMORY = 2 * 1024
+HOST_RESERVED_MEMORY = {
+    'logical': 2 * 1024,
+    'zfs': 8 * 1024,
+}
 
 
 # Default max number of CPUs, unless the hypervisor has fewer cores or num_cpu
