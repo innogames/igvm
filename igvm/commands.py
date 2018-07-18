@@ -570,7 +570,7 @@ def _get_vm(hostname, ignore_reserved=False, unlock=True):
 
     try:
         yield vm
-    except Exception:
+    except (Exception, KeyboardInterrupt):
         VM(vm_query(), hypervisor).release_lock()
         raise
     else:
