@@ -13,7 +13,7 @@ The functions are to be called like this:
 
 ```python
 def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
-               run_puppet=False, debug_puppet=False, maintenance=False,
+               run_puppet=False, debug_puppet=False,
                offline=False, offline_transport='drbd', ignore_reserved=False):
 ```
 
@@ -24,18 +24,16 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
     * newip - string, new IP address if you migrate to different vlan
     * run_puppet - boolean, run chrooted puppet after VM image is extracted
     * debug_puppet - boolean, run puppet with --debug
-    * maintenance - boolean, set VM to maintenance state, thus downtiming it in
-      Testtool and Nagios
     * offline - boolean, allow offline migration, default is to attempt online
       migration and fail if it is impossible due to hypervisor of network
-      configuration, also implies --maintenance
+      configuration
     * offline_transport - choose between the fast `drbd` or the simple `netcat`
       offline transport methods
     * ignore_reserved - boolean, allow migration to an online_reserved
       hypervisor
 
 ```python
-def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,          
+def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
              ignore_reserved=False):
 ```
 

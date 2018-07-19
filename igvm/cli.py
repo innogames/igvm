@@ -10,12 +10,12 @@ import time
 
 from fabric.network import disconnect_all
 
-from igvm.buildvm import buildvm
 from igvm.commands import (
     disk_set,
     host_info,
     mem_set,
     vcpu_set,
+    vm_build,
     vm_delete,
     vm_migrate,
     vm_rename,
@@ -88,9 +88,9 @@ def parse_args():
 
     subparser = subparsers.add_parser(
         'build',
-        description=buildvm.__doc__,
+        description=vm_build.__doc__,
     )
-    subparser.set_defaults(func=buildvm)
+    subparser.set_defaults(func=vm_build)
     subparser.add_argument(
         'vm_hostname',
         help='Hostname of the guest system',
@@ -155,14 +155,9 @@ def parse_args():
         help='Run puppet in debug mode',
     )
     subparser.add_argument(
-        '--maintenance',
-        action='store_true',
-        help='Set state to maintenance',
-    )
-    subparser.add_argument(
         '--offline',
         action='store_true',
-        help='Force offline migration, also implies --maintenance',
+        help='Force offline migration',
     )
     subparser.add_argument(
         '--ignore-reserved',
@@ -173,7 +168,9 @@ def parse_args():
     subparser.add_argument(
         '--offline-transport',
         default='drbd',
-        help='Specify drbd (default) or netcat transport to migrate disk image',
+        help=(
+            'Specify drbd (default) or netcat transport to migrate disk image'
+        ),
     )
     subparser = subparsers.add_parser(
         'disk-set',

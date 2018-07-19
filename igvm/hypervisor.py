@@ -517,8 +517,7 @@ class Hypervisor(Host):
         return 'vda1'
 
     def migrate_vm(
-        self, vm, target_hypervisor, maintenance, offline, offline_transport,
-        transaction,
+        self, vm, target_hypervisor, offline, offline_transport, transaction
     ):
         if offline_transport not in ['netcat', 'drbd']:
             raise StorageError(
@@ -540,16 +539,14 @@ class Hypervisor(Host):
                 self.start_drbd(vm, target_hypervisor)
                 try:
                     self.wait_for_sync()
-                    if maintenance or offline:
-                        vm.set_state('maintenance', transaction=transaction)
+                    vm.set_state('maintenance', transaction=transaction)
                     if vm.is_running():
                         vm.shutdown(transaction)
                 finally:
                     self.stop_drbd()
 
             elif offline_transport == 'netcat':
-                if maintenance or offline:
-                    vm.set_state('maintenance', transaction=transaction)
+                vm.set_state('maintenance', transaction=transaction)
                 if vm.is_running():
                     vm.shutdown(transaction)
                 with Transaction() as subtransaction:
@@ -696,14 +693,13 @@ class Hypervisor(Host):
             if i > 0:
                 log.warning(
                     'Umounting {} failed, attempting again in a moment. '
-                    '{} attempts left.'.format(
-                        device_or_path,
-                        retry - i,
-                        ))
+                    '{} attempts left.'
+                    .format(device_or_path, retry - i)
+                )
                 sleep(1)
             res = self.run(
                 'umount {0}'.format(device_or_path),
-                warn_only=(i < retry-1),
+                warn_only=(i < retry - 1),
             )
             if res.succeeded:
                 return
