@@ -182,15 +182,7 @@ def set_vcpus(hypervisor, vm, domain, num_cpu):
 
     # Properly pin all new VCPUs
     _live_repin_cpus(domain, props, hypervisor.dataset_obj['num_cpu'])
-
-    # TODO: make it detect CPUs, not just wait time
-    log.info('KVM: Waiting 10 seconds for new CPUs to show in guest')
-    sleep(10)
-    log.info('KVM: Activating new CPUs in guest')
-    # If CPUs are already online, this will fail. So || true.
-    vm.run(
-        'echo 1 | tee /sys/devices/system/cpu/cpu*/online || true'
-    )
+    # We used to set CPUs online here but now we have udev rule for that.
 
 
 def _live_repin_cpus(domain, props, max_phys_cpus):
@@ -300,18 +292,7 @@ def set_memory(hypervisor, vm, domain):
         assert add_memory > 0
         assert add_memory % (128 * props.num_nodes) == 0
         _attach_memory_dimms(vm, domain, props, add_memory)
-
-        # TODO: make it detect modules, not just wait time
-        log.info(
-            'KVM: Waiting 10 seconds for new memory modules to show in guest'
-        )
-        sleep(10)
-        log.info('KVM: Activating new DIMMs in guest')
-        # If modules are already online, this will fail. So || true.
-        vm.run(
-            'echo online'
-            ' | tee /sys/devices/system/memory/memory*/state || true'
-        )
+        # We used to set DIMMS online here but now we have udev rule for that.
         return
 
     raise HypervisorError(
