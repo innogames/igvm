@@ -196,7 +196,7 @@ class VM(Host):
             if not check(value):
                 raise ConfigError(err)
 
-    def start(self, transaction=None):
+    def start(self, force_stop_failed=True, transaction=None):
         self.hypervisor.start_vm(self)
         if not self.wait_for_running(running=True):
             raise VMError('VM did not come online in time')
@@ -205,22 +205,26 @@ class VM(Host):
             str(self.dataset_obj['intern_ip']),
             waitmsg='Waiting for SSH to respond',
         )
-        if not host_up:
+        if not host_up and force_stop_failed:
             # If there is a network or booting error VM must be destroyed
             # if starting has failed.
             self.hypervisor.stop_vm_force(self)
+        if not host_up:
             raise VMError('The server is not reachable with SSH')
 
         if transaction:
             transaction.on_rollback('stop VM', self.shutdown)
 
-    def shutdown(self, transaction=None):
+    def shutdown(self, check_vm_up_on_transaction=True, transaction=None):
         self.hypervisor.stop_vm(self)
         if not self.wait_for_running(running=False):
             self.hypervisor.stop_vm_force(self)
 
         if transaction:
-            transaction.on_rollback('start VM', self.start)
+            transaction.on_rollback(
+                'start VM', self.start,
+                force_stop_failed=check_vm_up_on_transaction,
+            )
 
     def is_running(self):
         return self.hypervisor.vm_running(self)
