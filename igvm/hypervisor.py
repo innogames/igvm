@@ -539,6 +539,23 @@ class Hypervisor(Host):
 
                 host_drbd = DRBD(self, vm, master_role=True)
                 peer_drbd = DRBD(target_hypervisor, vm)
+                if vm.hypervisor.vm_running(vm):
+                    vm_block_size = vm.get_block_size('/dev/vda')
+                    src_block_size = vm.hypervisor.get_block_size(
+                        vm.hypervisor.get_volume_by_vm(vm).path()
+                    )
+                    dst_block_size = target_hypervisor.get_block_size(
+                        target_hypervisor.get_volume_by_vm(vm).path()
+                    )
+                    log.debug(
+                        'Block sizes: VM {}, Source HV {}, Destination HV {}'
+                        .format(vm_block_size, src_block_size, dst_block_size)
+                    )
+                    vm.set_block_size('vda', min(
+                        vm_block_size,
+                        src_block_size,
+                        dst_block_size,
+                    ))
                 with host_drbd.start(peer_drbd), peer_drbd.start(host_drbd):
                     # XXX: Do we really need to wait for the both?
                     host_drbd.wait_for_sync()
