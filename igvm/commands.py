@@ -163,9 +163,7 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(vm_hostname))
 
-        if vm.hypervisor:
-            es.enter_context(_lock_hv(vm.hypervisor))
-        else:
+        if not vm.hypervisor:
             vm.hypervisor = es.enter_context(_get_best_hypervisor(
                 vm,
                 ['online', 'online_reserved'] if ignore_reserved
@@ -179,6 +177,8 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
             raise InvalidStateError(
                 '"{}" is still running.'.format(vm.fqdn)
             )
+
+        es.enter_context(_lock_hv(vm.hypervisor))
 
         if rebuild and vm.hypervisor.vm_defined(vm):
             vm.hypervisor.undefine_vm(vm)
