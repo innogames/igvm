@@ -366,6 +366,7 @@ class Hypervisor(Host):
             size=vm.dataset_obj['disk_size_gib'],
         )
 
+        self.storage_pool.refresh()
         volume = self.storage_pool.createXML(volume_xml, 0)
         if volume is None:
             raise StorageError(
