@@ -12,6 +12,7 @@ from pipes import quote
 from tempfile import NamedTemporaryFile
 from unittest import TestCase
 from uuid import uuid4
+from pytest import mark
 
 from adminapi.dataset import Query
 from fabric.api import env
@@ -540,6 +541,7 @@ class MigrationTest(IGVMTest):
                 newip='1.2.3.4',
             )
 
+    @mark.skip(reason="Serveradmin can't give out unique IP address yet")
     def test_new_ip(self):
         # We don't have a way to ask for new IP address from Serveradmin
         # and lock it for us. The method below will usually work fine.

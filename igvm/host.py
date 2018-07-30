@@ -156,3 +156,29 @@ class Host(object):
     def release_lock(self):
         self.dataset_obj['igvm_locked'] = False
         self.dataset_obj.commit()
+
+    def get_block_size(self, device):
+        device = self.run((
+            'lsblk --asci -s {} | '
+            'awk \'/[sv]d[a-z] / {{gsub(".*-", "", $1); print $1}}\''
+        ).format(device))
+        sys_path = '/sys/class/block/{}/queue/'.format(device)
+        bs = int(self.read_file(sys_path + 'max_sectors_kb'))
+        bs_hw = int(self.read_file(sys_path + 'max_hw_sectors_kb'))
+        return min(bs, bs_hw)
+
+    def set_block_size(self, device, bs_kib):
+        """ Reduce maximum number of KiB allowed for FS to request from
+            block layer
+
+        This is required for DRBD storage migrations. During disk migration
+        a DRBD will consist of devices on multiple hypervisors which might have
+        different maximum block size. It was observed that during high IO
+        requests were sometimes rejected by block layer causing filesystem to
+        crash.
+        """
+        self.run(
+            'echo {} > /sys/class/block/{}/queue/max_sectors_kb'
+            .format(bs_kib, device)
+        )
+        self.run('sync')
