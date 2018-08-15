@@ -547,10 +547,15 @@ def _get_vm(hostname, ignore_reserved=False, unlock=True):
     The function is accepting hostnames in any length as long as it resolves
     to a single server on Serveradmin.
     """
+
+    object_id = Query({
+        'hostname': Any(hostname, StartsWith(hostname + '.')),
+        'servertype': 'vm',
+    }, ['object_id']).get()['object_id']
+
     def vm_query():
         return Query({
-            'hostname': Any(hostname, StartsWith(hostname + '.')),
-            'servertype': 'vm',
+            'object_id': object_id,
         }, VM_ATTRIBUTES).get()
 
     dataset_obj = vm_query()
