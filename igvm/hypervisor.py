@@ -35,7 +35,7 @@ from igvm.settings import (
     IGVM_IMAGE_URL,
     IGVM_IMAGE_MD5_URL,
     IMAGE_PATH,
-    MIGRATE_COMMANDS,
+    MIGRATE_CONFIG,
     KVM_HWMODEL_TO_CPUMODEL,
     VM_OVERHEAD_MEMORY,
 )
@@ -193,7 +193,7 @@ class Hypervisor(Host):
         if not offline:
             # Compatbile OS?
             os_pair = (vm.hypervisor.dataset_obj['os'], self.dataset_obj['os'])
-            if os_pair not in MIGRATE_COMMANDS:
+            if os_pair not in MIGRATE_CONFIG:
                 raise HypervisorError(
                     '{} to {} migration is not supported online.'
                     .format(*os_pair))
