@@ -312,25 +312,32 @@ class Hypervisor(Host):
         if not running:
             log.info('VM is offline, rebuilding domain with new settings')
             self.redefine_vm(vm)
+            vm.dataset_obj.commit()
         else:
             old_total = vm.meminfo()['MemTotal']
             set_memory(self, vm, self._get_domain(vm))
+            vm.dataset_obj.commit()
+
             # Hypervisor might take some time to propagate memory changes,
             # wait until MemTotal changes.
             retry_wait_backoff(
                 lambda: vm.meminfo()['MemTotal'] != old_total,
-                'New memory is not yet visible',
+                'New memory is not visible to virtual machine. Note that we '
+                'can not online decrease the domains memory. The libvirt '
+                'and serveradmin changes will therefore not be rolled back.',
+                max_wait=40
             )
 
         # Validate changes, if possible.
         current_memory = self.vm_sync_from_hypervisor(vm).get('memory', memory)
         if current_memory != memory:
             raise HypervisorError(
-                'New memory is not visible to hypervisor, '
-                'changes will not be committed.'
+                'Warning: The sanity check to see if libvirt reports the '
+                'updated amount of memory for the domain we just changed has'
+                'failed. Note that we can not online decrease the domains '
+                'memory. The libvirt and serveradmin changes will therefore '
+                'not be rolled back.'
             )
-
-        vm.dataset_obj.commit()
 
     def vm_set_disk_size_gib(self, vm, new_size_gib):
         """Changes disk size of a VM."""
