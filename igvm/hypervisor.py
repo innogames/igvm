@@ -394,7 +394,8 @@ class Hypervisor(Host):
                 .format(vm.fqdn)
             )
 
-        self.format_storage(self.get_volume_by_vm(vm).path())
+        self.format_storage(
+            self.get_volume_by_vm(vm).path(), vm.dataset_obj['os'])
         return self.mount_vm_storage(vm, transaction)
 
     def download_and_extract_image(self, image, target_dir):
@@ -730,8 +731,11 @@ class Hypervisor(Host):
     def remove_temp(self, mount_path):
         self.run('rmdir {0}'.format(mount_path))
 
-    def format_storage(self, device):
-        self.run('mkfs.xfs -f {}'.format(device))
+    def format_storage(self, device, os):
+        if os == 'stretch' and self.dataset_obj['os'] == 'stretch':
+            self.run('mkfs.xfs -f {} -n ftype=1'.format(device))
+        else:
+            self.run('mkfs.xfs -f {}'.format(device))
 
     def check_netcat(self, port):
         pid = self.run(
