@@ -195,7 +195,8 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
 @with_fabric_settings   # NOQA: C901
 def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
                run_puppet=False, debug_puppet=False,
-               offline=False, offline_transport='drbd', ignore_reserved=False):
+               offline=False, offline_transport='drbd', ignore_reserved=False,
+               no_shutdown=False):
     """Migrate a VM to a new hypervisor."""
     with ExitStack() as es:
         vm = es.enter_context(
@@ -256,7 +257,8 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
                 )
 
             vm.hypervisor.migrate_vm(
-                vm, hypervisor, offline, offline_transport, transaction
+                vm, hypervisor, offline, offline_transport, transaction,
+                no_shutdown,
             )
 
             previous_hypervisor = vm.hypervisor

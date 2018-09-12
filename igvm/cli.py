@@ -172,6 +172,14 @@ def parse_args():
             'Specify drbd (default) or netcat transport to migrate disk image'
         ),
     )
+    subparser.add_argument(
+        '--no-shutdown',
+        action='store_true',
+        help=(
+            'Don\'t shutdown VM during offline migration, igvm will wait for'
+            ' operator to shut down VM.'
+        ),
+    )
     subparser = subparsers.add_parser(
         'disk-set',
         description=disk_set.__doc__,
