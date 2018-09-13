@@ -154,20 +154,22 @@ class IGVMTest(TestCase):
         """Clean up all HVs after every test"""
 
         for hv in HYPERVISORS:
-            hv.storage_pool.refresh()
+            hv.get_storage_pool().refresh()
             for domain in hv.conn().listAllDomains():
                 if domain.name() == self.uid_name:
                     if domain.state()[0] == VIR_DOMAIN_RUNNING:
                         domain.destroy()
                     domain.undefine()
-            for vol_name in hv.storage_pool.listVolumes():
+            for vol_name in hv.get_storage_pool().listVolumes():
                 if vol_name == self.uid_name:
                     hv.run(
                         'mount | grep -q "/dev/{vg}/{vm}" && '
                         ' umount /dev/{vg}/{vm} || true;'
                         .format(vg=VG_NAME, vm=self.uid_name)
                     )
-                    hv.storage_pool.storageVolLookupByName(vol_name).delete()
+                    hv.get_storage_pool().storageVolLookupByName(
+                        vol_name,
+                    ).delete()
 
     def check_vm_present(self):
         # Operate on fresh object
