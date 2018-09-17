@@ -11,7 +11,7 @@ import tqdm
 
 from base64 import b64decode
 from botocore.exceptions import ClientError
-from fabric.api import cd, get, hide, put, run, settings
+from fabric.api import cd, get, hide, put, run, sudo, settings
 from fabric.contrib.files import upload_template
 from fabric.exceptions import NetworkError
 from hashlib import sha1, sha256
@@ -673,10 +673,9 @@ class VM(Host):
                 host_string=self.dataset_obj['puppet_ca'],
                 warn_only=True,
             ):
-                run(
+                sudo(
                     '/usr/bin/puppet cert clean {}'.format(self.fqdn),
                     shell=False,
-                    with_sudo=True,
                 )
 
         if self.dataset_obj['datacenter_type'] == 'kvm.dct':
