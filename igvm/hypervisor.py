@@ -570,12 +570,18 @@ class Hypervisor(Host):
                     vm.set_state('maintenance', transaction=transaction)
 
                     if vm.is_running():
-                        vm.shutdown(transaction)
+                        vm.shutdown(
+                            check_vm_up_on_transaction=False,
+                            transaction=transaction,
+                        )
 
             elif offline_transport == 'netcat':
                 vm.set_state('maintenance', transaction=transaction)
                 if vm.is_running():
-                    vm.shutdown(transaction)
+                        vm.shutdown(
+                            check_vm_up_on_transaction=False,
+                            transaction=transaction,
+                        )
                 vm_disk_path = target_hypervisor.get_volume_by_vm(vm).path()
                 with target_hypervisor.netcat_to_device(vm_disk_path) as args:
                     self.device_to_netcat(
