@@ -209,17 +209,6 @@ def _live_repin_cpus(domain, props, max_phys_cpus):
 
 def migrate_live(source, destination, vm, domain):
     """Live-migrates a VM via libvirt."""
-    # Unfortunately, virsh provides a global timeout, but what we need it to
-    # timeout if it is catching up the dirtied memory.  To be in this stage,
-    # it should have coped the initial disk and memory and changes on them.
-    timeout = sum((
-        # We assume the disk can be copied at 33 MB/s;
-        vm.dataset_obj['disk_size_gib'] * 1024 // 33,
-        # the memory at 100 MB/s;
-        vm.dataset_obj['memory'] // 100,
-        # and 5 minutes more for other operations.
-        5 * 60,
-    ))
 
     migrate_cmd = (
         'virsh migrate'
@@ -237,8 +226,6 @@ def migrate_live(source, destination, vm, domain):
         ' --abort-on-error'
         # Show progress bar during migration
         ' --verbose'
-        # Force guest to suspend, if noting else helped
-        ' --timeout {timeout}'
     )
 
     # Append OS-specific migration commands.  They might not exist for some
@@ -260,7 +247,6 @@ def migrate_live(source, destination, vm, domain):
         migrate_cmd.format(
             domain=domain.name(),
             destination=destination.fqdn,
-            timeout=timeout,
         ),
         with_sudo=False,
     )

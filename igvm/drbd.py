@@ -122,7 +122,7 @@ class DRBD(object):
         fd.write(
             'resource {dev} {{\n'
             '    net {{\n'
-            '        protocol A;\n'
+            '        protocol C;\n'
             # max-buffers vs MB/s
             # 4k-150, 8k-233, 12k-330, 16K-397, 24k-561, 32k-700
             # 32k seems jumpy and might end up at as low aw 250MB/s
@@ -132,12 +132,7 @@ class DRBD(object):
             '#        sndbuf-size 2048k;\n'
             '#        rcvbuf-size 2048k;\n'
             '    }}\n'
-            # We don't care for flushes and barriers - we are replicating one
-            # way only and if things fail, we will just replicate them again.
             '    disk {{\n'
-            '         no-disk-flushes;\n'
-            '         no-md-flushes;\n'
-            '         no-disk-barrier;\n'
             # Try maximum speed immediately, no need for the slow-start
             '         c-max-rate 750M;\n'
             '         resync-rate 750M;\n'

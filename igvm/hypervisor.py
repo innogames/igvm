@@ -524,7 +524,8 @@ class Hypervisor(Host):
         return 'vda1'
 
     def migrate_vm(
-        self, vm, target_hypervisor, offline, offline_transport, transaction
+        self, vm, target_hypervisor, offline, offline_transport, transaction,
+        no_shutdown,
     ):
         if offline_transport not in ['netcat', 'drbd']:
             raise StorageError(
@@ -570,18 +571,27 @@ class Hypervisor(Host):
                     vm.set_state('maintenance', transaction=transaction)
 
                     if vm.is_running():
+                        if no_shutdown:
+                            log.info('Please shut down the VM manually now')
+                            vm.wait_for_running(running=False, timeout=86400)
+                        else:
+                            vm.shutdown(
+                                check_vm_up_on_transaction=False,
+                                transaction=transaction,
+                            )
+
+            elif offline_transport == 'netcat':
+                vm.set_state('maintenance', transaction=transaction)
+                if vm.is_running():
+                    if no_shutdown:
+                        log.info('Please shut down the VM manually now')
+                        vm.wait_for_running(running=False, timeout=86400)
+                    else:
                         vm.shutdown(
                             check_vm_up_on_transaction=False,
                             transaction=transaction,
                         )
 
-            elif offline_transport == 'netcat':
-                vm.set_state('maintenance', transaction=transaction)
-                if vm.is_running():
-                        vm.shutdown(
-                            check_vm_up_on_transaction=False,
-                            transaction=transaction,
-                        )
                 vm_disk_path = target_hypervisor.get_volume_by_vm(vm).path()
                 with target_hypervisor.netcat_to_device(vm_disk_path) as args:
                     self.device_to_netcat(
