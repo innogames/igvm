@@ -55,34 +55,47 @@ class Hypervisor(Host):
                 'Hypervisor "{0}" is retired.'.format(self.fqdn)
             )
 
+        self._mount_path = {}
+        self._storage_pool = None
+        self._storage_type = None
+
+    def get_storage_pool(self):
         # Store per-VM path information
         # We cannot store these in the VM object due to migrations.
-        self._mount_path = {}
-        self.storage_pool = self.conn().storagePoolLookupByName(VG_NAME)
-        self.storage_type = ElementTree.fromstring(
-            self.storage_pool.XMLDesc()
+        if self._storage_pool:
+            return self._storage_pool
+        self._storage_pool = self.conn().storagePoolLookupByName(VG_NAME)
+        return self._storage_pool
+
+    def get_storage_type(self):
+        if self._storage_type:
+            return self._storage_type
+
+        self._storage_type = ElementTree.fromstring(
+            self.get_storage_pool().XMLDesc()
         ).attrib['type']
 
         if (
-            self.storage_type not in HOST_RESERVED_MEMORY or
-            self.storage_type not in RESERVED_DISK
+            self._storage_type not in HOST_RESERVED_MEMORY or
+            self._storage_type not in RESERVED_DISK
         ):
             raise HypervisorError(
                 'Unsupported storage type {} on hypervisor {}'
-                .format(self.storage_type, self.dataset_obj['hostname'])
+                .format(self._storage_type, self.dataset_obj['hostname'])
             )
+        return self._storage_type
 
     def get_volume_by_vm(self, vm):
         """Get logical volume information of a VM"""
         domain = self._find_domain(vm)
-        for vol_name in self.storage_pool.listVolumes():
+        for vol_name in self.get_storage_pool().listVolumes():
             if (
                 # Match the LV based on the object_id encoded within its name
                 vm.match_uid_name(vol_name) or
                 # XXX: Deprecated matching for LVs w/o an uid_name
                 domain and vol_name == domain.name()
             ):
-                return self.storage_pool.storageVolLookupByName(vol_name)
+                return self.get_storage_pool().storageVolLookupByName(vol_name)
 
         raise StorageError(
             'No existing storage volume found for VM "{}" on "{}".'
@@ -109,7 +122,7 @@ class Hypervisor(Host):
                         vm.uid_name
                     )
                 )
-                self.storage_pool.refresh()
+                self.get_storage_pool().refresh()
 
     def vm_mount_path(self, vm):
         """Returns the mount path for a VM or raises HypervisorError if not
@@ -208,7 +221,7 @@ class Hypervisor(Host):
             raise HypervisorError(
                 'Not enough free space in VG {} to build VM while keeping'
                 ' {} GiB reserved'
-                .format(VG_NAME, RESERVED_DISK[self.storage_type])
+                .format(VG_NAME, RESERVED_DISK[self.get_storage_type()])
             )
 
         # Proper VLAN?
@@ -344,11 +357,11 @@ class Hypervisor(Host):
         if new_size_gib < vm.dataset_obj['disk_size_gib']:
             raise NotImplementedError('Cannot shrink the disk.')
         volume = self.get_volume_by_vm(vm)
-        if self.storage_type == 'logical':
+        if self.get_storage_type() == 'logical':
             # There is no resize function in version of libvirt
             # available in Debian 9.
             self.run('lvresize {} -L {}g'.format(volume.path(), new_size_gib))
-            self.storage_pool.refresh()
+            self.get_storage_pool().refresh()
         else:
             raise NotImplementedError(
                 'Storage volume resizing is supported only on LVM storage!'
@@ -373,11 +386,11 @@ class Hypervisor(Host):
             size=vm.dataset_obj['disk_size_gib'],
         )
 
-        volume = self.storage_pool.createXML(volume_xml, 0)
+        volume = self.get_storage_pool().createXML(volume_xml, 0)
         if volume is None:
             raise StorageError(
                 'Failed to create storage volume {}/{}'.format(
-                    self.storage_pool.name(),
+                    self.get_storage_pool().name(),
                     vol_name,
                 )
             )
@@ -537,8 +550,8 @@ class Hypervisor(Host):
             target_hypervisor.create_vm_storage(vm, transaction)
             if offline_transport == 'drbd':
                 if (
-                    self.storage_type != 'logical' or
-                    target_hypervisor.storage_type != 'logical'
+                    self.get_storage_type() != 'logical' or
+                    target_hypervisor.get_storage_type() != 'logical'
                 ):
                     raise NotImplementedError(
                         'DRBD migration is supported only between hypervisors '
@@ -614,7 +627,7 @@ class Hypervisor(Host):
         # Start with what OS sees as total memory (not installed memory)
         total_mib = self.conn().getMemoryStats(-1)['total'] // 1024
         # Always keep some extra memory free for Hypervisor
-        total_mib -= HOST_RESERVED_MEMORY[self.storage_type]
+        total_mib -= HOST_RESERVED_MEMORY[self.get_storage_type()]
         return total_mib
 
     def free_vm_memory(self):
@@ -706,11 +719,11 @@ class Hypervisor(Host):
 
     def get_free_disk_size_gib(self, safe=True):
         """Return free disk space as float in GiB"""
-        pool_info = self.storage_pool.info()
+        pool_info = self.get_storage_pool().info()
         # Floor instead of ceil because we check free instead of used space
         vg_size_gib = math.floor(float(pool_info[3]) / 1024 ** 3)
         if safe is True:
-            vg_size_gib -= RESERVED_DISK[self.storage_type]
+            vg_size_gib -= RESERVED_DISK[self.get_storage_type()]
         return vg_size_gib
 
     def mount_temp(self, device, suffix=''):
