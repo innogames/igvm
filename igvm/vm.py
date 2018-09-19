@@ -464,21 +464,32 @@ class VM(Host):
                 )
 
         self.block_autostart()
-        try:
-            self.run(
-                '( /opt/puppetlabs/puppet/bin/puppet agent '
-                '--fqdn={} --server={} --ca_server={} '
-                '--no-report --waitforcert=60 --onetime --no-daemonize '
-                '--skip_tags=chroot_unsafe --verbose {} && touch '
-                '/tmp/puppet_success ) | tee {} ; test -f /tmp/puppet_success'
-                .format(
-                    self.fqdn,
-                    self.dataset_obj['puppet_master'],
-                    self.dataset_obj['puppet_ca'],
-                    '--debug' if debug else '',
-                    '/var/log/puppetrun_igvm',
-                )
+
+        # XXX: We use puppet_command in the exception handler to find and kill
+        # this specific run. As far as I can tell the server option --pidfile
+        # is ignored by the client so we must kill it by name.
+        puppet_command = (
+            '/opt/puppetlabs/puppet/bin/puppet agent '
+            '--fqdn={} --server={} --ca_server={} '
+            '--no-report --waitforcert=60 --onetime --no-daemonize '
+            '--skip_tags=chroot_unsafe --verbose{}'
+            .format(
+                self.fqdn,
+                self.dataset_obj['puppet_master'],
+                self.dataset_obj['puppet_ca'],
+                ' --debug' if debug else '',
             )
+        )
+
+        full_command = (
+            '( {} && touch /tmp/puppet_success ) '
+            '| tee /var/log/puppetrun_igvm ; '
+            'test -f /tmp/puppet_success'
+            .format(puppet_command)
+        )
+
+        try:
+            self.run(full_command)
         except KeyboardInterrupt:
             # Why is killing of Puppet necessary?
             # Fabric does not seem to pass signals to remote commands. So after
@@ -486,9 +497,7 @@ class VM(Host):
             # It keeps the mounted FS in use making it impossible to rollback
             # LV creation.
             self.hypervisor.run(
-                'pkill -9 -f "^/opt/puppetlabs/puppet/bin/ruby '
-                '/usr/bin/puppet agent --fqdn={}" || true'
-                .format(self.fqdn),
+                'pkill -9 -f "{}$" || true'.format(puppet_command),
             )
             raise
 
