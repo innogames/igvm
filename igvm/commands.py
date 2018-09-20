@@ -200,7 +200,10 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
     """Migrate a VM to a new hypervisor."""
     with ExitStack() as es:
         vm = es.enter_context(
-            _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
+            _get_vm(
+                vm_hostname, ignore_reserved=ignore_reserved,
+                ignore_retired=True,
+            )
         )
         if hypervisor_hostname:
             hypervisor = es.enter_context(_get_hypervisor(
@@ -543,7 +546,7 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
 
 
 @contextmanager
-def _get_vm(hostname, ignore_reserved=False, unlock=True):
+def _get_vm(hostname, ignore_reserved=False, unlock=True, ignore_retired=False):
     """Get a server from Serveradmin by hostname to return VM object
 
     The function is accepting hostnames in any length as long as it resolves
@@ -575,6 +578,12 @@ def _get_vm(hostname, ignore_reserved=False, unlock=True):
     vm.acquire_lock()
 
     try:
+        if not ignore_retired and dataset_obj['state'] == 'retired':
+            raise InvalidStateError(
+                'VM {} is in state retired, I refuse to work on it!'.format(
+                    hostname,
+                )
+            )
         yield vm
     except (Exception, KeyboardInterrupt):
         VM(vm_query(), hypervisor).release_lock()

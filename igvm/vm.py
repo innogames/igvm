@@ -138,6 +138,9 @@ class VM(Host):
     def set_state(self, new_state, transaction=None):
         """Changes state of VM for LB and Nagios downtimes"""
         self.previous_state = self.dataset_obj['state']
+        if self.previous_state == 'retired':
+            # Don't set a state closer to online if VM is retired
+            return
         if new_state == self.previous_state:
             return
         log.debug('Setting VM to state {}'.format(new_state))
