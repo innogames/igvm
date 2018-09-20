@@ -638,8 +638,7 @@ class Hypervisor(Host):
         # We can not trust conn().getFreeMemory(), sum up memory used by
         # each VM instead
         used_kib = 0
-        for dom_id in self.conn().listDomainsID():
-            dom = self.conn().lookupByID(dom_id)
+        for dom in self.conn().listAllDomains():
             used_kib += dom.info()[2]
         free_mib = total_mib - used_kib / 1024
         return free_mib
