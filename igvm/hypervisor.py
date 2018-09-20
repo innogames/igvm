@@ -37,6 +37,7 @@ from igvm.settings import (
     IMAGE_PATH,
     MIGRATE_COMMANDS,
     KVM_HWMODEL_TO_CPUMODEL,
+    VM_OVERHEAD_MEMORY,
 )
 from igvm.utils import retry_wait_backoff
 
@@ -640,7 +641,7 @@ class Hypervisor(Host):
         used_kib = 0
         for dom in self.conn().listAllDomains():
             used_kib += dom.info()[2]
-        free_mib = total_mib - used_kib / 1024
+        free_mib = total_mib - (used_kib / 1024 - VM_OVERHEAD_MEMORY)
         return free_mib
 
     def start_vm(self, vm):
