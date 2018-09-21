@@ -408,7 +408,17 @@ class Hypervisor(Host):
                 .format(vm.fqdn)
             )
 
-        self.format_storage(self.get_volume_by_vm(vm).path())
+        if (
+            vm.dataset_obj['os'] == 'stretch' and
+            self.dataset_obj['os'] == 'jessie'
+        ):
+            # We only need to explicitely add support if hypervisor is jessie
+            # but VM is stretch. For stretch hvs it is enabled by default
+            ftype_support = True
+        else:
+            ftype_support = False
+
+        self.format_storage(self.get_volume_by_vm(vm).path(), ftype_support)
         return self.mount_vm_storage(vm, transaction)
 
     def download_and_extract_image(self, image, target_dir):
@@ -759,8 +769,11 @@ class Hypervisor(Host):
     def remove_temp(self, mount_path):
         self.run('rmdir {0}'.format(mount_path))
 
-    def format_storage(self, device):
-        self.run('mkfs.xfs -f {}'.format(device))
+    def format_storage(self, device, ftype=False):
+        if ftype:
+            self.run('mkfs.xfs -f {} -n ftype=1'.format(device))
+        else:
+            self.run('mkfs.xfs -f {}'.format(device))
 
     def check_netcat(self, port):
         pid = self.run(
