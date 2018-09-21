@@ -42,6 +42,8 @@ HOST_RESERVED_MEMORY = {
     'zfs': 8 * 1024,
 }
 
+VM_OVERHEAD_MEMORY = 50
+
 
 # Default max number of CPUs, unless the hypervisor has fewer cores or num_cpu
 # is larger than this value.

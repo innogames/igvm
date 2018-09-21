@@ -194,7 +194,7 @@ class IGVMTest(TestCase):
 
     def check_vm_absent(self, hv_name=None):
         # Operate on fresh object
-        with _get_vm(VM_HOSTNAME) as vm:
+        with _get_vm(VM_HOSTNAME, ignore_retired=True) as vm:
             if not hv_name:
                 hv_name = vm.dataset_obj['hypervisor']
 
