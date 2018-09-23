@@ -291,6 +291,12 @@ def parse_args():
         'vm_hostname',
         help='Hostname of the guest system',
     )
+    subparser.add_argument(
+        '--unretire',
+        nargs='?',
+        const='maintenance',
+        help='Unretire a VM, set it to given state, maintenance by default',
+    )
 
     subparser = subparsers.add_parser(
         'stop',
@@ -305,6 +311,11 @@ def parse_args():
         '--force',
         action='store_true',
         help='Do not wait for guest to shutdown gracefully',
+    )
+    subparser.add_argument(
+        '--retire',
+        action='store_true',
+        help='Retire VM after stopping it',
     )
 
     subparser = subparsers.add_parser(
