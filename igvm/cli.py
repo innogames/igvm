@@ -12,6 +12,7 @@ from fabric.network import disconnect_all
 
 from igvm.commands import (
     disk_set,
+    evacuate,
     host_info,
     mem_set,
     vcpu_set,
@@ -354,6 +355,26 @@ def parse_args():
         '--offline',
         action='store_true',
         help='Shutdown VM, if running',
+    )
+
+    subparser = subparsers.add_parser(
+        'evacuate',
+        description=evacuate.__doc__,
+    )
+    subparser.set_defaults(func=evacuate)
+    subparser.add_argument(
+        'hv_hostname',
+        help='Hostname of the hypervisor',
+    )
+    subparser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Do not migrate but just print what would be done'
+    )
+    subparser.add_argument(
+        '--offline',
+        nargs='*',
+        help='Migrate VMs offline',
     )
 
     return vars(top_parser.parse_args())
