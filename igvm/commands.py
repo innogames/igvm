@@ -62,32 +62,32 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
     a list of strings is passed only those matching will be migrate offline.
     """
 
-    hv = Query({'hostname': hv_hostname}, ['state'])
-    if len(hv) == 0:
-        print('No such hypervisor {}'.format(hv_hostname))
-        exit(1)
+    with ExitStack() as es:
+        hv = es.enter_context(
+            _get_hypervisor(hv_hostname, ignore_reserved=True))
 
-    if dry_run:
-        print('Setting {} to state maintenance'.format(hv_hostname))
-    else:
-        hv['state'] = 'maintenance'
-        hv.commit()
-
-    vms = [o['hostname'] for o in Query({
-        'hypervisor': hv_hostname, 'servertype': 'vm'})]
-    for vm in vms:
-        vm_function = Query({'hostname': vm}, ['function']).get()['function']
-
-        if offline is not None and (offline == [] or vm_function in offline):
-            if dry_run:
-                print('migrating {} offline'.format(vm))
-            else:
-                vm_migrate(vm, offline=True)
+        if dry_run:
+            log.info('Setting {} to state maintenance'.format(hv_hostname))
         else:
-            if dry_run:
-                print('migrating {} online'.format(vm))
+            hv.dataset_obj['state'] = 'maintenance'
+            hv.dataset_obj.commit()
+
+        for vm in hv.dataset_obj['vms']:
+            vm_function = vm['function']
+
+            if (
+                offline is not None and
+                (offline == [] or vm_function in offline)
+            ):
+                if dry_run:
+                    log.info('migrating {} offline'.format(vm['hostname']))
+                else:
+                    vm_migrate(vm['hostname'], offline=True)
             else:
-                vm_migrate(vm)
+                if dry_run:
+                    log.info('migrating {} online'.format(vm['hostname']))
+                else:
+                    vm_migrate(vm['hostname'])
 
 
 @with_fabric_settings
