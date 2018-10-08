@@ -62,10 +62,7 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
     a list of strings is passed only those matching will be migrate offline.
     """
 
-    with ExitStack() as es:
-        hv = es.enter_context(
-            _get_hypervisor(hv_hostname, ignore_reserved=True))
-
+    with _get_hypervisor(hv_hostname, ignore_reserved=True) as hv:
         if dry_run:
             log.info('Setting {} to state maintenance'.format(hv_hostname))
         else:
