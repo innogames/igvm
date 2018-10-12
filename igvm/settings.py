@@ -102,6 +102,7 @@ HYPERVISOR_ATTRIBUTES = [
     'hostname',
     'igvm_locked',
     'intern_ip',
+    'iops_avg',
     'memory',
     'num_cpu',
     'os',
@@ -182,6 +183,8 @@ HYPERVISOR_PREFERENCES = [
     OverAllocation('num_cpu'),
     # Find less loaded Hypervisor
     HypervisorAttributeValue('cpu_util_pct'),
+    # Find Hypervisor with less I/O utilization
+    HypervisorAttributeValue('iops_avg'),
     # Prefer the hypervisor with less VMs from the same cluster
     OtherVMs(['project', 'environment', 'game_market']),
     # As the last resort, choose the hypervisor with less VMs
