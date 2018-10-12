@@ -374,7 +374,7 @@ def parse_args():
     subparser.add_argument(
         '--offline',
         nargs='*',
-        help='Migrate VMs offline',
+        help='Migrate VMs matching the given serveradmin function offline',
     )
 
     return vars(top_parser.parse_args())

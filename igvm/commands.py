@@ -64,7 +64,7 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
 
     with _get_hypervisor(hv_hostname, ignore_reserved=True) as hv:
         if dry_run:
-            log.info('Setting {} to state maintenance'.format(hv_hostname))
+            log.info('I would set {} to state maintenance'.format(hv_hostname))
         else:
             hv.dataset_obj['state'] = 'maintenance'
             hv.dataset_obj.commit()
@@ -77,12 +77,12 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
                 (offline == [] or vm_function in offline)
             ):
                 if dry_run:
-                    log.info('migrating {} offline'.format(vm['hostname']))
+                    log.info('Would migrate {} offline'.format(vm['hostname']))
                 else:
                     vm_migrate(vm['hostname'], offline=True)
             else:
                 if dry_run:
-                    log.info('migrating {} online'.format(vm['hostname']))
+                    log.info('Would migrate {} online'.format(vm['hostname']))
                 else:
                     vm_migrate(vm['hostname'])
 
