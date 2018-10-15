@@ -52,6 +52,42 @@ def _check_defined(vm, fail_hard=True):
 
 
 @with_fabric_settings
+def evacuate(hv_hostname, offline=None, dry_run=False):
+    """Move all VMs out of a hypervisor
+
+    Move all VMs out of a hypervisor and put it to state maintenance.
+
+    Offline can be passed without arguments or with a list strings matching
+    function attributes. If just passed all VMs will be migrated offline. If
+    a list of strings is passed only those matching will be migrate offline.
+    """
+
+    with _get_hypervisor(hv_hostname, ignore_reserved=True) as hv:
+        if dry_run:
+            log.info('I would set {} to state maintenance'.format(hv_hostname))
+        else:
+            hv.dataset_obj['state'] = 'maintenance'
+            hv.dataset_obj.commit()
+
+        for vm in hv.dataset_obj['vms']:
+            vm_function = vm['function']
+
+            if (
+                offline is not None and
+                (offline == [] or vm_function in offline)
+            ):
+                if dry_run:
+                    log.info('Would migrate {} offline'.format(vm['hostname']))
+                else:
+                    vm_migrate(vm['hostname'], offline=True)
+            else:
+                if dry_run:
+                    log.info('Would migrate {} online'.format(vm['hostname']))
+                else:
+                    vm_migrate(vm['hostname'])
+
+
+@with_fabric_settings
 def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
     """Change the number of CPUs in a VM"""
     with ExitStack() as es:
