@@ -26,6 +26,7 @@ setup(
             'templates/etc/hosts',
             'templates/etc/inittab',
             'templates/etc/resolv.conf',
+            'scripts/ssh_wrapper',
         ]
     },
     author='InnoGames System Administration',
