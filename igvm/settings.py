@@ -4,6 +4,7 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 from os import environ
+from sys import stdout
 
 from igvm.hypervisor_preferences import (
     HashDifference,
@@ -17,11 +18,12 @@ from igvm.hypervisor_preferences import (
 COMMON_FABRIC_SETTINGS = dict(
     disable_known_hosts=True,
     use_ssh_config=True,
-    always_use_pty=False,
+    always_use_pty=stdout.isatty(),
     forward_agent=True,
     shell='/bin/sh -c',
     timeout=5,
     connection_attempts=1,
+    remote_interrupt=True,
 )
 
 # Swap size in MiB
