@@ -3,9 +3,10 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 
-from libvirt import open as libvirt_open, libvirtError
-
 from fabric.api import env
+from libvirt import open as libvirt_open, libvirtError
+from os import path
+
 
 _conns = {}
 
@@ -17,8 +18,12 @@ def get_virtconn(fqdn):
     else:
         username = ''
 
+    scripts_dir = path.join(path.dirname(__file__), 'scripts')
+
     if fqdn not in _conns:
-        url = 'qemu+ssh://{}{}/system'.format(username, fqdn)
+        url = 'qemu+ssh://{}{}/system?command={}/ssh_wrapper'.format(
+            username, fqdn, scripts_dir
+        )
         _conns[fqdn] = libvirt_open(url)
     return _conns[fqdn]
 
