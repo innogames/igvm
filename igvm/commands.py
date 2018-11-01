@@ -55,7 +55,7 @@ def _check_defined(vm, fail_hard=True):
 def evacuate(hv_hostname, offline=None, dry_run=False):
     """Move all VMs out of a hypervisor
 
-    Move all VMs out of a hypervisor and put it to state maintenance.
+    Move all VMs out of a hypervisor and put it to state online reserved.
 
     Offline can be passed without arguments or with a list strings matching
     function attributes. If just passed all VMs will be migrated offline. If
@@ -64,9 +64,10 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
 
     with _get_hypervisor(hv_hostname, ignore_reserved=True) as hv:
         if dry_run:
-            log.info('I would set {} to state maintenance'.format(hv_hostname))
+            log.info('I would set {} to state online reserved'.format(
+                hv_hostname))
         else:
-            hv.dataset_obj['state'] = 'maintenance'
+            hv.dataset_obj['state'] = 'online_reserved'
             hv.dataset_obj.commit()
 
         for vm in hv.dataset_obj['vms']:
