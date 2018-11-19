@@ -89,12 +89,10 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
 
 
 @with_fabric_settings
-def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
+def vcpu_set(vm_hostname, count, offline=False):
     """Change the number of CPUs in a VM"""
     with ExitStack() as es:
-        vm = es.enter_context(
-            _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
-        )
+        vm = es.enter_context(_get_vm(vm_hostname))
 
         _check_defined(vm)
 
@@ -116,7 +114,7 @@ def vcpu_set(vm_hostname, count, offline=False, ignore_reserved=False):
 
 
 @with_fabric_settings
-def mem_set(vm_hostname, size, offline=False, ignore_reserved=False):
+def mem_set(vm_hostname, size, offline=False):
     """Change the memory size of a VM
 
     Size argument is a size unit, which defaults to MiB.
@@ -125,9 +123,7 @@ def mem_set(vm_hostname, size, offline=False, ignore_reserved=False):
     powered off.
     """
     with ExitStack() as es:
-        vm = es.enter_context(
-            _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
-        )
+        vm = es.enter_context(_get_vm(vm_hostname))
 
         _check_defined(vm)
 
@@ -156,7 +152,7 @@ def mem_set(vm_hostname, size, offline=False, ignore_reserved=False):
 
 
 @with_fabric_settings
-def disk_set(vm_hostname, size, ignore_reserved=False):
+def disk_set(vm_hostname, size):
     """Change the disk size of a VM
 
     Currently only increasing the disk is implemented.  Size argument is
@@ -166,9 +162,7 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
     error out.
     """
     with ExitStack() as es:
-        vm = es.enter_context(
-            _get_vm(vm_hostname, ignore_reserved=ignore_reserved)
-        )
+        vm = es.enter_context(_get_vm(vm_hostname))
 
         _check_defined(vm)
 
@@ -191,7 +185,7 @@ def disk_set(vm_hostname, size, ignore_reserved=False):
 
 @with_fabric_settings
 def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
-             ignore_reserved=False, rebuild=False):
+             allow_reserved_hv=False, rebuild=False):
     """Create a VM and start it
 
     Puppet in run once to configure baseline networking.
@@ -205,7 +199,7 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
         else:
             vm.hypervisor = es.enter_context(_get_best_hypervisor(
                 vm,
-                ['online', 'online_reserved'] if ignore_reserved
+                ['online', 'online_reserved'] if allow_reserved_hv
                 else ['online'],
                 True,
             ))
@@ -232,19 +226,16 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
 @with_fabric_settings   # NOQA: C901
 def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
                run_puppet=False, debug_puppet=False,
-               offline=False, offline_transport='drbd', ignore_reserved=False,
-               no_shutdown=False):
+               offline=False, offline_transport='drbd',
+               allow_reserved_hv=False, no_shutdown=False):
     """Migrate a VM to a new hypervisor."""
     with ExitStack() as es:
         vm = es.enter_context(
-            _get_vm(
-                vm_hostname, ignore_reserved=ignore_reserved,
-                ignore_retired=True,
-            )
+            _get_vm(vm_hostname, allow_retired=True)
         )
         if hypervisor_hostname:
             hypervisor = es.enter_context(_get_hypervisor(
-                hypervisor_hostname, ignore_reserved=ignore_reserved
+                hypervisor_hostname, allow_reserved=allow_reserved_hv
             ))
             if vm.hypervisor.fqdn == hypervisor.fqdn:
                 raise IGVMError(
@@ -253,7 +244,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
         else:
             hypervisor = es.enter_context(_get_best_hypervisor(
                 vm,
-                ['online', 'online_reserved'] if ignore_reserved
+                ['online', 'online_reserved'] if allow_reserved_hv
                 else ['online'],
                 offline,
             ))
@@ -363,7 +354,7 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
     No data will be lost.
     """
     with ExitStack() as es:
-        vm = es.enter_context(_get_vm(vm_hostname, ignore_reserved=True))
+        vm = es.enter_context(_get_vm(vm_hostname))
 
         _check_defined(vm)
 
@@ -390,7 +381,7 @@ def vm_delete(vm_hostname, retire=False):
     state will be updated to 'retired'.
     """
 
-    with _get_vm(vm_hostname, ignore_reserved=True, unlock=retire) as vm:
+    with _get_vm(vm_hostname, unlock=retire) as vm:
         # Make sure the VM has a hypervisor and that it is defined on it.
         # Abort if the VM has not been defined.
         _check_defined(vm)
@@ -427,7 +418,7 @@ def vm_sync(vm_hostname):
 
     This command collects actual resource allocation of a VM from the
     hypervisor and overwrites outdated attribute values in Serveradmin."""
-    with _get_vm(vm_hostname, ignore_reserved=True) as vm:
+    with _get_vm(vm_hostname) as vm:
         _check_defined(vm)
 
         attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
@@ -458,7 +449,7 @@ def host_info(vm_hostname):
 
     Library consumers should use VM.info() directly.
     """
-    with _get_vm(vm_hostname, ignore_reserved=True) as vm:
+    with _get_vm(vm_hostname) as vm:
 
         info = vm.info()
 
@@ -567,7 +558,7 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
     to be shut down.  No data will be lost.
     """
 
-    with _get_vm(vm_hostname, ignore_reserved=True) as vm:
+    with _get_vm(vm_hostname) as vm:
         _check_defined(vm)
 
         if not offline:
@@ -583,7 +574,7 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
 
 
 @contextmanager
-def _get_vm(hostname, ignore_reserved=False, unlock=True, ignore_retired=False):
+def _get_vm(hostname, unlock=True, allow_retired=False):
     """Get a server from Serveradmin by hostname to return VM object
 
     The function is accepting hostnames in any length as long as it resolves
@@ -615,7 +606,7 @@ def _get_vm(hostname, ignore_reserved=False, unlock=True, ignore_retired=False):
     vm.acquire_lock()
 
     try:
-        if not ignore_retired and dataset_obj['state'] == 'retired':
+        if not allow_retired and dataset_obj['state'] == 'retired':
             raise InvalidStateError(
                 'VM {} is in state retired, I refuse to work on it!'.format(
                     hostname,
@@ -636,14 +627,14 @@ def _get_vm(hostname, ignore_reserved=False, unlock=True, ignore_retired=False):
 
 
 @contextmanager
-def _get_hypervisor(hostname, ignore_reserved=False):
+def _get_hypervisor(hostname, allow_reserved=False):
     """Get a server from Serveradmin by hostname to return Hypervisor object"""
     dataset_obj = Query({
         'hostname': hostname,
         'servertype': 'hypervisor',
     }, HYPERVISOR_ATTRIBUTES).get()
 
-    if not ignore_reserved and dataset_obj['state'] == 'online_reserved':
+    if not allow_reserved and dataset_obj['state'] == 'online_reserved':
         raise InvalidStateError(
             'Server "{0}" is online_reserved.'.format(dataset_obj['hostname'])
         )
