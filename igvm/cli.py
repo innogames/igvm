@@ -114,9 +114,9 @@ def parse_args():
     )
     subparser.add_argument(
         '--ignore-reserved',
-        dest='ignore_reserved',
+        dest='allow_reserved_hv',
         action='store_true',
-        help='Force build on a Host which has the state online_reserved',
+        help='Allow building on a Host which has the state online_reserved',
     )
     subparser.add_argument(
         '--rebuild',
@@ -162,9 +162,9 @@ def parse_args():
     )
     subparser.add_argument(
         '--ignore-reserved',
-        dest='ignore_reserved',
+        dest='allow_reserved_hv',
         action='store_true',
-        help='Force migration to a Host which has the state online_reserved',
+        help='Allow migration to a Host which has the state online_reserved',
     )
     subparser.add_argument(
         '--offline-transport',
@@ -197,12 +197,6 @@ def parse_args():
             'Can be specified relative with "+". Only integers are allowed'
         )
     )
-    subparser.add_argument(
-        '--ignore-reserved',
-        dest='ignore_reserved',
-        action='store_true',
-        help='Force setting disk on a hypervisor with state online_reserved',
-    )
 
     subparser = subparsers.add_parser(
         'mem-set',
@@ -225,12 +219,6 @@ def parse_args():
         action='store_true',
         help='Shutdown VM, change memory, and restart VM',
     )
-    subparser.add_argument(
-        '--ignore-reserved',
-        dest='ignore_reserved',
-        action='store_true',
-        help='Force setting memory on a hypervisor with state online_reserved',
-    )
 
     subparser = subparsers.add_parser(
         'vcpu-set',
@@ -250,12 +238,6 @@ def parse_args():
         '--offline',
         action='store_true',
         help='Shutdown VM, change CPUs, and restart VM',
-    )
-    subparser.add_argument(
-        '--ignore-reserved',
-        dest='ignore_reserved',
-        action='store_true',
-        help='Force setting cpus on a hypervisor with state online_reserved',
     )
 
     subparser = subparsers.add_parser(
