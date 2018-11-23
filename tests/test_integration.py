@@ -143,7 +143,7 @@ class IGVMTest(TestCase):
         obj['hypervisor'] = None
         obj['repositories'] = [
             'int:basejessie:stable',
-            'int:innogames:stable jessie',
+            'int:innogames:stable',
         ]
         obj['puppet_environment'] = None
         obj['backup_disabled'] = True
@@ -225,7 +225,7 @@ class BuildTest(IGVMTest):
             'os': 'stretch',
             'repositories': [
                 'int:basestretch:stable',
-                'int:innogames:stable stretch',
+                'int:innogames:stable',
             ]
         })
         obj.commit()
