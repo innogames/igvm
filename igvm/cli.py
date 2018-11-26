@@ -11,6 +11,7 @@ import time
 from fabric.network import disconnect_all
 
 from igvm.commands import (
+    change_address,
     disk_set,
     evacuate,
     host_info,
@@ -141,11 +142,6 @@ def parse_args():
         help='Hostname of destination hypervisor',
     )
     subparser.add_argument(
-        '--newip',
-        metavar='IP address',
-        help='IP address to move VM to, in case you migrate between VLANs',
-    )
-    subparser.add_argument(
         '--run-puppet',
         action='store_true',
         help='Run puppet in chroot before powering up',
@@ -181,6 +177,28 @@ def parse_args():
             ' operator to shut down VM.'
         ),
     )
+
+    subparser = subparsers.add_parser(
+        'change-address',
+        description=disk_set.__doc__,
+    )
+    subparser.set_defaults(func=change_address)
+    subparser.add_argument(
+        'vm_hostname',
+        help='Hostname of the guest system',
+    )
+    subparser.add_argument(
+        'new_address',
+        help=(
+            'New IPv4 address of VM'
+        )
+    )
+    subparser.add_argument(
+        '--offline',
+        action='store_true',
+        help='Perform IP address change offline',
+    )
+
     subparser = subparsers.add_parser(
         'disk-set',
         description=disk_set.__doc__,
