@@ -137,13 +137,13 @@ class IGVMTest(TestCase):
         obj['disk_size_gib'] = 3
         obj['memory'] = 2048
         obj['num_cpu'] = 2
-        obj['os'] = 'jessie'
+        obj['os'] = 'stretch'
         obj['environment'] = 'testing'
         obj['no_monitoring'] = True
         obj['hypervisor'] = None
         obj['repositories'] = [
-            'int:basejessie:stable',
-            'int:innogames:stable jessie',
+            'int:basestretch:stable',
+            'int:innogames:stable',
         ]
         obj['puppet_environment'] = None
         obj['backup_disabled'] = True
@@ -215,22 +215,8 @@ class BuildTest(IGVMTest):
     def tearDown(self):
         super(BuildTest, self).tearDown()
 
-    def test_build_jessie(self):
-        vm_build(VM_HOSTNAME)
-        self.check_vm_present()
-
     def test_build_stretch(self):
-        obj = Query({'hostname': VM_HOSTNAME}, ['os', 'repositories']).get()
-        obj.update({
-            'os': 'stretch',
-            'repositories': [
-                'int:basestretch:stable',
-                'int:innogames:stable stretch',
-            ]
-        })
-        obj.commit()
         vm_build(VM_HOSTNAME)
-
         self.check_vm_present()
 
     def test_postboot(self):
