@@ -52,8 +52,23 @@ environ['IGVM_MODE'] = 'testing'
 
 # Configuration of VMs used for tests
 # Keep in mind that the whole hostname must fit in 64 characters.
-VM_HOSTNAME = 'igvm-{}.test.ig.local'.format(uuid4())
-VM_NET = 'igvm-net-aw.test.ig.local'
+if environ.get('EXECUTOR_NUMBER'):
+    JENKINS_EXECUTOR = '{:02}'.format(int(environ['EXECUTOR_NUMBER']))
+else:
+    JENKINS_EXECUTOR = 'manual'
+
+if environ.get('BUILD_NUMBER'):
+    JENKINS_BUILD = environ['BUILD_NUMBER']
+else:
+    JENKINS_BUILD = uuid4()
+
+VM_NET = 'igvm-net-{}-aw.test.ig.local'.format(JENKINS_EXECUTOR)
+
+VM_HOSTNAME_PATTERN = 'igvm-{}-{}.test.ig.local'
+VM_HOSTNAME = VM_HOSTNAME_PATTERN.format(
+    JENKINS_BUILD,
+    JENKINS_EXECUTOR,
+)
 
 
 def setUpModule():
