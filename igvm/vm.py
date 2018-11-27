@@ -346,9 +346,7 @@ class VM(Host):
             # even if it fails to start.
             self.dataset_obj.commit()
 
-        # VM was successfully built, don't risk undoing all this just because
-        # start fails.
-        self.start()
+            self.start()
 
         # Perform operations on Virtual Machine
         if postboot is not None:
