@@ -32,6 +32,11 @@ class StorageError(IGVMError):
     pass
 
 
+class VMError(IGVMError):
+    """Something related to a VM went wrong."""
+    pass
+
+
 class InvalidStateError(IGVMError):
     """Host state is invalid for the requested operation."""
     pass

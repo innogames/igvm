@@ -16,17 +16,13 @@ from ipaddress import ip_address
 from re import compile as re_compile
 from uuid import uuid4
 
-from igvm.exceptions import ConfigError, RemoteCommandError
+from igvm.exceptions import ConfigError, RemoteCommandError, VMError
 from igvm.host import Host
 from igvm.settings import DEFAULT_SWAP_SIZE
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
 
 log = logging.getLogger(__name__)
-
-
-class VMError(Exception):
-    pass
 
 
 class VM(Host):
