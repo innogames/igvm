@@ -13,6 +13,7 @@ from tempfile import NamedTemporaryFile
 from unittest import TestCase
 from uuid import uuid4
 from pytest import mark
+from re import match
 
 from adminapi.dataset import Query
 from fabric.api import env
@@ -52,8 +53,23 @@ environ['IGVM_MODE'] = 'testing'
 
 # Configuration of VMs used for tests
 # Keep in mind that the whole hostname must fit in 64 characters.
-VM_HOSTNAME = 'igvm-{}.test.ig.local'.format(uuid4())
-VM_NET = 'igvm-net-aw.test.ig.local'
+if environ.get('EXECUTOR_NUMBER'):
+    JENKINS_EXECUTOR = '{:02}'.format(int(environ['EXECUTOR_NUMBER']))
+else:
+    JENKINS_EXECUTOR = 'manual'
+
+if environ.get('BUILD_NUMBER'):
+    JENKINS_BUILD = environ['BUILD_NUMBER']
+else:
+    JENKINS_BUILD = uuid4()
+
+VM_NET = 'igvm-net-{}-aw.test.ig.local'.format(JENKINS_EXECUTOR)
+
+VM_HOSTNAME_PATTERN = 'igvm-{}-{}.test.ig.local'
+VM_HOSTNAME = VM_HOSTNAME_PATTERN.format(
+    JENKINS_BUILD,
+    JENKINS_EXECUTOR,
+)
 
 
 def setUpModule():
@@ -87,6 +103,40 @@ def setUpModule():
     vm_obj['team'] = 'test'
 
     query.commit()
+
+    # Cancelled builds are forcefully killed by Jenkins. They did not have the
+    # opportunity to clean up so we forcibly destroy everything found on any HV
+    # which would interrupt our work in the current JENKINS_EXECUTOR.
+    for hv in HYPERVISORS:
+        hv.get_storage_pool().refresh()
+        for domain in hv.conn().listAllDomains():
+            if match(('^([0-9]+_)?' + VM_HOSTNAME_PATTERN + '$').format(
+                    '[0-9]+',
+                    JENKINS_EXECUTOR,
+                ),
+                domain.name(),
+            ):
+                if domain.state()[0] == VIR_DOMAIN_RUNNING:
+                    domain.destroy()
+                domain.undefine()
+        st_pool = hv.get_storage_pool()
+        for vol_name in st_pool.listVolumes():
+            if match(('^([0-9]+_)?' + VM_HOSTNAME_PATTERN + '$').format(
+                    '[0-9]+',
+                    JENKINS_EXECUTOR,
+                ),
+                vol_name,
+            ):
+                vol_path = st_pool.storageVolLookupByName(vol_name).path()
+                hv.run(
+                    'mount | awk \'/{}/ {{print $3}}\' | '
+                    'xargs -r -n1 umount'.format(
+                        vol_name.replace('-', '--'),
+                    )
+                )
+                hv.get_storage_pool().storageVolLookupByName(
+                    vol_name,
+                ).delete()
 
 
 def tearDownModule():
