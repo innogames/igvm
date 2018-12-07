@@ -12,7 +12,7 @@ from igvm.commands import vm_build, vm_migrate
 The functions are to be called like this:
 
 ```python
-def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
+def vm_migrate(vm_hostname, hypervisor_hostname=None,
                run_puppet=False, debug_puppet=False,
                offline=False, offline_transport='drbd', ignore_reserved=False):
 ```
@@ -21,7 +21,6 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
     * vm_hostname - string, hostname of virtual machine
     * hypervisor_hostname - string, hostname of destination hypervisor
 * Optional:
-    * newip - string, new IP address if you migrate to different vlan
     * run_puppet - boolean, run chrooted puppet after VM image is extracted
     * debug_puppet - boolean, run puppet with --debug
     * offline - boolean, allow offline migration, default is to attempt online

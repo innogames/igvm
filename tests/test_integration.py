@@ -19,6 +19,7 @@ from adminapi.dataset import Query
 from fabric.api import env
 
 from igvm.commands import (
+    change_address,
     disk_set,
     host_info,
     mem_set,
@@ -565,22 +566,7 @@ class MigrationTest(IGVMTest):
         with self.assertRaises(InconsistentAttributeError):
             vm_migrate(VM_HOSTNAME)
 
-    def test_reject_online_with_new_ip(self):
-        with self.assertRaises(IGVMError):
-            # Fake IP address is fine, this is a failing test.
-            vm_migrate(VM_HOSTNAME, newip='1.2.3.4')
-
-    def test_reject_new_ip_without_puppet(self):
-        with self.assertRaises(IGVMError):
-            # Fake IP address is fine, this is a failing test.
-            vm_migrate(
-                VM_HOSTNAME,
-                offline=True,
-                newip='1.2.3.4',
-            )
-
-    @mark.skip(reason="Serveradmin can't give out unique IP address yet")
-    def test_new_ip(self):
+    def test_new_address(self):
         # We don't have a way to ask for new IP address from Serveradmin
         # and lock it for us. The method below will usually work fine.
         # When it starts failing, we must develop retry method.
@@ -588,18 +574,18 @@ class MigrationTest(IGVMTest):
             Query({'hostname': VM_NET}, ['intern_ip']).get_free_ip_addrs()
         )
 
-        vm_migrate(
-            VM_HOSTNAME,
-            offline=True,
-            newip=new_address,
-            run_puppet=True,
-        )
+        change_address(VM_HOSTNAME, new_address, offline=True)
 
         obj = Query({'hostname': VM_HOSTNAME}, ['intern_ip']).get()
         self.assertEqual(obj['intern_ip'], new_address)
         with _get_vm(VM_HOSTNAME) as vm:
             vm.run(cmd('ip a | grep {}', new_address))
         self.check_vm_present()
+
+    def test_new_address_fail(self):
+        with self.assertRaises(IGVMError):
+            # A wrong IP address won't be reachable
+            change_address(VM_HOSTNAME, '1.2.3.4')
 
     def test_reject_online_with_puppet(self):
         with self.assertRaises(IGVMError):

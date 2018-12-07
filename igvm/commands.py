@@ -11,9 +11,11 @@ from adminapi.dataset import Query
 from adminapi.filters import Any, StartsWith
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
+from ipaddress import ip_address
 from libvirt import libvirtError
 
 from igvm.exceptions import (
+    ConfigError,
     HypervisorError,
     IGVMError,
     InconsistentAttributeError,
@@ -184,6 +186,46 @@ def disk_set(vm_hostname, size):
 
 
 @with_fabric_settings
+def change_address(vm_hostname, new_address, offline=False):
+    """Change VMs IP address
+
+    This is done by changing data in Serveradmin, running Puppet in VM and
+    rebooting it.
+    """
+
+    if not offline:
+        raise IGVMError('IP address change can be only performed offline')
+
+    with _get_vm(vm_hostname) as vm:
+        old_address = vm.dataset_obj['intern_ip']
+        new_address = ip_address(new_address)
+
+        if old_address == new_address:
+            raise ConfigError('New IP address is the same as the old one!')
+
+        vm_was_running = vm.is_running()
+
+        vm.dataset_obj['intern_ip'] = new_address
+        vm.dataset_obj.commit()
+
+        if vm_was_running:
+            vm.shutdown()
+
+        try:
+            with Transaction() as transaction:
+                vm.hypervisor.mount_vm_storage(vm, transaction)
+                vm.run_puppet()
+                vm.hypervisor.redefine_vm(vm)
+                vm.hypervisor.umount_vm_storage(vm)
+                if vm_was_running:
+                    vm.start()
+        except BaseException:
+            vm.dataset_obj['intern_ip'] = old_address
+            vm.dataset_obj.commit()
+            raise
+
+
+@with_fabric_settings
 def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
              allow_reserved_hv=False, rebuild=False):
     """Create a VM and start it
@@ -224,7 +266,7 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
 
 
 @with_fabric_settings   # NOQA: C901
-def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
+def vm_migrate(vm_hostname, hypervisor_hostname=None,
                run_puppet=False, debug_puppet=False,
                offline=False, offline_transport='drbd',
                allow_reserved_hv=False, no_shutdown=False):
@@ -255,16 +297,8 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
         if not was_running:
             offline = True
 
-        if not offline and newip:
-            raise IGVMError('Online migration cannot change IP address.')
-
         if not offline and run_puppet:
             raise IGVMError('Online migration cannot run Puppet.')
-
-        if not run_puppet and newip:
-            raise IGVMError(
-                'Changing IP requires a Puppet run, pass --run-puppet.'
-            )
 
         # Validate destination hypervisor can run the VM (needs to happen after
         # setting new IP!)
@@ -275,18 +309,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None, newip=None,
 
         vm.check_serveradmin_config()
 
-        if newip:
-            vm._set_ip(newip)
-
         with Transaction() as transaction:
-            # Commit previously changed IP address.
-            if newip:
-                # TODO: This commit is not rolled back.
-                vm.dataset_obj.commit()
-                transaction.on_rollback(
-                    'newip warning', log.info, '--newip is not rolled back'
-                )
-
             vm.hypervisor.migrate_vm(
                 vm, hypervisor, offline, offline_transport, transaction,
                 no_shutdown,

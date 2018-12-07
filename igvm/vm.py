@@ -12,7 +12,6 @@ from fabric.api import cd, get, put, run, settings
 from fabric.contrib.files import upload_template
 from hashlib import sha1, sha256
 from io import BytesIO
-from ipaddress import ip_address
 from re import compile as re_compile
 from uuid import uuid4
 
@@ -38,21 +37,6 @@ class VM(Host):
         # upon method of accessing files correctly: mounted image on HV or
         # directly on running VM.
         self.mounted = False
-
-    def _set_ip(self, new_ip):
-        """Changes the IP address and updates all related attributes.
-        Internal method for VM building and migration."""
-        old_ip = self.dataset_obj['intern_ip']
-        # New IP address is given as a string,
-        # dataset_obj['intern_ip'] is ip_address!
-        # So convert the type.
-        self.dataset_obj['intern_ip'] = ip_address(new_ip)
-
-        if old_ip != new_ip:
-            log.info(
-                '"{0}" networking changed to IP address {1}.'
-                .format(self.fqdn, new_ip)
-            )
 
     def vm_host(self):
         """ Return correct ssh host for mounted and unmounted vm """
@@ -310,9 +294,6 @@ class VM(Host):
         self.check_serveradmin_config()
 
         image = self.dataset_obj['os'] + '-base.tar.gz'
-
-        # Populate initial networking attributes.
-        self._set_ip(self.dataset_obj['intern_ip'])
 
         # Can VM run on given hypervisor?
         self.hypervisor.check_vm(self, offline=True)
