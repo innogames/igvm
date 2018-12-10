@@ -45,6 +45,9 @@ class MigrationError(IGVMError):
     """Indicates an error during migration."""
     pass
 
+class MigrationAborted(MigrationError):
+    """Indicates an error during migration."""
+    pass
 
 class TimeoutError(IGVMError):
     """An operation timed out."""

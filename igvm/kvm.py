@@ -22,10 +22,12 @@ from libvirt import (
     VIR_MIGRATE_NON_SHARED_DISK,
     VIR_MIGRATE_AUTO_CONVERGE,
     VIR_MIGRATE_ABORT_ON_ERROR,
+    VIR_ERR_OPERATION_ABORTED,
     libvirtError,
+    virGetLastError,
 )
 
-from igvm.exceptions import HypervisorError, MigrationError
+from igvm.exceptions import HypervisorError, MigrationError, MigrationAborted
 from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
@@ -222,13 +224,18 @@ def migrate_background(
 ):
     # As it seems it is possible to call multiple functions in parallel
     # from different threads.
-    domain.migrateToURI3(
-        MIGRATE_CONFIG.get(
-            (source.dataset_obj['os'], destination.dataset_obj['os'])
-        )['uri'].format(destination=destination.fqdn),
-        migrate_params,
-        migrate_flags,
-    )
+    try:
+        domain.migrateToURI3(
+            MIGRATE_CONFIG.get(
+                (source.dataset_obj['os'], destination.dataset_obj['os'])
+            )['uri'].format(destination=destination.fqdn),
+            migrate_params,
+            migrate_flags,
+        )
+    except libvirtError as e:
+        if virGetLastError()[0] == VIR_ERR_OPERATION_ABORTED:
+            raise MigrationAborted('Migration aborted by user')
+        raise MigrationError(e)
 
 
 def migrate_live(source, destination, vm, domain):
@@ -249,7 +256,7 @@ def migrate_live(source, destination, vm, domain):
         VIR_MIGRATE_CHANGE_PROTECTION |  # Protect source VM
         VIR_MIGRATE_NON_SHARED_DISK |  # Copy non-shared storage
         VIR_MIGRATE_AUTO_CONVERGE |  # Slow down VM if can't migrate memory
-        VIR_MIGRATE_ABORT_ON_ERROR  # Don't tolerate soft errors
+        VIR_MIGRATE_ABORT_ON_ERROR # Don't tolerate soft errors
     )
 
     migrate_params = {
@@ -295,21 +302,18 @@ def migrate_live(source, destination, vm, domain):
                 log.info('Waiting for migration stats to show up')
             time.sleep(1)
     except KeyboardInterrupt:
-        log.warning('Cancelling migration')
         domain.abortJob()
-
-    log.info('Awaiting migration to finish')
-    try:
+        log.info('Awaiting migration to abort')
         future.result()
-    except Exception as e:
-        log.warning('Migration failed')
-        raise MigrationError(e)
-
-    log.info('Migration finished')
-
-    # And pin again, in case we migrated to a host with more physical cores
-    domain = destination._get_domain(vm)
-    _live_repin_cpus(domain, props, destination.dataset_obj['num_cpu'])
+        # Nothing to log, the function above raised an exception
+    else:
+        log.info('Awaiting migration to finish')
+        future.result() # Exception from slave thread will re-raise here
+        log.info('Migration finished')
+        
+        # And pin again, in case we migrated to a host with more physical cores
+        domain = destination._get_domain(vm)
+        _live_repin_cpus(domain, props, destination.dataset_obj['num_cpu'])
 
 
 def set_memory(hypervisor, vm, domain):
