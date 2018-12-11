@@ -41,6 +41,13 @@ class InvalidStateError(IGVMError):
     """Host state is invalid for the requested operation."""
     pass
 
+class MigrationError(IGVMError):
+    """Indicates an error during migration."""
+    pass
+
+class MigrationAborted(MigrationError):
+    """Indicates an error during migration."""
+    pass
 
 class TimeoutError(IGVMError):
     """An operation timed out."""

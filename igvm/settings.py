@@ -6,6 +6,11 @@ Copyright (c) 2018 InnoGames GmbH
 from os import environ
 from sys import stdout
 
+from libvirt import (
+    VIR_MIGRATE_PEER2PEER,
+    VIR_MIGRATE_TUNNELLED,
+)
+
 from igvm.hypervisor_preferences import (
     HashDifference,
     HypervisorAttributeValue,
@@ -61,23 +66,23 @@ KVM_HWMODEL_TO_CPUMODEL = {
 
 # There are various combinations of source and target HVs which come
 # with their own bugs and must be addressed separately.
-MIGRATE_COMMANDS = {
-    ('jessie', 'jessie'):
+MIGRATE_CONFIG = {
+    ('jessie', 'jessie'): {
         # Using p2p migrations on Jessie causes qemu process to allocate
         # as much memory as disk size on source HV.
-        ' --desturi qemu+ssh://{destination}/system',
-    ('stretch', 'stretch'): (
+        'uri': 'qemu+ssh://{destination}/system',
+        'flags': 0,
+    },
+    ('stretch', 'stretch'): {
         # Live migration works only via p2p on Stretch. See Debian bug #796122.
-        ' --desturi qemu+tls://{destination}/system'
-        ' --p2p'
-        ' --tunnelled'
-    ),
-    ('stretch', 'jessie'): (
+        'uri': 'qemu+tls://{destination}/system',
+        'flags': VIR_MIGRATE_PEER2PEER | VIR_MIGRATE_TUNNELLED,
+    },
+    ('stretch', 'jessie'): {
         # Jessie can still correctly *receive* p2p migration.
-        ' --desturi qemu+tls://{destination}/system'
-        ' --p2p'
-        ' --tunnelled'
-    ),
+        'uri': 'qemu+tls://{destination}/system',
+        'flags': VIR_MIGRATE_PEER2PEER | VIR_MIGRATE_TUNNELLED,
+    },
     # Jessie to Stretch is unsupported because VM after migration looses
     # access to disk. After kernel reboots (not by panic, maybe by watchdog?)
     # it works fine again.

@@ -6,6 +6,7 @@ Copyright (c) 2018 InnoGames GmbH
 import logging
 import re
 import time
+import concurrent.futures
 from uuid import uuid4
 from xml.dom import minidom
 from xml.etree import ElementTree
@@ -15,18 +16,28 @@ from libvirt import (
     VIR_DOMAIN_VCPU_MAXIMUM,
     VIR_DOMAIN_AFFECT_LIVE,
     VIR_DOMAIN_AFFECT_CONFIG,
+    VIR_MIGRATE_LIVE,
+    VIR_MIGRATE_PERSIST_DEST,
+    VIR_MIGRATE_CHANGE_PROTECTION,
+    VIR_MIGRATE_NON_SHARED_DISK,
+    VIR_MIGRATE_AUTO_CONVERGE,
+    VIR_MIGRATE_ABORT_ON_ERROR,
+    VIR_ERR_OPERATION_ABORTED,
     libvirtError,
+    virGetLastError,
 )
 
-from igvm.exceptions import HypervisorError
+from igvm.exceptions import HypervisorError, MigrationError, MigrationAborted
 from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
     MAC_ADDRESS_PREFIX,
     VG_NAME,
-    MIGRATE_COMMANDS,
+    MIGRATE_CONFIG,
 )
 from igvm.utils import parse_size
+from igvm.vm import VM
+import igvm.hypervisor
 
 from jinja2 import Environment, PackageLoader
 
@@ -207,32 +218,28 @@ def _live_repin_cpus(domain, props, max_phys_cpus):
         domain.pinVcpu(vcpu, tuple(mask))
 
 
+def migrate_background(
+    domain, source, destination,
+    migrate_params, migrate_flags,
+):
+    # As it seems it is possible to call multiple functions in parallel
+    # from different threads.
+    try:
+        domain.migrateToURI3(
+            MIGRATE_CONFIG.get(
+                (source.dataset_obj['os'], destination.dataset_obj['os'])
+            )['uri'].format(destination=destination.fqdn),
+            migrate_params,
+            migrate_flags,
+        )
+    except libvirtError as e:
+        if virGetLastError()[0] == VIR_ERR_OPERATION_ABORTED:
+            raise MigrationAborted('Migration aborted by user')
+        raise MigrationError(e)
+
+
 def migrate_live(source, destination, vm, domain):
     """Live-migrates a VM via libvirt."""
-
-    migrate_cmd = (
-        'virsh migrate'
-        # Do it live!
-        ' --live'
-        ' --copy-storage-all'
-        # Define the VM on the new host
-        ' --persistent'
-        # Don't let the VM configuration to be changed
-        ' --change-protection'
-        # Force convergence, otherwise migrations never end
-        ' --auto-converge'
-        ' --domain {domain}'
-        # Don't tolerate soft errors
-        ' --abort-on-error'
-        # Show progress bar during migration
-        ' --verbose'
-    )
-
-    # Append OS-specific migration commands.  They might not exist for some
-    # combinations but this should have already been checked by the caller.
-    migrate_cmd += MIGRATE_COMMANDS.get(
-        (source.dataset_obj['os'], destination.dataset_obj['os'])
-    )
 
     # Reduce CPU pinning to minimum number of available cores on both
     # hypervisors to avoid "invalid cpuset" errors.
@@ -243,17 +250,70 @@ def migrate_live(source, destination, vm, domain):
         min(source.dataset_obj['num_cpu'], destination.dataset_obj['num_cpu']),
     )
 
-    source.run(
-        migrate_cmd.format(
-            domain=domain.name(),
-            destination=destination.fqdn,
-        ),
-        with_sudo=False,
+    migrate_flags = (
+        VIR_MIGRATE_LIVE |  # Do it live
+        VIR_MIGRATE_PERSIST_DEST |  # Define the VM on the new host
+        VIR_MIGRATE_CHANGE_PROTECTION |  # Protect source VM
+        VIR_MIGRATE_NON_SHARED_DISK |  # Copy non-shared storage
+        VIR_MIGRATE_AUTO_CONVERGE |  # Slow down VM if can't migrate memory
+        VIR_MIGRATE_ABORT_ON_ERROR # Don't tolerate soft errors
     )
 
-    # And pin again, in case we migrated to a host with more physical cores
-    domain = destination._get_domain(vm)
-    _live_repin_cpus(domain, props, destination.dataset_obj['num_cpu'])
+    migrate_params = {
+    }
+
+    # Append OS-specific migration commands.  They might not exist for some
+    # combinations but this should have already been checked by the caller.
+    migrate_flags |= MIGRATE_CONFIG.get(
+        (source.dataset_obj['os'], destination.dataset_obj['os'])
+    )['flags']
+
+    log.info('Starting migration')
+    executor = concurrent.futures.ThreadPoolExecutor()
+
+    future = executor.submit(
+        migrate_background,
+        domain, source, destination,
+        migrate_params, migrate_flags,
+    )
+
+    try:
+        while future.running():
+            try:
+                js = domain.jobStats()
+            except libvirtError:
+                # When migration is finished, jobStats will fail
+                break
+            if 'memory_total' in js and 'disk_total' in js:
+                log.info(
+                    (
+                        'Migration progress: '
+                        'disk {:.0f}% {:.0f}/{:.0f}MiB, '
+                        'memory {:.0f}% {:.0f}/{:.0f}MiB, '
+                    ).format(
+                        js['disk_processed'] / (js['disk_total']+1) * 100,
+                        js['disk_processed']/1024/1024,
+                        js['disk_total']/1024/1024,
+                        js['memory_processed'] / (js['memory_total']+1) * 100,
+                        js['memory_processed']/1024/1024,
+                        js['memory_total']/1024/1024,
+                    ))
+            else:
+                log.info('Waiting for migration stats to show up')
+            time.sleep(1)
+    except KeyboardInterrupt:
+        domain.abortJob()
+        log.info('Awaiting migration to abort')
+        future.result()
+        # Nothing to log, the function above raised an exception
+    else:
+        log.info('Awaiting migration to finish')
+        future.result() # Exception from slave thread will re-raise here
+        log.info('Migration finished')
+        
+        # And pin again, in case we migrated to a host with more physical cores
+        domain = destination._get_domain(vm)
+        _live_repin_cpus(domain, props, destination.dataset_obj['num_cpu'])
 
 
 def set_memory(hypervisor, vm, domain):
