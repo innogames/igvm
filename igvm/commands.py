@@ -355,7 +355,7 @@ def vm_start(vm_hostname):
 @with_fabric_settings
 def vm_stop(vm_hostname, force=False):
     """Gracefully stop a VM"""
-    with _get_vm(vm_hostname) as vm:
+    with _get_vm(vm_hostname, allow_retired=True) as vm:
         _check_defined(vm)
 
         if not vm.is_running():
@@ -404,7 +404,7 @@ def vm_delete(vm_hostname, retire=False):
     state will be updated to 'retired'.
     """
 
-    with _get_vm(vm_hostname, unlock=retire) as vm:
+    with _get_vm(vm_hostname, unlock=retire, allow_retired=True) as vm:
         # Make sure the VM has a hypervisor and that it is defined on it.
         # Abort if the VM has not been defined.
         _check_defined(vm)
