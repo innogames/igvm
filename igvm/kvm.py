@@ -269,7 +269,7 @@ def migrate_live(source, destination, vm, domain):
     )['flags']
 
     log.info('Starting migration')
-    executor = concurrent.futures.ThreadPoolExecutor()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     future = executor.submit(
         migrate_background,
