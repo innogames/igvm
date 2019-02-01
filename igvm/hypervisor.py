@@ -549,6 +549,7 @@ class Hypervisor(Host):
             )
 
         if offline:
+            log.info("Starting offline migration of server: {}".format(vm))
             target_hypervisor.create_vm_storage(vm, transaction)
             if offline_transport == 'drbd':
                 if (
