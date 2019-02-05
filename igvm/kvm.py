@@ -268,7 +268,9 @@ def migrate_live(source, destination, vm, domain):
         (source.dataset_obj['os'], destination.dataset_obj['os'])
     )['flags']
 
-    log.info('Starting online migration of server: {}'.format(vm))
+    log.info('Starting online migration of vm {} from {} to {}'.format(
+        vm, source, destination,
+    ))
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     future = executor.submit(
