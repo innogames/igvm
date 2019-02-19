@@ -151,7 +151,7 @@ class VM(Host):
         validations = [
             (
                 'hostname',
-                re_compile('\A[a-z][a-z0-9\.\-]+\Z').match,
+                re_compile(r'\A[a-z][a-z0-9\.\-]+\Z').match,
                 'invalid hostname',
             ),
             ('memory', lambda v: v > 0, 'memory must be > 0'),
