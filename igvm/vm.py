@@ -445,12 +445,11 @@ class VM(Host):
 
         puppet_command = (
             '( /opt/puppetlabs/puppet/bin/puppet agent '
+            '--detailed-exitcodes '
             '--fqdn={} --server={} --ca_server={} '
             '--no-report --waitforcert=60 --onetime --no-daemonize '
-            '--skip_tags=chroot_unsafe --verbose{}'
-            '&& touch /tmp/puppet_success ) '
-            '| tee /var/log/puppetrun_igvm ; '
-            'test -f /tmp/puppet_success'
+            '--skip_tags=chroot_unsafe --verbose{} ) ;'
+            '[ $? -eq 2 ]'
             .format(
                 self.fqdn,
                 self.dataset_obj['puppet_master'],
@@ -459,7 +458,10 @@ class VM(Host):
             )
         )
 
-        self.run(puppet_command)
+        try:
+            self.run(puppet_command)
+        except RemoteCommandError as e:
+            raise VMError('Initial puppetrun failed') from e
 
         self.unblock_autostart()
 
