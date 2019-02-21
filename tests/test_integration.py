@@ -37,6 +37,7 @@ from igvm.exceptions import (
     IGVMError,
     InvalidStateError,
     InconsistentAttributeError,
+    VMError,
 )
 from igvm.hypervisor import Hypervisor
 from igvm.settings import (
@@ -301,7 +302,7 @@ class BuildTest(IGVMTest):
         obj['puppet_environment'] = 'doesnotexist'
         obj.commit()
 
-        with self.assertRaises(IGVMError):
+        with self.assertRaises(VMError):
             vm_build(VM_HOSTNAME)
 
         self.check_vm_absent()
