@@ -4,6 +4,7 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 from io import BytesIO
+from datetime import datetime
 
 import fabric.api
 import fabric.state
@@ -138,13 +139,13 @@ class Host(object):
             )
 
     def acquire_lock(self, allow_fail=False):
-        if self.dataset_obj['igvm_locked']:
+        if self.dataset_obj['igvm_locked'] is not None:
             raise InvalidStateError(
                 'Server "{0}" is already being worked on by another igvm'
                 .format(self.dataset_obj['hostname'])
             )
 
-        self.dataset_obj['igvm_locked'] = True
+        self.dataset_obj['igvm_locked'] = datetime.utcnow()
         try:
             self.dataset_obj.commit()
         except DatasetError:
@@ -154,7 +155,7 @@ class Host(object):
             )
 
     def release_lock(self):
-        self.dataset_obj['igvm_locked'] = False
+        self.dataset_obj['igvm_locked'] = None
         self.dataset_obj.commit()
 
     def get_block_size(self, device):
