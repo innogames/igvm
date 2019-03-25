@@ -526,7 +526,7 @@ def host_info(vm_hostname):
                 info[result_key] = red(simple_stats)
                 return
 
-            assert free >= 0 and free <= capacity
+            assert 0 <= free <= capacity
             ratio = 1 - float(free) / float(capacity)
             if ratio >= 0.9:
                 color = red
