@@ -63,8 +63,7 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
     function attributes. If just passed all VMs will be migrated offline. If
     a list of strings is passed only those matching will be migrate offline.
     """
-
-    with _get_hypervisor(hv_hostname, ignore_reserved=True) as hv:
+    with _get_hypervisor(hv_hostname, allow_reserved=True) as hv:
         if dry_run:
             log.info('I would set {} to state online reserved'.format(
                 hv_hostname))
@@ -527,7 +526,7 @@ def host_info(vm_hostname):
                 info[result_key] = red(simple_stats)
                 return
 
-            assert free >= 0 and free <= capacity
+            assert 0 <= free <= capacity
             ratio = 1 - float(free) / float(capacity)
             if ratio >= 0.9:
                 color = red
