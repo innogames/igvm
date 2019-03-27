@@ -31,10 +31,6 @@ COMMON_FABRIC_SETTINGS = dict(
     remote_interrupt=True,
 )
 
-# Swap size in MiB
-DEFAULT_SWAP_SIZE = 1024
-
-
 VG_NAME = 'xen-data'
 # Reserved pool space on Hypervisor
 # TODO: this could be a percent value, at least for ZFS.
