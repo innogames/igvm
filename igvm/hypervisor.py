@@ -399,6 +399,12 @@ class Hypervisor(Host):
         if transaction:
             transaction.on_rollback('destroy storage', volume.delete)
 
+        # XXX: When building a VM we use the volumes path to format it right
+        # after creation.  Unfortunately the kernel is slow to pick up on zfs
+        # volume changes and creates the symlink in /dev/zvol/<pool>/ only
+        # after a moment.
+        self.run("while [ ! -L '{}' ]; do sleep 1; done".format(volume.path()))
+
     def format_vm_storage(self, vm, transaction=None):
         """Create new filesystem for VM and mount it. Returns mount path."""
 
