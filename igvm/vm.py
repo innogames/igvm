@@ -17,7 +17,6 @@ from uuid import uuid4
 
 from igvm.exceptions import ConfigError, RemoteCommandError, VMError
 from igvm.host import Host
-from igvm.settings import DEFAULT_SWAP_SIZE
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
 
@@ -390,7 +389,6 @@ class VM(Host):
             get('/etc/resolv.conf', fd)
         self.put('/etc/resolv.conf', fd)
 
-        self.create_swap(DEFAULT_SWAP_SIZE)
         self.create_ssh_keys()
 
     def create_ssh_keys(self):
@@ -419,13 +417,6 @@ class VM(Host):
                 self.dataset_obj['sshfp'].add('{} {} {}'.format(
                     key_id, fp_id, fp_type(pub_key).hexdigest()
                 ))
-
-    def create_swap(self, size_MiB):
-        self.run(
-            'dd if=/dev/zero of=/swap bs=1M count={}'.format(size_MiB)
-        )
-        self.run('/bin/chmod 0600 /swap')
-        self.run('/sbin/mkswap /swap')
 
     def run_puppet(self, clear_cert=False, debug=False):
         """Runs Puppet in chroot on the hypervisor."""

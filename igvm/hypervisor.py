@@ -748,7 +748,7 @@ class Hypervisor(Host):
 
         Sometimes it is impossible to immediately umount a directory due to
         a process still holding it open. It happens often when igvm is stopped.
-        Underlying process such as mkswap or puppetrun won't die immediately.
+        Underlying process such puppetrun won't die immediately.
         """
 
         retry = 10
