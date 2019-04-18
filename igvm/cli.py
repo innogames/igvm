@@ -163,10 +163,11 @@ def parse_args():
         help='Allow migration to a Host which has the state online_reserved',
     )
     subparser.add_argument(
-        '--offline-transport',
+        '--disk-transport',
         default='drbd',
         help=(
-            'Specify drbd (default) or netcat transport to migrate disk image'
+            'Specify drbd (default), netcat or qemut ransport '
+            'to migrate disk image'
         ),
     )
     subparser.add_argument(

@@ -466,3 +466,15 @@ class VM(Host):
 
     def copy_postboot_script(self, script):
         self.put('/buildvm-postboot', script, '0755')
+
+    def prepare_offline_migration(self, no_shutdown, transaction):
+        self.set_state('maintenance', transaction=transaction)
+        if self.is_running():
+            if no_shutdown:
+                log.info('Please shut down the VM manually now')
+                self.wait_for_running(running=False, timeout=86400)
+            else:
+                self.shutdown(
+                    check_vm_up_on_transaction=False,
+                    transaction=transaction,
+                )

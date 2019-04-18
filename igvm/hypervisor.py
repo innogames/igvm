@@ -18,7 +18,7 @@ from igvm.exceptions import (
     InvalidStateError,
     StorageError,
 )
-from igvm.drbd import DRBD
+from igvm.drbd import DRBD, sync_block_size
 from igvm.host import Host
 from igvm.kvm import (
     DomainProperties,
@@ -545,86 +545,17 @@ class Hypervisor(Host):
         return 'vda1'
 
     def migrate_vm(
-        self, vm, target_hypervisor, offline, offline_transport, transaction,
+        self, vm, target_hypervisor, offline, disk_transport, transaction,
         no_shutdown,
     ):
-        if offline_transport not in ['netcat', 'drbd']:
-            raise StorageError(
-                'Unknown offline transport method {}!'
-                .format(offline_transport)
-            )
+        log.info(
+            'Starting {} migration of vm {} from {} to {}'.format(
+                'offline' if offline else 'online',
+                vm, vm.hypervisor, target_hypervisor,
+        ))
 
         if offline:
-            log.info(
-                'Starting offline migration of vm {} from {} to {}'.format(
-                    vm, vm.hypervisor, target_hypervisor,
-            ))
             target_hypervisor.create_vm_storage(vm, transaction)
-            if offline_transport == 'drbd':
-                if (
-                    self.get_storage_type() != 'logical' or
-                    target_hypervisor.get_storage_type() != 'logical'
-                ):
-                    raise NotImplementedError(
-                        'DRBD migration is supported only between hypervisors '
-                        ' using LVM storage!'
-                    )
-
-                host_drbd = DRBD(self, vm, master_role=True)
-                peer_drbd = DRBD(target_hypervisor, vm)
-                if vm.hypervisor.vm_running(vm):
-                    vm_block_size = vm.get_block_size('/dev/vda')
-                    src_block_size = vm.hypervisor.get_block_size(
-                        vm.hypervisor.get_volume_by_vm(vm).path()
-                    )
-                    dst_block_size = target_hypervisor.get_block_size(
-                        target_hypervisor.get_volume_by_vm(vm).path()
-                    )
-                    log.debug(
-                        'Block sizes: VM {}, Source HV {}, Destination HV {}'
-                        .format(vm_block_size, src_block_size, dst_block_size)
-                    )
-                    vm.set_block_size('vda', min(
-                        vm_block_size,
-                        src_block_size,
-                        dst_block_size,
-                    ))
-                with host_drbd.start(peer_drbd), peer_drbd.start(host_drbd):
-                    # XXX: Do we really need to wait for the both?
-                    host_drbd.wait_for_sync()
-                    peer_drbd.wait_for_sync()
-                    vm.set_state('maintenance', transaction=transaction)
-
-                    if vm.is_running():
-                        if no_shutdown:
-                            log.info('Please shut down the VM manually now')
-                            vm.wait_for_running(running=False, timeout=86400)
-                        else:
-                            vm.shutdown(
-                                check_vm_up_on_transaction=False,
-                                transaction=transaction,
-                            )
-
-            elif offline_transport == 'netcat':
-                vm.set_state('maintenance', transaction=transaction)
-                if vm.is_running():
-                    if no_shutdown:
-                        log.info('Please shut down the VM manually now')
-                        vm.wait_for_running(running=False, timeout=86400)
-                    else:
-                        vm.shutdown(
-                            check_vm_up_on_transaction=False,
-                            transaction=transaction,
-                        )
-
-                vm_disk_path = target_hypervisor.get_volume_by_vm(vm).path()
-                with target_hypervisor.netcat_to_device(vm_disk_path) as args:
-                    self.device_to_netcat(
-                        self.get_volume_by_vm(vm).path(),
-                        vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
-                        args,
-                    )
-            target_hypervisor.define_vm(vm, transaction)
         else:
             # For online migrations always use same volume name as VM
             # already has.
@@ -632,7 +563,59 @@ class Hypervisor(Host):
                 vm, transaction,
                 vm.hypervisor.get_volume_by_vm(vm).name(),
             )
-            migrate_live(self, target_hypervisor, vm, self._get_domain(vm))
+
+        if disk_transport == 'drbd':
+            if (
+                self.get_storage_type() != 'logical' or
+                target_hypervisor.get_storage_type() != 'logical'
+            ):
+                raise NotImplementedError(
+                    'DRBD migration is supported only between hypervisors '
+                    ' using LVM storage!'
+                )
+
+            sync_block_size(vm, target_hypervisor)
+
+            host_drbd = DRBD(self, vm, master_role=True)
+            peer_drbd = DRBD(target_hypervisor, vm)
+
+            with host_drbd.start(peer_drbd), peer_drbd.start(host_drbd):
+                # XXX: Do we really need to wait for the both?
+                host_drbd.wait_for_sync()
+                peer_drbd.wait_for_sync()
+
+                if offline:
+                    vm.prepare_offline_migration(no_shutdown, transaction)
+                else:
+                    migrate_live(
+                        self, target_hypervisor, vm, self._get_domain(vm), False
+                    )
+
+        elif disk_transport == 'netcat' and offline:
+            vm.prepare_offline_migration(no_shutdown, transaction)
+            vm_disk_path = target_hypervisor.get_volume_by_vm(vm).path()
+            with target_hypervisor.netcat_to_device(vm_disk_path) as args:
+                self.device_to_netcat(
+                    self.get_volume_by_vm(vm).path(),
+                    vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
+                    args,
+                )
+            target_hypervisor.define_vm(vm, transaction)
+
+        elif disk_transport == 'qemu' and not offline:
+            migrate_live(
+                self, target_hypervisor, vm, self._get_domain(vm), True
+            )
+
+        else:
+            raise StorageError(
+                'Unsupported combination of migration method "{}" '
+                'and disk transport method "{}"!'
+                .format(
+                    'offline' if offline else 'online',
+                    disk_transport
+                )
+            )
 
     def total_vm_memory(self):
         """Get amount of memory in MiB available to hypervisor"""

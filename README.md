@@ -14,7 +14,7 @@ The functions are to be called like this:
 ```python
 def vm_migrate(vm_hostname, hypervisor_hostname=None,
                run_puppet=False, debug_puppet=False,
-               offline=False, offline_transport='drbd', ignore_reserved=False):
+               offline=False, disk_transport='drbd', ignore_reserved=False):
 ```
 
 * Mandatory:
@@ -26,8 +26,12 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None,
     * offline - boolean, allow offline migration, default is to attempt online
       migration and fail if it is impossible due to hypervisor of network
       configuration
-    * offline_transport - choose between the fast `drbd` or the simple `netcat`
-      offline transport methods
+    * disk_transport - choose disk migration method:
+      * netcat - copy whole disk device contents over netcat, offline only, 
+                 VM stays offline during the whole process
+      * drbd - live disk replication for offline or online migration, for
+               offline migration VM will be shut down for a brief moment
+      * qemu - native migration via qemu and libvirt, online only
     * ignore_reserved - boolean, allow migration to an online_reserved
       hypervisor
 

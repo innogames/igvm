@@ -546,7 +546,7 @@ class MigrationTest(IGVMTest):
         vm_migrate(
             VM_HOSTNAME,
             offline=True,
-            offline_transport='netcat',
+            disk_transport='netcat',
         )
         self.check_vm_present()
 
@@ -554,7 +554,7 @@ class MigrationTest(IGVMTest):
         vm_migrate(
             VM_HOSTNAME,
             offline=True,
-            offline_transport='drbd',
+            disk_transport='drbd',
         )
 
         self.check_vm_present()
@@ -602,7 +602,7 @@ class MigrationTest(IGVMTest):
                 VM_HOSTNAME,
                 offline=True,
                 run_puppet=True,
-                offline_transport='netcat',
+                disk_transport='netcat',
             )
 
         self.check_vm_present()
@@ -617,7 +617,7 @@ class MigrationTest(IGVMTest):
                 VM_HOSTNAME,
                 offline=True,
                 run_puppet=True,
-                offline_transport='drbd',
+                disk_transport='drbd',
             )
 
         self.check_vm_present()

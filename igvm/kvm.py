@@ -238,7 +238,7 @@ def migrate_background(
         raise MigrationError(e)
 
 
-def migrate_live(source, destination, vm, domain):
+def migrate_live(source, destination, vm, domain, with_disk):
     """Live-migrates a VM via libvirt."""
 
     # Reduce CPU pinning to minimum number of available cores on both
@@ -254,10 +254,11 @@ def migrate_live(source, destination, vm, domain):
         VIR_MIGRATE_LIVE |  # Do it live
         VIR_MIGRATE_PERSIST_DEST |  # Define the VM on the new host
         VIR_MIGRATE_CHANGE_PROTECTION |  # Protect source VM
-        VIR_MIGRATE_NON_SHARED_DISK |  # Copy non-shared storage
         VIR_MIGRATE_AUTO_CONVERGE |  # Slow down VM if can't migrate memory
         VIR_MIGRATE_ABORT_ON_ERROR # Don't tolerate soft errors
     )
+    if with_disk:
+        migrate_flags |= VIR_MIGRATE_NON_SHARED_DISK # Copy non-shared storage
 
     migrate_params = {
     }
@@ -268,9 +269,6 @@ def migrate_live(source, destination, vm, domain):
         (source.dataset_obj['os'], destination.dataset_obj['os'])
     )['flags']
 
-    log.info('Starting online migration of vm {} from {} to {}'.format(
-        vm, source, destination,
-    ))
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     future = executor.submit(
