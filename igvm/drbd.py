@@ -80,10 +80,7 @@ class DRBD(object):
         all of the initialization must handle cleaning up themselves.
         """
         with self.prepare_metadata_device(), self.build_config(peer):
-            if self.master_role:
-                self.replicate_to_slave()
-            else:
-                self.replicate_from_master()
+            self.take_over_device()
         try:
             yield
         finally:
@@ -104,10 +101,7 @@ class DRBD(object):
                 'dd if=/dev/zero of=/dev/{}/{} bs=1048576 count=256'
                 .format(self.vg_name, self.meta_disk)
             )
-            if self.master_role:
-                with self.prepare_lv_override():
-                    yield
-            else:
+            with self.prepare_lv_override():
                 yield
         except BaseException:
             self.hv.run(
@@ -151,6 +145,8 @@ class DRBD(object):
             # one datacenter.
             '#        sndbuf-size 2048k;\n'
             '#        rcvbuf-size 2048k;\n'
+            # Allow master-master operation, required for live VM migrations.
+            '        allow-two-primaries;\n'
             '    }}\n'
             '    disk {{\n'
             # Try maximum speed immediately, no need for the slow-start
@@ -187,21 +183,19 @@ class DRBD(object):
                 port=self.get_device_port(),
                 dm_minor=self.get_device_minor(),
                 lv_name=self.lv_name,
-                disk=(
-                    'mapper/{}_orig'.format(self.lv_name)
-                    if self.master_role
-                    else '{}/{}'.format(self.vg_name, self.lv_name)
-                ),
+                disk='mapper/{}_orig'.format(self.lv_name),
                 vg_name=self.vg_name,
                 meta_disk=self.meta_disk,
             )
         )
 
-    def replicate_to_slave(self, transaction=None):
+    def take_over_device(self):
         # Size must be retrieved before suspending device
         dev_size = self.get_device_size()
 
-        # Suspend all traffic to disk from VM
+        # Suspend all traffic to disk from VM.
+        # There's no real need to susped and resume on target HV but it saves
+        # us a few ifs and it does not hurt.
         self.hv.run(
             'dmsetup suspend /dev/{}/{}'.format(self.vg_name, self.lv_name)
         )
@@ -210,12 +204,27 @@ class DRBD(object):
             self.hv.run('drbdadm create-md {}'.format(self.vm_name))
             self.hv.run('drbdadm up {}'.format(self.vm_name))
 
-            # Enforce primary operation and sync to secondary with
-            # overwriting of data
-            self.hv.run(
-                'drbdadm -- --overwrite-data-of-peer primary {}'
-                .format(self.vm_name)
-            )
+            if self.master_role:
+                # Enforce primary operation and sync to secondary with
+                # overwriting of data on peer.
+                self.hv.run(
+                    'drbdadm -- --overwrite-data-of-peer primary {}'
+                    .format(self.vm_name)
+                )
+            else:
+                # It wouldn't be possible to live replace disk until drbd
+                # reports its device ready, which happens not only after
+                # sync is started ...
+                self.hv.run(
+                    'drbdadm wait-connect {}'
+                    .format(self.vm_name)
+                )
+                # ... but also after primary/primary mode is established
+                # which makes devide writable.
+                self.hv.run(
+                    'drbdadm -- primary {}'
+                    .format(self.vm_name)
+                )
 
             # DRBD is finally up, now replace device which VM talks to on-fly.
             # In Device Mapper block is always 512 bytes.
@@ -227,6 +236,7 @@ class DRBD(object):
                     self.get_device_minor(),
                 )
             )
+
             try:
                 self.hv.run(
                     'dmsetup resume /dev/{}/{}'
@@ -258,15 +268,6 @@ class DRBD(object):
             self.hv.run(
                 'dmsetup resume /dev/{}/{}'.format(self.vg_name, self.lv_name)
             )
-            raise
-
-    def replicate_from_master(self, transaction=None):
-        self.hv.run('drbdadm create-md {}'.format(self.vm_name))
-        self.hv.run('drbdadm up {}'.format(self.vm_name))
-        try:
-            self.hv.run('drbdadm wait-connect {}'.format(self.vm_name))
-        except BaseException:
-            self.hv.run('drbdadm down {}'.format(self.vm_name))
             raise
 
     def wait_for_sync(self):
@@ -307,14 +308,13 @@ class DRBD(object):
         self.hv.run('drbdsetup wait-sync {}'.format(self.get_device_minor()))
 
     def stop(self):
-        if self.master_role:
-            self.hv.run(
-                'dmsetup load /dev/{}/{} < {}'
-                .format(self.vg_name, self.lv_name, self.table_file)
-            )
-            self.hv.run('dmsetup resume /dev/{}/{}'.format(
-                self.vg_name, self.lv_name
-            ))
+        self.hv.run(
+            'dmsetup load /dev/{}/{} < {}'
+            .format(self.vg_name, self.lv_name, self.table_file)
+        )
+        self.hv.run('dmsetup resume /dev/{}/{}'.format(
+            self.vg_name, self.lv_name
+        ))
 
         # One would expect that DRBD must be shut down after table load and
         # before resume. Unfortunately that is impossible because table is
@@ -325,8 +325,7 @@ class DRBD(object):
         # only after that, all is safe.
         self.hv.run('drbdadm down {}'.format(self.vm_name))
 
-        if self.master_role:
-            self.hv.run('dmsetup remove {}_orig'.format(self.lv_name))
+        self.hv.run('dmsetup remove {}_orig'.format(self.lv_name))
 
         self.hv.run('lvremove -fy {}/{}'.format(self.vg_name, self.meta_disk))
         self.hv.run('rm /etc/drbd.d/{}.res'.format(self.vm_name))

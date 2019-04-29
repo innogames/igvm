@@ -580,10 +580,7 @@ class Hypervisor(Host):
             peer_drbd = DRBD(target_hypervisor, vm)
 
             with host_drbd.start(peer_drbd), peer_drbd.start(host_drbd):
-                # XXX: Do we really need to wait for the both?
-                host_drbd.wait_for_sync()
                 peer_drbd.wait_for_sync()
-
                 if offline:
                     vm.prepare_offline_migration(no_shutdown, transaction)
                 else:
