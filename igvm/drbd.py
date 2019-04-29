@@ -251,6 +251,7 @@ class DRBD(object):
 
     def wait_for_sync(self):
         # Display a "nice" progress bar
+        progressbar_found = 0
         show_progress = True
         while show_progress:
             lines = iter(self.hv.read_file('/proc/drbd').splitlines())
@@ -263,11 +264,16 @@ class DRBD(object):
                         next(lines)
                         line = next(lines).decode()
                     except StopIteration:
-                        log.warning(
-                            'Could not find progress bar, '
-                            'migrating without it!'
-                        )
-                        show_progress = False
+                        # It takes a moment for the progress bar to show up
+                        progressbar_found += 1
+                        if progressbar_found < 5:
+                            log.info('Waiting for DRBD progress bar to show up')
+                        else:
+                            log.warning(
+                                'Could not find progress bar, '
+                                'migrating without it!'
+                            )
+                            show_progress = False
                     else:
                         log.info(line)
                     break
