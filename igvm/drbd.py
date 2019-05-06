@@ -38,6 +38,7 @@ class DRBD(object):
 
         lv = vm.hypervisor.get_volume_by_vm(vm).path()
         lv_name = lv.split('/')
+        self.vm = vm
         self.vg_name = lv_name[2]
         self.lv_name = lv_name[3] if self.master_role else vm.uid_name
         self.vm_name = vm.fqdn
@@ -308,6 +309,9 @@ class DRBD(object):
         self.hv.run('drbdsetup wait-sync {}'.format(self.get_device_minor()))
 
     def stop(self):
+        if not self.master_role:
+            self.hv.suspend_vm(self.vm)
+
         self.hv.run(
             'dmsetup load /dev/{}/{} < {}'
             .format(self.vg_name, self.lv_name, self.table_file)
@@ -321,9 +325,12 @@ class DRBD(object):
         # loaded to inactive slot and the old table with DRBD device is still
         # there holding it locked. Only after resuming the device its table
         # is fully updated. Do we risk data loss here? Probably yes. But since
-        # we shut down source VM before DRBD is stopped and start the target VM
-        # only after that, all is safe.
+        # VM is paused (for online migrations) or shut down (for offline)
+        # there should be no IO.
         self.hv.run('drbdadm down {}'.format(self.vm_name))
+
+        if not self.master_role:
+            self.hv.resume_vm(self.vm)
 
         self.hv.run('dmsetup remove {}_orig'.format(self.lv_name))
 

@@ -640,6 +640,16 @@ class Hypervisor(Host):
         if self._get_domain(vm).create() != 0:
             raise HypervisorError('"{0}" failed to start'.format(vm.fqdn))
 
+    def suspend_vm(self, vm):
+        log.info('Suspending "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
+        if self._get_domain(vm).suspend() != 0:
+            raise HypervisorError('"{0}" failed to suspend'.format(vm.fqdn))
+
+    def resume_vm(self, vm):
+        log.info('Resuming "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
+        if self._get_domain(vm).resume() != 0:
+            raise HypervisorError('"{0}" failed to resume'.format(vm.fqdn))
+
     def vm_defined(self, vm):
         return self._find_domain(vm) is not None
 
