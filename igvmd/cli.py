@@ -77,6 +77,19 @@ def get_vms(conn):
         } for domain in conn.listAllDomains()
     }
 
+
+    # FIXME: Drop this once we can reach serveradmin
+    vms[235073]['dataset_obj'] = {
+        'object_id': 235073,
+        'state': 'retired',
+        'hypervisor': {
+            'object_id': 52517,
+            'hostname': 'hv-awtest-2c5-2-11.ndco.ig.local',
+        }
+    }
+    return vms
+
+
     # Try to get a dataset object for each domain and join the data
     for dataset_obj in Query(
         {'object_id': Any(*vms.keys())}, VM_ATTRIBUTES
