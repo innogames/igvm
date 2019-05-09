@@ -29,8 +29,8 @@ def main():
         with libvirt_connection('qemu:///system') as conn:
             vms = get_vms(conn)
             vms_by_state = sort_vms_by_state(vms)
-            start_stop_vms(vms_by_state)
-            cleanup_retired_vms(vms_by_state, vms)
+            start_stop_vms(vms, vms_by_state)
+            cleanup_retired_vms(vms, vms_by_state)
         sleep(60 * 5)
 
 
@@ -103,24 +103,24 @@ def sort_vms_by_state(vms):
     vms_by_state = defaultdict(list)
     for object_id, vm in vms.items():
         if not vm['dataset_obj']:
-            vms_by_state['not_in_serveradmin'].append(vm)
+            vms_by_state['not_in_serveradmin'].append(object_id)
 
         elif (
             vm['dataset_obj']['hypervisor']['object_id'] !=
             HYPERVISOR_OBJECT_ID
         ):
-            vms_by_state['wrong_hypervisor'].append(vm)
+            vms_by_state['wrong_hypervisor'].append(object_id)
 
         elif vm['dataset_obj']['state'] == 'retired':
-            vms_by_state['retired'].append(vm)
+            vms_by_state['retired'].append(object_id)
 
         else:
-            vms_by_state['online'].append(vm)
+            vms_by_state['online'].append(object_id)
 
     return vms_by_state
 
 
-def start_stop_vms(vms_by_state):
+def start_stop_vms(vms, vms_by_state):
     def _enforce_vm_state(domain, should_run, message, is_warning=False):
         is_running = domain.info()[0] < VIR_DOMAIN_SHUTOFF
         if is_running != should_run:
@@ -133,45 +133,45 @@ def start_stop_vms(vms_by_state):
                 if domain.destroy() != 0:
                     log.error('Unable to stop "{}".'.format(domain.name()))
 
-    for vm in vms_by_state['not_in_serveradmin']:
-        _enforce_vm_state(vm['domain'], should_run=False, message=(
+    for object_id in vms_by_state['not_in_serveradmin']:
+        _enforce_vm_state(vms[object_id]['domain'], should_run=False, message=(
             'The libvirt domain {} could not be found in serveradmin. '
             'The object has probably been deleted from serveradmin '
             'before deleting this libvirt domain. Stopping...'
-            .format(vm['domain_name'])
+            .format(vms[object_id]['domain_name'])
         ), is_warning=True)
 
-    for vm in vms_by_state['wrong_hypervisor']:
-        _enforce_vm_state(vm['domain'], should_run=False, message=(
+    for object_id in vms_by_state['wrong_hypervisor']:
+        _enforce_vm_state(vms[object_id]['domain'], should_run=False, message=(
             'The libvirt domain {} should not be running on this '
             'hypervisor, but on {} instead. Stopping...'.format(
-                vm['domain_name'],
-                vm['dataset_obj']['hypervisor']['hostname']
+                vms[object_id]['domain_name'],
+                vms[object_id]['dataset_obj']['hypervisor']['hostname']
             )
         ), is_warning=True)
 
-    for vm in vms_by_state['retired']:
-        _enforce_vm_state(vm['domain'], should_run=False, message=(
+    for object_id in vms_by_state['retired']:
+        _enforce_vm_state(vms[object_id]['domain'], should_run=False, message=(
             'The libvirt domain {} is in state retired and should therefore '
-            'be stopped. Stopping...'.format(vm['domain_name'])
+            'be stopped. Stopping...'.format(vms[object_id]['domain_name'])
         ))
 
-    for vm in vms_by_state['online']:
-        _enforce_vm_state(vm['domain'], should_run=True, message=(
+    for object_id in vms_by_state['online']:
+        _enforce_vm_state(vms[object_id]['domain'], should_run=True, message=(
             'The libvirt domain {} should be running. Starting...'
-            .format(vm['domain_name'])
+            .format(vms[object_id]['domain_name'])
         ))
 
 
-def cleanup_retired_vms(vms_by_state, vms):
+def cleanup_retired_vms(vms, vms_by_state):
     # Note down the current timestamp for all retired VMs on this hypervisor
     now = int(datetime.utcnow().timestamp())
     retired_vms = {
-        # XXX: The object_id is a string as we JSON serialize this information.
-        # JSON only allows string keys and python json.dumps will convert
-        # integers dict keys automatically to strings.
-        str(vm['dataset_obj']['object_id']): now
-        for vm in vms_by_state['retired']
+        # XXX: The object_id is a string as we JSON serialize this dict. JSON
+        # only allows dict keys to be strings and python json.dumps will
+        # convert integers dict keys to strings anyway.
+        str(object_id): now
+        for object_id in vms_by_state['retired']
     }
 
     try:
