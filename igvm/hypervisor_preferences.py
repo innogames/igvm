@@ -1,4 +1,4 @@
-"""igvm - Hypervisor Preferences
+"""igvm - Hypervisor Selection Preferences
 
 This module contains preferences to select hypervisors.  Preferences return
 a value of any comparable datatype.  Only the return values of the same
@@ -6,13 +6,12 @@ preference is compared with each other.  Smaller values mark hypervisors
 as more preferred.  Keep in mind that for booleans false is less than true.
 See sorted_hypervisors() function below for the details of sorting.
 
-NOTE: This module contains the preferences as simple class form.  We try
-to keep them reusable, even though most of them are not reused.  Some of
-the classes are so simple, they could as well just be a function but kept
-as classes to have a consistent style.
-
 Copyright (c) 2018 InnoGames GmbH
 """
+# This module contains the preferences as simple classes.  We try to keep
+# them reusable, even though most of them are not reused.  Some of the classes
+# are so simple that they could as well just be a function, but kept
+# as classes to have a consistent style.
 
 from logging import getLogger
 
@@ -167,8 +166,8 @@ def sorted_hypervisors(preferences, vm, hypervisors):
     The most preferred ones will be yielded first.  The caller may then verify
     and use the hypervisors.  For sorting, we simply put the results
     of the preferences to any array for every hypervisor, and let Python
-    sort the arrays.  Unlikely semantically-low-level programming languages
-    like C, Python can compare arrays alright.  It would recursively compare
+    sort the arrays.  Unlike semantically-low-level programming languages
+    like C, Python can compare arrays just fine.  It would recursively compare
     the elements of the arrays with each other, and stop when they differ.
 
     As we know that most of the time it wouldn't be necessary to compare
@@ -178,15 +177,15 @@ def sorted_hypervisors(preferences, vm, hypervisors):
     and element of the array first time, the preference is going to be
     executed for that hypervisor by LazyCompare.
 
-    The LazyCompare optimization has one other benefit of bring more
-    visibility about selection.  After the sorting is done, we can check
+    The LazyCompare optimization has one other benefit of providing some
+    visibility about the selection.  After the sorting is done, we can check
     which preferences are actually executed for the selected hypervisor,
-    and log which preference caused this hypervisor to be sorted before
-    the next one.
+    and log which preference caused this hypervisor to be sorted after
+    the previous or before the next one.
     """
     log.debug('Sorting hypervisors by preference...')
 
-    # We use decorate-sort-undecorate pattern to log details about sorting.
+    # Use decorate-sort-undecorate pattern to log details about sorting
     for comparables, hypervisor in sorted(
         ([LazyCompare(p, vm, h) for p in preferences], h)
         for h in hypervisors
