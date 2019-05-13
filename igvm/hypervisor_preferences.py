@@ -191,13 +191,14 @@ def sorted_hypervisors(preferences, vm, hypervisors):
         ([LazyCompare(p, vm, h) for p in preferences], h)
         for h in hypervisors
     ):
-        for index, comparable in enumerate(comparables):
+        for executed, comparable in enumerate(comparables):
             if not comparable.executed:
                 break
+        else:
+            executed = len(comparables)
         log.info(
-            'Hypervisor "{}" selected with decisive preference {!r} '
-            'after checking {} preferences.'
-            .format(hypervisor, comparable.func, index)
+            'Hypervisor "{}" selected using {} preferences.'
+            .format(hypervisor, executed)
         )
 
         yield hypervisor
