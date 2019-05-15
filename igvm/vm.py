@@ -424,7 +424,6 @@ class VM(Host):
         if clear_cert:
             with settings(
                 host_string=self.dataset_obj['puppet_ca'],
-                user='root',
                 warn_only=True,
             ):
                 run(
