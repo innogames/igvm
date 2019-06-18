@@ -391,6 +391,9 @@ def generate_domain_xml(hypervisor, vm):
         'name': vm.uid_name,
         'disk_pool': VG_NAME,
         'disk_volume': hypervisor.get_volume_by_vm(vm).name(),
+        'io_weight': (
+            500 if vm.dataset_obj['io_weight'] == 'default' else 250
+        ),
         'memory': vm.dataset_obj['memory'],
         'num_cpu': vm.dataset_obj['num_cpu'],
         'props': props,
