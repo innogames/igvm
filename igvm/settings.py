@@ -147,6 +147,7 @@ VM_ATTRIBUTES = [
     'hostname',
     'igvm_locked',
     'intern_ip',
+    'io_weight',
     'mac',
     'memory',
     'num_cpu',
