@@ -31,14 +31,15 @@ from igvm.kvm import (
 from igvm.libvirt import get_virtconn
 from igvm.settings import (
     HOST_RESERVED_MEMORY,
-    VG_NAME,
-    RESERVED_DISK,
-    IGVM_IMAGE_URL,
     IGVM_IMAGE_MD5_URL,
+    IGVM_IMAGE_URL,
     IMAGE_PATH,
-    MIGRATE_CONFIG,
     KVM_HWMODEL_TO_CPUMODEL,
+    MIGRATE_CONFIG,
+    RESERVED_DISK,
+    VG_NAME,
     VM_OVERHEAD_MEMORY,
+    XFS_CONFIG,
 )
 from igvm.utils import retry_wait_backoff
 
@@ -419,7 +420,16 @@ class Hypervisor(Host):
                 .format(vm.fqdn)
             )
 
-        self.format_storage(self.get_volume_by_vm(vm).path())
+        mkfs_options = XFS_CONFIG.get(vm.dataset_obj['os'])
+
+        if not mkfs_options:
+            raise ConfigError(
+                'No mkfs options defined for OS {}'.format(
+                    vm.dataset_obj['os']
+                )
+            )
+
+        self.format_storage(self.get_volume_by_vm(vm).path(), mkfs_options)
         return self.mount_vm_storage(vm, transaction)
 
     def download_and_extract_image(self, image, target_dir):
@@ -773,8 +783,8 @@ class Hypervisor(Host):
     def remove_temp(self, mount_path):
         self.run('rmdir {0}'.format(mount_path))
 
-    def format_storage(self, device):
-        self.run('mkfs.xfs -f {}'.format(device))
+    def format_storage(self, device, options):
+        self.run('mkfs.xfs -f {} {}'.format(' '.join(options), device))
 
     def check_netcat(self, port):
         pid = self.run(
