@@ -309,7 +309,11 @@ class DRBD(object):
         self.hv.run('drbdsetup wait-sync {}'.format(self.get_device_minor()))
 
     def stop(self):
-        if not self.master_role:
+        if (
+            not self.master_role and
+            self.hv.vm_defined(self.vm) and
+            self.hv.vm_running(self.vm)
+        ):
             self.hv.suspend_vm(self.vm)
 
         self.hv.run(
@@ -329,7 +333,11 @@ class DRBD(object):
         # there should be no IO.
         self.hv.run('drbdadm down {}'.format(self.vm_name))
 
-        if not self.master_role:
+        if (
+            not self.master_role and
+            self.hv.vm_defined(self.vm) and
+            self.hv.vm_running(self.vm)
+        ):
             self.hv.resume_vm(self.vm)
 
         self.hv.run('dmsetup remove {}_orig'.format(self.lv_name))
