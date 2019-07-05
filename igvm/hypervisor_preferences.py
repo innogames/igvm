@@ -9,9 +9,9 @@ See sorted_hypervisors() function below for the details of sorting.
 Copyright (c) 2018 InnoGames GmbH
 """
 # This module contains the preferences as simple classes.  We try to keep
-# them reusable, even though most of them are not reused.  Some of the classes
-# are so simple that they could as well just be a function, but kept
-# as classes to have a consistent style.
+# them reusable, even though most of them are not reused.  The classes are
+# so simple that they could as well just be a function, but kept as classes
+# to have a consistent style.
 
 from logging import getLogger
 
@@ -25,13 +25,6 @@ class InsufficientResource(object):
     def __init__(self, attribute, reserved=0):
         self.attribute = attribute
         self.reserved = reserved
-
-    def __repr__(self):
-        args = repr(self.attribute)
-        if self.reserved:
-            args += ', reserved=' + repr(self.reserved)
-
-        return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
         total_size = hv.dataset_obj[self.attribute]
@@ -47,15 +40,6 @@ class OtherVMs(object):
         assert values is None or len(attributes) == len(values)
         self.attributes = attributes
         self.values = values
-
-    def __repr__(self):
-        args = ''
-        if self.attributes:
-            args += repr(self.attributes)
-            if self.values:
-                args += ', ' + repr(self.values)
-
-        return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
         result = 0
@@ -87,11 +71,6 @@ class HypervisorAttributeValue(object):
     def __init__(self, attribute):
         self.attribute = attribute
 
-    def __repr__(self):
-        args = repr(self.attribute)
-
-        return '{}({})'.format(type(self).__name__, args)
-
     def __call__(self, vm, hv):
         value = hv.dataset_obj[self.attribute]
 
@@ -110,11 +89,6 @@ class HypervisorAttributeValueLimit(object):
         self.attribute = attribute
         self.limit = limit
 
-    def __repr__(self):
-        args = repr(self.attribute) + ', ' + repr(self.limit)
-
-        return '{}({})'.format(type(self).__name__, args)
-
     def __call__(self, vm, hv):
         value = hv.dataset_obj[self.attribute]
 
@@ -125,11 +99,6 @@ class OverAllocation(object):
     """Check for an attribute being over allocated than the current one"""
     def __init__(self, attribute):
         self.attribute = attribute
-
-    def __repr__(self):
-        args = repr(self.attribute)
-
-        return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
         # New VM has no hypervisor attribute yet.
@@ -153,9 +122,6 @@ class OverAllocation(object):
 
 class HashDifference(object):
     """Return some arbitrary number to have stable ordering"""
-    def __repr__(self):
-        return '{}()'.format(type(self).__name__)
-
     def __call__(self, vm, hv):
         return hash(hv.fqdn) - hash(vm.fqdn)
 
