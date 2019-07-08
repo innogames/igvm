@@ -263,9 +263,9 @@ class DRBD(object):
                 raise
         except BaseException:
             # The "up" command might fail due to misconfiguration but the
-            # device is started nevertheless. This is why "down" rollback is
-            # always performed.
-            self.hv.run('drbdadm down {}'.format(self.vm_name))
+            # device might be started nevertheless. This is why "down" rollback
+            # is always performed but allowed to fail.
+            self.hv.run('drbdadm down {}'.format(self.vm_name), warn_only=True)
             self.hv.run(
                 'dmsetup resume /dev/{}/{}'.format(self.vg_name, self.lv_name)
             )
