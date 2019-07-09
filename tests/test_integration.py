@@ -6,17 +6,17 @@ Copyright (c) 2018 InnoGames GmbH
 from __future__ import print_function
 
 from logging import INFO, basicConfig
-from libvirt import VIR_DOMAIN_RUNNING
 from os import environ
 from pipes import quote
+from re import match
 from tempfile import NamedTemporaryFile
 from unittest import TestCase
 from uuid import uuid4
-from pytest import mark
-from re import match
 
 from adminapi.dataset import Query
 from fabric.api import env
+from fabric.network import disconnect_all
+from libvirt import VIR_DOMAIN_RUNNING
 
 from igvm.commands import (
     change_address,
@@ -46,11 +46,11 @@ from igvm.settings import (
     VG_NAME,
 )
 from igvm.utils import parse_size
-from fabric.network import disconnect_all
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
-env['user'] = 'igtesting'  # Enforce user for integration testing process
+environ['IGVM_SSH_USER'] = 'igtesting'  # Enforce user for integration testing
+env.user = 'igtesting'
 environ['IGVM_MODE'] = 'testing'
 
 # Configuration of VMs used for tests
