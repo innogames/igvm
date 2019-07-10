@@ -8,6 +8,9 @@ from __future__ import division
 import logging
 import socket
 import time
+from os import path
+
+from paramiko import SSHConfig
 
 from igvm.exceptions import TimeoutError
 
@@ -146,3 +149,21 @@ def convert_size(size, from_name, to_name):
     return size / (
         _SIZE_FACTORS[from_name.upper()] * _SIZE_FACTORS[to_name.upper()]
     )
+
+
+def get_ssh_config(hostname):
+    """Get SSH config for given hostname
+
+    :param: hostname: hostname
+
+    :return: dict
+    """
+
+    ssh_config_file = path.abspath(path.expanduser('~/.ssh/config'))
+    if path.exists(ssh_config_file):
+        ssh_config = SSHConfig()
+        with open(ssh_config_file) as f:
+            ssh_config.parse(f)
+            return ssh_config.lookup(hostname)
+
+    return dict()

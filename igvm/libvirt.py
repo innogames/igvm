@@ -3,20 +3,23 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 
-from fabric.api import env
 from libvirt import open as libvirt_open, libvirtError
-from os import path
+from os import path, environ
 
+from igvm.utils import get_ssh_config
 
 _conns = {}
 
 
 def get_virtconn(fqdn):
-    # Unfortunately required for igvm intergration testing
-    if 'user' in env:
-        username = env['user'] + '@'
+    if 'IGVM_SSH_USER' in environ:
+        username = environ.get('IGVM_SSH_USER') + '@'
     else:
-        username = ''
+        ssh_config = get_ssh_config(fqdn)
+        if 'user' in ssh_config:
+            username = ssh_config['user'] + '@'
+        else:
+            username = ''
 
     scripts_dir = path.join(path.dirname(__file__), 'scripts')
 
