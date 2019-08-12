@@ -22,23 +22,32 @@ log = getLogger(__name__)
 
 class InsufficientResource(object):
     """Check a resource of hypervisor would be sufficient"""
-    def __init__(self, attribute, reserved=0):
-        self.attribute = attribute
+    def __init__(self, hv_attribute, vm_attribute, multiplier=1, reserved=0):
+        self.hv_attribute = hv_attribute
+        self.vm_attribute = vm_attribute
+        self.multiplier = multiplier # TODO: Use identical units in Serveradmin.
         self.reserved = reserved
 
     def __repr__(self):
-        args = repr(self.attribute)
+        args = repr(self.hv_attribute)
         if self.reserved:
             args += ', reserved=' + repr(self.reserved)
 
         return '{}({})'.format(type(self).__name__, args)
 
     def __call__(self, vm, hv):
-        total_size = hv.dataset_obj[self.attribute]
-        vms_size = sum(v[self.attribute] for v in hv.dataset_obj['vms'])
+        # Treat freshly created HVs always passing this check
+        if not hv.dataset_obj[self.hv_attribute]:
+            return False
+
+        total_size = hv.dataset_obj[self.hv_attribute]
+        vms_size = sum(
+            vm[self.vm_attribute] * self.multiplier
+            for vm in hv.dataset_obj['vms']
+        )
         remaining_size = total_size - vms_size - self.reserved
 
-        return remaining_size < vm.dataset_obj[self.attribute]
+        return remaining_size < vm.dataset_obj[self.vm_attribute]
 
 
 class OtherVMs(object):

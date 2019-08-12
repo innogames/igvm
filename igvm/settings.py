@@ -104,13 +104,15 @@ IMAGE_PATH = '/tmp'
 HYPERVISOR_ATTRIBUTES = [
     'cpu_util_pct',
     'cpu_util_vm_pct',
-    'disk_size_gib',
     'hardware_model',
     'hostname',
     'igvm_locked',
     'intern_ip',
     'iops_avg',
-    'memory',
+    'libvirt_memory_total_gib',
+    'libvirt_memory_used_gib',
+    'libvirt_pool_total_gib',
+    'libvirt_pool_used_gib',
     'num_cpu',
     'os',
     'state',
@@ -166,9 +168,8 @@ VM_ATTRIBUTES = [
 # preference is only going to be checked when the previous ones return all
 # the same values.
 HYPERVISOR_PREFERENCES = [
-    # We assume 10 GiB for root partition, 16 for swap, and 6 reserved.
-    InsufficientResource('disk_size_gib', reserved=32),
-    InsufficientResource('memory'),
+    InsufficientResource('libvirt_pool_total_gib', 'disk_size_gib'),
+    InsufficientResource('libvirt_memory_total_gib', 'memory', multiplier=1024),
     # Checks the maximum vCPU usage (95 percentile) of the given hypervisor
     # for the given time_range and dismisses it as target when it is over
     # the value of threshold.
