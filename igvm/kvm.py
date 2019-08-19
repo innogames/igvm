@@ -101,11 +101,12 @@ class DomainProperties(object):
         else:
             # Opportunistic algorighm: get *any* MAC from Serveradmin
             self.mac_address = next(iter(vm.dataset_obj['mac']))
-        if vm.dataset_obj['os'] in ['wheezy', 'jessie', 'stretch']:
+
+        if vm.dataset_obj['os'].startswith('freebsd'):
+            self.boot_type = 'freebsd'
+        else:
             self.boot_type = 'grub'
             self.kernel_image = '/var/lib/libvirt/boot/grub2.img'
-        elif vm.dataset_obj['os'] in ['freebsd10', 'freebsd11']:
-            self.boot_type = 'freebsd'
 
     def info(self):
         """Returns a dictionary with user-exposable information."""
