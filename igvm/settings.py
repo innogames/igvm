@@ -282,8 +282,17 @@ AWS_CONFIG = [
 # preference is only going to be checked when the previous ones return all
 # the same values.
 HYPERVISOR_PREFERENCES = [
-    InsufficientResource('libvirt_pool_total_gib', 'disk_size_gib'),
-    InsufficientResource('libvirt_memory_total_gib', 'memory', multiplier=1024),
+    InsufficientResource(
+        'libvirt_pool_total_gib',
+        'disk_size_gib',
+        reserved=32,
+    ),
+    InsufficientResource(
+        'libvirt_memory_total_gib',
+        'memory',
+        multiplier=1024,
+        reserved=2048,
+    ),
     # Checks the maximum vCPU usage (95 percentile) of the given hypervisor
     # for the given time_range and dismisses it as target when it is over
     # the value of threshold.
