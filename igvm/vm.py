@@ -219,9 +219,8 @@ class VM(Host):
         action = 'boot' if running else 'shutdown'
         for i in range(timeout, 1, -1):
             print(
-                'Waiting for VM "{}" to {}... {} s'
-                .format(self.fqdn, action, i)
-            )
+                'Waiting for VM "{}" to {}... {} s'.format(
+                    self.fqdn, action, i))
             if self.hypervisor.vm_running(self) == running:
                 return True
             time.sleep(1)
@@ -261,7 +260,7 @@ class VM(Host):
         ).strip()
         if not output.isdigit():
             raise RemoteCommandError('Non-numeric output in disk_free')
-        return round(float(output) / 1024**2, 2)
+        return round(float(output) / 1024 ** 2, 2)
 
     def info(self):
         result = {
@@ -406,9 +405,7 @@ class VM(Host):
         for key_id, key_type in key_types:
             self.run(
                 'ssh-keygen -q -t {0} -N "" '
-                '-f /etc/ssh/ssh_host_{0}_key'
-                .format(key_type)
-            )
+                '-f /etc/ssh/ssh_host_{0}_key'.format(key_type))
 
             fd = BytesIO()
             self.get('/etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)

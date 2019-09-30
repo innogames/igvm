@@ -37,7 +37,7 @@ VG_NAME = 'xen-data'
 RESERVED_DISK = {
     'logical': 5.0,
     'zfs': 2 * 1024,
- }
+}
 
 # Reserved memory for host OS in MiB
 HOST_RESERVED_MEMORY = {

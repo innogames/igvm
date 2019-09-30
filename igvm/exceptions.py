@@ -41,13 +41,16 @@ class InvalidStateError(IGVMError):
     """Host state is invalid for the requested operation."""
     pass
 
+
 class MigrationError(IGVMError):
     """Indicates an error during migration."""
     pass
 
+
 class MigrationAborted(MigrationError):
     """Indicates an error during migration."""
     pass
+
 
 class TimeoutError(IGVMError):
     """An operation timed out."""
@@ -57,6 +60,7 @@ class TimeoutError(IGVMError):
 class InconsistentAttributeError(IGVMError):
     """An attribute on the VM differs from the excepted value from
     Serveradmin."""
+
     def __init__(self, vm, attribute, actual_value):
         self.fqdn = vm.fqdn
         self.attribute = attribute
@@ -67,8 +71,7 @@ class InconsistentAttributeError(IGVMError):
     def __str__(self):
         return (
             'Attribute "{}" on "{}" is out of sync: '
-            '{} (config) != {} (actual)'
-            .format(
+            '{} (config) != {} (actual)'.format(
                 self.attribute,
                 self.fqdn,
                 self.config_value,

@@ -66,7 +66,8 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
     with _get_hypervisor(hv_hostname, allow_reserved=True) as hv:
         if dry_run:
             log.info('I would set {} to state online reserved'.format(
-                hv_hostname))
+                hv_hostname)
+            )
         else:
             hv.dataset_obj['state'] = 'online_reserved'
             hv.dataset_obj.commit()
@@ -99,8 +100,8 @@ def vcpu_set(vm_hostname, count, offline=False):
 
         if offline and not vm.is_running():
             log.info(
-                '"{}" is already powered off, ignoring --offline.'
-                .format(vm.fqdn)
+                '"{}" is already powered off, ignoring --offline.'.format(
+                    vm.fqdn)
             )
             offline = False
 
@@ -140,8 +141,8 @@ def mem_set(vm_hostname, size, offline=False):
 
         if offline and not vm.is_running():
             log.info(
-                '"{}" is already powered off, ignoring --offline.'
-                .format(vm.fqdn)
+                '"{}" is already powered off, ignoring --offline.'.format(
+                    vm.fqdn)
             )
             offline = False
 
@@ -319,6 +320,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None,
 
             def _reset_hypervisor():
                 vm.hypervisor = previous_hypervisor
+
             transaction.on_rollback('reset hypervisor', _reset_hypervisor)
 
             if run_puppet:
@@ -422,15 +424,15 @@ def vm_delete(vm_hostname, retire=False):
             vm.dataset_obj['state'] = 'retired'
             vm.dataset_obj.commit()
             log.info(
-                '"{}" is destroyed and set to "retired" state.'
-                .format(vm.fqdn)
+                '"{}" is destroyed and set to "retired" state.'.format(
+                    vm.fqdn)
             )
         else:
             vm.dataset_obj.delete()
             vm.dataset_obj.commit()
             log.info(
-                '"{}" is destroyed and deleted from Serveradmin'
-                .format(vm.fqdn)
+                '"{}" is destroyed and deleted from Serveradmin'.format(
+                    vm.fqdn)
             )
 
 
@@ -456,8 +458,8 @@ def vm_sync(vm_hostname):
         if changed:
             vm.dataset_obj.commit()
             log.info(
-                '"{}" is synchronized {} attributes ({}).'
-                .format(vm.fqdn, len(changed), ', '.join(changed))
+                '"{}" is synchronized {} attributes ({}).'.format(
+                    vm.fqdn, len(changed), ', '.join(changed))
             )
         else:
             log.info(
@@ -465,7 +467,7 @@ def vm_sync(vm_hostname):
             )
 
 
-@with_fabric_settings   # NOQA: C901
+@with_fabric_settings  # NOQA: C901
 def host_info(vm_hostname):
     """Extract runtime information about a VM
 
@@ -513,15 +515,14 @@ def host_info(vm_hostname):
             simple_stats = (
                 'Current: {} {unit}\n'
                 'Free:    {} {unit}\n'
-                'Max:     {} {unit}'
-                .format(capacity - free, free, capacity, unit=unit)
-            )
+                'Max:     {} {unit}'.format(
+                    capacity - free, free, capacity, unit=unit))
 
             if not 0 <= free <= capacity > 0:
                 log.warning(
                     '{} ({}) and {} ({}) have weird ratio, skipping progress '
-                    'calculation'
-                    .format(free_key, free, capacity_key, capacity)
+                    'calculation'.format(
+                        free_key, free, capacity_key, capacity)
                 )
                 info[result_key] = red(simple_stats)
                 return
@@ -538,8 +539,7 @@ def host_info(vm_hostname):
             max_bars = 20
             num_bars = int(round(ratio * max_bars))
             info[result_key] = (
-                '[{}{}] {}%\n{}'
-                .format(
+                '[{}{}] {}%\n{}'.format(
                     color('#' * num_bars), ' ' * (max_bars - num_bars),
                     int(round(ratio * 100)),
                     simple_stats,
@@ -696,15 +696,15 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
         except libvirtError as error:
             hypervisor.release_lock()
             log.warning(
-                'Preferred hypervisor "{}" is skipped: {}'
-                .format(hypervisor, error)
+                'Preferred hypervisor "{}" is skipped: {}'.format(
+                    hypervisor, error)
             )
             continue
         except HypervisorError as error:
             hypervisor.release_lock()
             log.warning(
-                'Preferred hypervisor "{}" is skipped: {}'
-                .format(hypervisor, error)
+                'Preferred hypervisor "{}" is skipped: {}'.format(
+                    hypervisor, error)
             )
             continue
 
