@@ -5,3 +5,5 @@ paramiko
 Fabric3
 libvirt-python
 jinja2
+boto3
+tqdm

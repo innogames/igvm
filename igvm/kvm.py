@@ -289,8 +289,7 @@ def migrate_live(source, destination, vm, domain):
                         js['disk_processed'] / (js['disk_total'] + 1) * 100,
                         js['disk_processed'] / 1024 / 1024,
                         js['disk_total'] / 1024 / 1024,
-                        js['memory_processed'] /
-                        (js['memory_total'] + 1) * 100,
+                        js['memory_processed'] / (js['memory_total'] + 1) * 100,
                         js['memory_processed'] / 1024 / 1024,
                         js['memory_total'] / 1024 / 1024,
                     ))
