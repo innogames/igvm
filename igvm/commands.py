@@ -12,7 +12,7 @@ from adminapi.filters import Any, StartsWith
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 from ipaddress import ip_address
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, PackageLoader
 from libvirt import libvirtError
 
 from igvm.exceptions import (
@@ -264,10 +264,8 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
         vm = es.enter_context(_get_vm(vm_hostname))
 
         if vm.dataset_obj['igvm_operation_mode'] == 'aws':
-            file_loader = FileSystemLoader('igvm/templates/')
-            env = Environment(loader=file_loader)
-            template = env.get_template('aws_user_data.cfg')
-
+            jenv = Environment(loader=PackageLoader('igvm', 'templates'))
+            template = jenv.get_template('aws_user_data.cfg')
             user_data = template.render(
                 hostname=vm.dataset_obj['hostname'].rstrip('.ig.local'),
                 fqdn=vm.dataset_obj['hostname'],
