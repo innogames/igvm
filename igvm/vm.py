@@ -3,20 +3,26 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 
+import boto3
 import logging
 import os
 import time
+import tqdm
 
 from base64 import b64decode
-from fabric.api import cd, get, put, run, settings
+from botocore.exceptions import ClientError
+from fabric.api import cd, get, hide, put, run, settings
 from fabric.contrib.files import upload_template
+from fabric.exceptions import NetworkError
 from hashlib import sha1, sha256
 from io import BytesIO
 from re import compile as re_compile
+from typing import Optional
 from uuid import uuid4
 
 from igvm.exceptions import ConfigError, RemoteCommandError, VMError
 from igvm.host import Host
+from igvm.settings import AWS_RETURN_CODES
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
 
@@ -197,6 +203,47 @@ class VM(Host):
         if transaction:
             transaction.on_rollback('stop VM', self.shutdown)
 
+    def aws_start(self):
+        """AWS start
+
+        Start a VM in AWS.
+        """
+
+        ec2 = boto3.client('ec2')
+
+        try:
+            ec2.start_instances(
+                InstanceIds=[self.dataset_obj['aws_instance_id']],
+                DryRun=True
+            )
+        except ClientError as e:
+            if 'DryRunOperation' not in str(e):
+                raise
+
+        try:
+            response = ec2.start_instances(
+                InstanceIds=[self.dataset_obj['aws_instance_id']],
+                DryRun=False
+            )
+            current_state = (
+                response['StartingInstances'][0]['CurrentState']['Code']
+            )
+            log.info(response)
+            if current_state and current_state == AWS_RETURN_CODES['running']:
+                log.info('{} is already running.'.format(
+                    self.dataset_obj['hostname']))
+                return
+        except ClientError as e:
+            raise VMError(e)
+
+        host_up = wait_until(
+            str(self.dataset_obj['intern_ip']),
+            waitmsg='Waiting for SSH to respond',
+        )
+
+        if not host_up:
+            raise VMError('The server is not reachable with SSH')
+
     def shutdown(self, check_vm_up_on_transaction=True, transaction=None):
         self.hypervisor.stop_vm(self)
         if not self.wait_for_running(running=False):
@@ -207,6 +254,100 @@ class VM(Host):
                 'start VM', self.start,
                 force_stop_failed=check_vm_up_on_transaction,
             )
+
+    def aws_shutdown(self, timeout: int = 120) -> None:
+        """AWS shutdown
+
+        Shutdown a VM in AWS.
+
+        :param: timeout: Timeout value for VM shutdown
+        """
+        ec2 = boto3.client('ec2')
+
+        try:
+            ec2.stop_instances(
+                InstanceIds=[self.dataset_obj['aws_instance_id']],
+                DryRun=True
+            )
+        except ClientError as e:
+            if 'DryRunOperation' not in str(e):
+                raise
+
+        try:
+            response = ec2.stop_instances(
+                InstanceIds=[self.dataset_obj['aws_instance_id']],
+                DryRun=False
+            )
+            current_state = response['StoppingInstances'][0][
+                'CurrentState']['Code']
+            log.info(response)
+            if current_state and current_state == AWS_RETURN_CODES['stopped']:
+                log.info('{} is already stopped.'.format(
+                    self.dataset_obj['hostname']))
+        except ClientError as e:
+            raise VMError(e)
+
+        for retry in range(timeout):
+            if AWS_RETURN_CODES[
+                'stopped'] == self.aws_describe_instance_status(
+                    self.dataset_obj['aws_instance_id']
+            ):
+                log.info(
+                    '"{}" is stopped.'.format(self.dataset_obj['hostname'])
+                )
+                break
+
+            log.info(
+                'Waiting for VM "{}" to shutdown'
+                .format(self.dataset_obj['hostname'])
+            )
+            time.sleep(1)
+
+    def aws_describe_instance_status(self, instance_id: str) -> int:
+        """AWS describe instance status
+
+        Get the actual VM status in AWS, e.g. running, stopped or terminated.
+
+        :param: instance_id: Instance ID to get the status for
+
+        :return: return code of instance state as int
+        """
+
+        ec2 = boto3.client('ec2')
+        response = ec2.describe_instances(
+            Filters=[
+                {
+                    'Name': 'instance-state-code',
+                    'Values': [
+                        str(AWS_RETURN_CODES['pending']),
+                        str(AWS_RETURN_CODES['running']),
+                        str(AWS_RETURN_CODES['shutting-down']),
+                        str(AWS_RETURN_CODES['terminated']),
+                        str(AWS_RETURN_CODES['stopping']),
+                        str(AWS_RETURN_CODES['stopped']),
+                    ]
+                },
+            ],
+            InstanceIds=[instance_id],
+            DryRun=False)
+
+        return int(response['Reservations'][0]['Instances'][0][
+                   'State']['Code'])
+
+    def aws_delete(self):
+        """AWS delete
+
+        Delete a VM in AWS.
+        """
+
+        ec2 = boto3.client('ec2')
+
+        try:
+            response = ec2.terminate_instances(
+                InstanceIds=[self.dataset_obj['aws_instance_id']])
+            log.info(response)
+        except ClientError as e:
+            raise VMError(e)
 
     def is_running(self):
         return self.hypervisor.vm_running(self)
@@ -219,9 +360,8 @@ class VM(Host):
         action = 'boot' if running else 'shutdown'
         for i in range(timeout, 1, -1):
             print(
-                'Waiting for VM "{}" to {}... {} s'
-                .format(self.fqdn, action, i)
-            )
+                'Waiting for VM "{}" to {}... {} s'.format(
+                    self.fqdn, action, i))
             if self.hypervisor.vm_running(self) == running:
                 return True
             time.sleep(1)
@@ -261,7 +401,7 @@ class VM(Host):
         ).strip()
         if not output.isdigit():
             raise RemoteCommandError('Non-numeric output in disk_free')
-        return round(float(output) / 1024**2, 2)
+        return round(float(output) / 1024 ** 2, 2)
 
     def info(self):
         result = {
@@ -335,6 +475,115 @@ class VM(Host):
 
         log.info('"{}" is successfully built.'.format(self.fqdn))
 
+    def aws_build(self,
+                  run_puppet: bool = True,
+                  debug_puppet: bool = False,
+                  postboot: Optional[str] = None,
+                  timeout_vm_setup: int = 300,
+                  timeout_cloud_init: int = 600) -> None:
+        """AWS build
+
+        Build a VM in AWS.
+
+        :param: run_puppet: Run puppet (incl. cert clean) after VM creation
+        :param: debug_puppet: Run puppet in debug mode
+        :param: postboot: cloudinit configuration put as userdata
+        :param: timeout_vm_setup: Timeout value for the VM creation
+        :param: timeout_cloud_init: Timeout value for the cloudinit
+                                    provisioning
+
+        :raises: VMError: Generic exception for VM errors of all kinds
+        """
+
+        ec2 = boto3.client('ec2')
+
+        try:
+            response = ec2.run_instances(
+                ImageId=self.dataset_obj['aws_image_id'],
+                InstanceType=self.dataset_obj['aws_instance_type'],
+                KeyName=self.dataset_obj['aws_key_name'],
+                SecurityGroupIds=list(
+                    self.dataset_obj['aws_security_group_ids']),
+                SubnetId=self.dataset_obj['aws_subnet_id'],
+                Placement={
+                    'AvailabilityZone': self.dataset_obj['aws_placement']
+                },
+                PrivateIpAddress=str(self.dataset_obj['intern_ip']),
+                UserData='' if postboot is None else postboot,
+                TagSpecifications=[
+                    {
+                        'ResourceType': 'instance',
+                        'Tags': [
+                            {
+                                'Key': 'Name',
+                                'Value': self.dataset_obj['hostname'],
+                            },
+                        ]
+                    },
+                ],
+                DryRun=False,
+                MinCount=1,
+                MaxCount=1)
+            log.info(response)
+        except ClientError as e:
+            raise VMError(e)
+
+        if run_puppet:
+            self.run_puppet(clear_cert=True, debug=debug_puppet)
+
+        self.dataset_obj['aws_instance_id'] = response['Instances'][0][
+            'InstanceId']
+
+        log.info('waiting for {} to be started'.format(
+            self.dataset_obj['hostname']))
+        vm_setup = tqdm.tqdm(
+            total=timeout_vm_setup, desc='vm_setup', position=0)
+        cloud_init = tqdm.tqdm(
+            total=timeout_cloud_init, desc='cloud_init', position=1)
+
+        # Wait for AWS to declare the VM running
+        while (
+            timeout_vm_setup and
+            AWS_RETURN_CODES['running'] != self.aws_describe_instance_status(
+                self.dataset_obj['aws_instance_id']
+            )
+        ):
+            vm_setup.update(1)
+            timeout_vm_setup -= 1
+            time.sleep(1)
+        vm_setup.update(timeout_vm_setup)
+        # TODO: Handle overrun timeout
+
+        # Try to provision the VM with cloudinit
+        for retry in range(timeout_cloud_init):
+            cloud_init.update(1)
+
+            # Only try to connect every 10s to avoid paramiko exceptions
+            if retry % 10 != 0:
+                time.sleep(1)
+                continue
+
+            with settings(
+                hide('aborts'),
+                host_string=self.dataset_obj['hostname'],
+                warn_only=True,
+                abort_on_prompts=True,
+            ):
+                try:
+                    if run(
+                        'find /var/lib/cloud/instance/boot-finished',
+                        quiet=True
+                    ).succeeded:
+                        cloud_init.update(timeout_cloud_init - retry - 1)
+                        break
+                except (SystemExit, NetworkError):
+                    time.sleep(1)
+        # TODO: Handle overrun timeout
+
+        self.create_ssh_keys()
+
+        log.info('"{}" is successfully built in AWS.'.format(self.fqdn))
+
     def rename(self, new_hostname):
         """Rename the VM"""
         self.dataset_obj['hostname'] = new_hostname
@@ -406,9 +655,7 @@ class VM(Host):
         for key_id, key_type in key_types:
             self.run(
                 'ssh-keygen -q -t {0} -N "" '
-                '-f /etc/ssh/ssh_host_{0}_key'
-                .format(key_type)
-            )
+                '-f /etc/ssh/ssh_host_{0}_key'.format(key_type))
 
             fd = BytesIO()
             self.get('/etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)
@@ -432,29 +679,29 @@ class VM(Host):
                     shell=False,
                 )
 
-        self.block_autostart()
+        if self.dataset_obj['igvm_operation_mode'] == 'kvm':
+            self.block_autostart()
 
-        puppet_command = (
-            '( /opt/puppetlabs/puppet/bin/puppet agent '
-            '--detailed-exitcodes '
-            '--fqdn={} --server={} --ca_server={} '
-            '--no-report --waitforcert=60 --onetime --no-daemonize '
-            '--skip_tags=chroot_unsafe --verbose{} ) ;'
-            '[ $? -eq 2 ]'
-            .format(
-                self.fqdn,
-                self.dataset_obj['puppet_master'],
-                self.dataset_obj['puppet_ca'],
-                ' --debug' if debug else '',
+            puppet_command = (
+                '( /opt/puppetlabs/puppet/bin/puppet agent '
+                '--detailed-exitcodes '
+                '--fqdn={} --server={} --ca_server={} '
+                '--no-report --waitforcert=60 --onetime --no-daemonize '
+                '--skip_tags=chroot_unsafe --verbose{} ) ;'
+                '[ $? -eq 2 ]'.format(
+                    self.fqdn,
+                    self.dataset_obj['puppet_master'],
+                    self.dataset_obj['puppet_ca'],
+                    ' --debug' if debug else '',
+                )
             )
-        )
 
-        try:
-            self.run(puppet_command)
-        except RemoteCommandError as e:
-            raise VMError('Initial puppetrun failed') from e
+            try:
+                self.run(puppet_command)
+            except RemoteCommandError as e:
+                raise VMError('Initial puppetrun failed') from e
 
-        self.unblock_autostart()
+            self.unblock_autostart()
 
     def block_autostart(self):
         fd = BytesIO()

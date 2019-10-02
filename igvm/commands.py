@@ -12,6 +12,7 @@ from adminapi.filters import Any, StartsWith
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 from ipaddress import ip_address
+from jinja2 import Environment, FileSystemLoader
 from libvirt import libvirtError
 
 from igvm.exceptions import (
@@ -25,6 +26,8 @@ from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.hypervisor_preferences import sorted_hypervisors
 from igvm.settings import (
+    AWS_CONFIG,
+    AWS_RETURN_CODES,
     HYPERVISOR_ATTRIBUTES,
     HYPERVISOR_PREFERENCES,
     VM_ATTRIBUTES,
@@ -66,7 +69,8 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
     with _get_hypervisor(hv_hostname, allow_reserved=True) as hv:
         if dry_run:
             log.info('I would set {} to state online reserved'.format(
-                hv_hostname))
+                hv_hostname)
+            )
         else:
             hv.dataset_obj['state'] = 'online_reserved'
             hv.dataset_obj.commit()
@@ -95,12 +99,18 @@ def vcpu_set(vm_hostname, count, offline=False):
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(vm_hostname))
 
+        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
+
         _check_defined(vm)
 
         if offline and not vm.is_running():
             log.info(
-                '"{}" is already powered off, ignoring --offline.'
-                .format(vm.fqdn)
+                '"{}" is already powered off, ignoring --offline.'.format(
+                    vm.fqdn)
             )
             offline = False
 
@@ -126,6 +136,12 @@ def mem_set(vm_hostname, size, offline=False):
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(vm_hostname))
 
+        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
+
         _check_defined(vm)
 
         if size.startswith('+'):
@@ -140,8 +156,8 @@ def mem_set(vm_hostname, size, offline=False):
 
         if offline and not vm.is_running():
             log.info(
-                '"{}" is already powered off, ignoring --offline.'
-                .format(vm.fqdn)
+                '"{}" is already powered off, ignoring --offline.'.format(
+                    vm.fqdn)
             )
             offline = False
 
@@ -164,6 +180,12 @@ def disk_set(vm_hostname, size):
     """
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(vm_hostname))
+
+        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
 
         _check_defined(vm)
 
@@ -196,6 +218,12 @@ def change_address(vm_hostname, new_address, offline=False):
         raise IGVMError('IP address change can be only performed offline')
 
     with _get_vm(vm_hostname) as vm:
+        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
+
         old_address = vm.dataset_obj['intern_ip']
         new_address = ip_address(new_address)
 
@@ -235,45 +263,79 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(vm_hostname))
 
-        if vm.hypervisor:
-            es.enter_context(_lock_hv(vm.hypervisor))
-        else:
-            vm.hypervisor = es.enter_context(_get_best_hypervisor(
-                vm,
-                ['online', 'online_reserved'] if allow_reserved_hv
-                else ['online'],
-                True,
-            ))
-            vm.dataset_obj['hypervisor'] = \
-                vm.hypervisor.dataset_obj['hostname']
+        if vm.dataset_obj['igvm_operation_mode'] == 'aws':
+            file_loader = FileSystemLoader('igvm/templates/')
+            env = Environment(loader=file_loader)
+            template = env.get_template('aws_user_data.cfg')
 
-        if vm.hypervisor.vm_defined(vm) and vm.is_running():
-            raise InvalidStateError(
-                '"{}" is still running.'.format(vm.fqdn)
+            user_data = template.render(
+                hostname=vm.dataset_obj['hostname'].rstrip('.ig.local'),
+                fqdn=vm.dataset_obj['hostname'],
+                apt_repos=AWS_CONFIG[0]['apt'],
+                puppet_master_addr=AWS_CONFIG[0]['puppet']['master_addr'],
+                puppet_master=vm.dataset_obj['puppet_master'],
+                puppet_ca=vm.dataset_obj['puppet_ca'],
+                puppet_ca_addr=AWS_CONFIG[0]['puppet']['ca_addr'],
             )
 
-        if rebuild and vm.hypervisor.vm_defined(vm):
-            vm.hypervisor.undefine_vm(vm)
+            vm.aws_build(
+                run_puppet=run_puppet,
+                debug_puppet=debug_puppet,
+                postboot=user_data
+            )
+        elif vm.dataset_obj['igvm_operation_mode'] == 'kvm':
+            if vm.hypervisor:
+                es.enter_context(_lock_hv(vm.hypervisor))
+            else:
+                vm.hypervisor = es.enter_context(_get_best_hypervisor(
+                    vm,
+                    ['online', 'online_reserved'] if allow_reserved_hv
+                    else ['online'],
+                    True,
+                ))
+                vm.dataset_obj['hypervisor'] = \
+                    vm.hypervisor.dataset_obj['hostname']
 
-        vm.build(
-            run_puppet=run_puppet,
-            debug_puppet=debug_puppet,
-            postboot=postboot,
-        )
+            if vm.hypervisor.vm_defined(vm) and vm.is_running():
+                raise InvalidStateError(
+                    '"{}" is still running.'.format(vm.fqdn)
+                )
+
+            if rebuild and vm.hypervisor.vm_defined(vm):
+                vm.hypervisor.undefine_vm(vm)
+
+            vm.build(
+                run_puppet=run_puppet,
+                debug_puppet=debug_puppet,
+                postboot=postboot,
+            )
+        else:
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
 
         vm.dataset_obj.commit()
 
 
-@with_fabric_settings   # NOQA: C901
+@with_fabric_settings  # NOQA: C901
 def vm_migrate(vm_hostname, hypervisor_hostname=None,
                run_puppet=False, debug_puppet=False,
                offline=False, offline_transport='drbd',
                allow_reserved_hv=False, no_shutdown=False):
     """Migrate a VM to a new hypervisor."""
+
     with ExitStack() as es:
         vm = es.enter_context(
             _get_vm(vm_hostname, allow_retired=True)
         )
+
+        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
+
         if hypervisor_hostname:
             hypervisor = es.enter_context(_get_hypervisor(
                 hypervisor_hostname, allow_reserved=allow_reserved_hv
@@ -319,6 +381,7 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None,
 
             def _reset_hypervisor():
                 vm.hypervisor = previous_hypervisor
+
             transaction.on_rollback('reset hypervisor', _reset_hypervisor)
 
             if run_puppet:
@@ -343,28 +406,43 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None,
 def vm_start(vm_hostname):
     """Start a VM"""
     with _get_vm(vm_hostname) as vm:
-        _check_defined(vm)
-
-        if vm.is_running():
-            log.info('"{}" is already running.'.format(vm.fqdn))
-            return
-        vm.start()
+        if vm.dataset_obj['igvm_operation_mode'] == 'aws':
+            vm.aws_start()
+        elif vm.dataset_obj['igvm_operation_mode'] == 'kvm':
+            _check_defined(vm)
+            if vm.is_running():
+                log.info('"{}" is already running.'.format(vm.fqdn))
+                return
+            vm.start()
+        else:
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
 
 
 @with_fabric_settings
 def vm_stop(vm_hostname, force=False):
     """Gracefully stop a VM"""
     with _get_vm(vm_hostname, allow_retired=True) as vm:
-        _check_defined(vm)
+        if vm.dataset_obj['igvm_operation_mode'] == 'aws':
+            vm.aws_shutdown()
+        elif vm.dataset_obj['igvm_operation_mode'] == 'kvm':
+            _check_defined(vm)
 
-        if not vm.is_running():
-            log.info('"{}" is already stopped.'.format(vm.fqdn))
-            return
-        if force:
-            vm.hypervisor.stop_vm_force(vm)
+            if not vm.is_running():
+                log.info('"{}" is already stopped.'.format(vm.fqdn))
+                return
+            if force:
+                vm.hypervisor.stop_vm_force(vm)
+            else:
+                vm.shutdown()
+            log.info('"{}" is stopped.'.format(vm.fqdn))
         else:
-            vm.shutdown()
-        log.info('"{}" is stopped.'.format(vm.fqdn))
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
 
 
 @with_fabric_settings
@@ -377,21 +455,30 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
     """
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(vm_hostname))
+        if vm.dataset_obj['igvm_operation_mode'] == 'aws':
+            vm.aws_shutdown()
+            vm.aws_start()
+        elif vm.dataset_obj['igvm_operation_mode'] == 'kvm':
+            _check_defined(vm)
 
-        _check_defined(vm)
+            if not vm.is_running():
+                raise InvalidStateError('"{}" is not running'.format(vm.fqdn))
 
-        if not vm.is_running():
-            raise InvalidStateError('"{}" is not running'.format(vm.fqdn))
+            if force:
+                vm.hypervisor.stop_vm_force(vm)
+            else:
+                vm.shutdown()
 
-        if force:
-            vm.hypervisor.stop_vm_force(vm)
+            if not no_redefine:
+                vm.hypervisor.redefine_vm(vm)
+
+            vm.start()
         else:
-            vm.shutdown()
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
 
-        if not no_redefine:
-            vm.hypervisor.redefine_vm(vm)
-
-        vm.start()
         log.info('"{}" is restarted.'.format(vm.fqdn))
 
 
@@ -404,17 +491,34 @@ def vm_delete(vm_hostname, retire=False):
     """
 
     with _get_vm(vm_hostname, unlock=retire, allow_retired=True) as vm:
-        # Make sure the VM has a hypervisor and that it is defined on it.
-        # Abort if the VM has not been defined.
-        _check_defined(vm)
+        if vm.dataset_obj['igvm_operation_mode'] == 'aws':
+            vm_status_code = vm.aws_describe_instance_status(
+                vm.dataset_obj['aws_instance_id'])
+            if vm_status_code != AWS_RETURN_CODES['stopped']:
+                raise InvalidStateError(
+                    '"{}" is still running.'.format(vm.fqdn))
+            else:
+                vm.aws_delete()
+        elif vm.dataset_obj['igvm_operation_mode'] == 'kvm':
+            # Make sure the VM has a hypervisor and that it is defined on it.
+            # Abort if the VM has not been defined.
+            _check_defined(vm)
 
-        # Make sure the VM is shut down, abort if it is not.
-        if vm.hypervisor and vm.hypervisor.vm_defined(vm) and vm.is_running():
-            raise InvalidStateError('"{}" is still running.'.format(vm.fqdn))
+            # Make sure the VM is shut down, abort if it is not.
+            if vm.hypervisor and vm.hypervisor.vm_defined(
+                    vm) and vm.is_running():
+                raise InvalidStateError('"{}" is still running.'.format(
+                    vm.fqdn)
+                )
 
-        # Delete the VM from its hypervisor if required.
-        if vm.hypervisor and vm.hypervisor.vm_defined(vm):
-            vm.hypervisor.undefine_vm(vm)
+            # Delete the VM from its hypervisor if required.
+            if vm.hypervisor and vm.hypervisor.vm_defined(vm):
+                vm.hypervisor.undefine_vm(vm)
+        else:
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
 
         # Delete the serveradmin object of this VM
         # or update its state to 'retired' if retire is True.
@@ -422,15 +526,15 @@ def vm_delete(vm_hostname, retire=False):
             vm.dataset_obj['state'] = 'retired'
             vm.dataset_obj.commit()
             log.info(
-                '"{}" is destroyed and set to "retired" state.'
-                .format(vm.fqdn)
+                '"{}" is destroyed and set to "retired" state.'.format(
+                    vm.fqdn)
             )
         else:
             vm.dataset_obj.delete()
             vm.dataset_obj.commit()
             log.info(
-                '"{}" is destroyed and deleted from Serveradmin'
-                .format(vm.fqdn)
+                '"{}" is destroyed and deleted from Serveradmin'.format(
+                    vm.fqdn)
             )
 
 
@@ -441,6 +545,12 @@ def vm_sync(vm_hostname):
     This command collects actual resource allocation of a VM from the
     hypervisor and overwrites outdated attribute values in Serveradmin."""
     with _get_vm(vm_hostname) as vm:
+        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
+
         _check_defined(vm)
 
         attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
@@ -456,8 +566,8 @@ def vm_sync(vm_hostname):
         if changed:
             vm.dataset_obj.commit()
             log.info(
-                '"{}" is synchronized {} attributes ({}).'
-                .format(vm.fqdn, len(changed), ', '.join(changed))
+                '"{}" is synchronized {} attributes ({}).'.format(
+                    vm.fqdn, len(changed), ', '.join(changed))
             )
         else:
             log.info(
@@ -465,13 +575,19 @@ def vm_sync(vm_hostname):
             )
 
 
-@with_fabric_settings   # NOQA: C901
+@with_fabric_settings  # NOQA: C901
 def host_info(vm_hostname):
     """Extract runtime information about a VM
 
     Library consumers should use VM.info() directly.
     """
     with _get_vm(vm_hostname) as vm:
+
+        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
 
         info = vm.info()
 
@@ -513,15 +629,14 @@ def host_info(vm_hostname):
             simple_stats = (
                 'Current: {} {unit}\n'
                 'Free:    {} {unit}\n'
-                'Max:     {} {unit}'
-                .format(capacity - free, free, capacity, unit=unit)
-            )
+                'Max:     {} {unit}'.format(
+                    capacity - free, free, capacity, unit=unit))
 
             if not 0 <= free <= capacity > 0:
                 log.warning(
                     '{} ({}) and {} ({}) have weird ratio, skipping progress '
-                    'calculation'
-                    .format(free_key, free, capacity_key, capacity)
+                    'calculation'.format(
+                        free_key, free, capacity_key, capacity)
                 )
                 info[result_key] = red(simple_stats)
                 return
@@ -538,8 +653,7 @@ def host_info(vm_hostname):
             max_bars = 20
             num_bars = int(round(ratio * max_bars))
             info[result_key] = (
-                '[{}{}] {}%\n{}'
-                .format(
+                '[{}{}] {}%\n{}'.format(
                     color('#' * num_bars), ' ' * (max_bars - num_bars),
                     int(round(ratio * 100)),
                     simple_stats,
@@ -581,6 +695,12 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
     """
 
     with _get_vm(vm_hostname) as vm:
+        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
+
         _check_defined(vm)
 
         if not offline:
@@ -696,15 +816,15 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
         except libvirtError as error:
             hypervisor.release_lock()
             log.warning(
-                'Preferred hypervisor "{}" is skipped: {}'
-                .format(hypervisor, error)
+                'Preferred hypervisor "{}" is skipped: {}'.format(
+                    hypervisor, error)
             )
             continue
         except HypervisorError as error:
             hypervisor.release_lock()
             log.warning(
-                'Preferred hypervisor "{}" is skipped: {}'
-                .format(hypervisor, error)
+                'Preferred hypervisor "{}" is skipped: {}'.format(
+                    hypervisor, error)
             )
             continue
 

@@ -10,7 +10,6 @@ import concurrent.futures
 from uuid import uuid4
 from xml.dom import minidom
 from xml.etree import ElementTree
-from time import sleep
 
 from libvirt import (
     VIR_DOMAIN_VCPU_MAXIMUM,
@@ -36,8 +35,6 @@ from igvm.settings import (
     MIGRATE_CONFIG,
 )
 from igvm.utils import parse_size
-from igvm.vm import VM
-import igvm.hypervisor
 
 from jinja2 import Environment, PackageLoader
 
@@ -140,8 +137,8 @@ class DomainProperties(object):
             self.max_mem = domain.maxMemory()
         else:
             self.max_mem = parse_size(
-                tree.find('maxMemory').text +
-                tree.find('maxMemory').attrib['unit'],
+                tree.find('maxMemory').text + tree.find(
+                    'maxMemory').attrib['unit'],
                 'M',
             )
 
@@ -160,9 +157,7 @@ class DomainProperties(object):
             self.numa_mode = self.NUMA_UNBOUND
         else:
             log.warning(
-                'Cannot determine NUMA of "{}" for KVM.'
-                .format(vm.fqdn)
-            )
+                'Cannot determine NUMA of "{}" for KVM.'.format(vm.fqdn))
             self.numa_node = self.NUMA_UNKNOWN
         return self
 
@@ -175,9 +170,7 @@ def set_vcpus(hypervisor, vm, domain, num_cpu):
     props = DomainProperties.from_running(hypervisor, vm, domain)
     if num_cpu > props.max_cpus:
         raise HypervisorError(
-            'VM can not receive more than {} VCPUs'
-            .format(props.max_cpus)
-        )
+            'VM can not receive more than {} VCPUs'.format(props.max_cpus))
 
     # Note: We could support the guest agent in here by first trying the
     #       VIR_DOMAIN_VCPU_GUEST flag. This would allow live shrinking.
@@ -201,9 +194,8 @@ def _live_repin_cpus(domain, props, max_phys_cpus):
     """Adjusts NUMA pinning of all VCPUs."""
     if props.numa_mode != props.NUMA_SPREAD:
         log.warning(
-            'Skipping CPU re-pin, VM is in NUMA mode "{}"'
-            .format(props.numa_mode)
-        )
+            'Skipping CPU re-pin, VM is in NUMA mode "{}"'.format(
+                props.numa_mode))
         return
 
     num_nodes = props.num_nodes
@@ -257,7 +249,7 @@ def migrate_live(source, destination, vm, domain):
         VIR_MIGRATE_CHANGE_PROTECTION |  # Protect source VM
         VIR_MIGRATE_NON_SHARED_DISK |  # Copy non-shared storage
         VIR_MIGRATE_AUTO_CONVERGE |  # Slow down VM if can't migrate memory
-        VIR_MIGRATE_ABORT_ON_ERROR # Don't tolerate soft errors
+        VIR_MIGRATE_ABORT_ON_ERROR  # Don't tolerate soft errors
     )
 
     migrate_params = {
@@ -294,12 +286,12 @@ def migrate_live(source, destination, vm, domain):
                         'disk {:.0f}% {:.0f}/{:.0f}MiB, '
                         'memory {:.0f}% {:.0f}/{:.0f}MiB, '
                     ).format(
-                        js['disk_processed'] / (js['disk_total']+1) * 100,
-                        js['disk_processed']/1024/1024,
-                        js['disk_total']/1024/1024,
-                        js['memory_processed'] / (js['memory_total']+1) * 100,
-                        js['memory_processed']/1024/1024,
-                        js['memory_total']/1024/1024,
+                        js['disk_processed'] / (js['disk_total'] + 1) * 100,
+                        js['disk_processed'] / 1024 / 1024,
+                        js['disk_total'] / 1024 / 1024,
+                        js['memory_processed'] / (js['memory_total'] + 1) * 100,
+                        js['memory_processed'] / 1024 / 1024,
+                        js['memory_total'] / 1024 / 1024,
                     ))
             else:
                 log.info('Waiting for migration stats to show up')
@@ -311,9 +303,9 @@ def migrate_live(source, destination, vm, domain):
         # Nothing to log, the function above raised an exception
     else:
         log.info('Awaiting migration to finish')
-        future.result() # Exception from slave thread will re-raise here
+        future.result()  # Exception from slave thread will re-raise here
         log.info('Migration finished')
-        
+
         # And pin again, in case we migrated to a host with more physical cores
         domain = destination._get_domain(vm)
         _live_repin_cpus(domain, props, destination.dataset_obj['num_cpu'])
@@ -346,8 +338,8 @@ def set_memory(hypervisor, vm, domain):
 
     raise HypervisorError(
         '"{}" does not support any known memory extension strategy. '
-        'You will have to power off the machine and do it offline.'
-        .format(vm.fqdn)
+        'You will have to power off the machine and do it offline.'.format(
+            vm.fqdn)
     )
 
 
@@ -359,17 +351,15 @@ def _attach_memory_dimms(vm, domain, props, memory_mib):
         xml = (
             "<memory model='dimm'>"
             "<target><size unit='MiB'>{}</size><node>{}</node></target>"
-            "</memory>"
-            .format(dimm_size, i)
-        )
+            "</memory>".format(dimm_size, i))
 
         domain.attachDeviceFlags(
             xml, VIR_DOMAIN_AFFECT_LIVE | VIR_DOMAIN_AFFECT_CONFIG
         )
 
     log.info(
-        'KVM: Added {} DIMMs with {} MiB each'
-        .format(props.num_nodes, dimm_size)
+        'KVM: Added {} DIMMs with {} MiB each'.format(
+            props.num_nodes, dimm_size)
     )
 
 
@@ -571,6 +561,4 @@ def _place_numa(hypervisor, vm, tree, props):
             # </numatune>
     else:
         raise NotImplementedError(
-            'NUMA mode not supported: {0}'
-            .format(props.numa_mode)
-        )
+            'NUMA mode not supported: {0}'.format(props.numa_mode))

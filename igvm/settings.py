@@ -37,7 +37,7 @@ VG_NAME = 'xen-data'
 RESERVED_DISK = {
     'logical': 5.0,
     'zfs': 2 * 1024,
- }
+}
 
 # Reserved memory for host OS in MiB
 HOST_RESERVED_MEMORY = {
@@ -140,6 +140,14 @@ HYPERVISOR_ATTRIBUTES = [
 ]
 
 VM_ATTRIBUTES = [
+    'aws_image_id',
+    'aws_instance_id',
+    'aws_instance_type',
+    'aws_key_name',
+    'aws_placement',
+    'aws_security_group_ids',
+    'aws_subnet_id',
+    'datacenter',
     'disk_size_gib',
     'environment',
     'function',
@@ -148,6 +156,7 @@ VM_ATTRIBUTES = [
     'game_world',
     'hostname',
     'igvm_locked',
+    'igvm_operation_mode',
     'intern_ip',
     'io_weight',
     'mac',
@@ -162,6 +171,111 @@ VM_ATTRIBUTES = [
     'sshfp',
     'state',
     {'hypervisor': HYPERVISOR_ATTRIBUTES},
+]
+
+AWS_RETURN_CODES = {
+    'pending': 0,
+    'running': 16,
+    'shutting-down': 32,
+    'terminated': 48,
+    'stopping': 64,
+    'stopped': 80,
+}
+
+AWS_CONFIG = [
+    {
+        # TODO: remove this puppet config and use internal project based puppet
+        'puppet': {
+            'ca_addr': '212.53.146.132',
+            'master_addr': '212.53.146.131',
+        },
+        'apt': [
+            {
+                'name': 'innogames_stable',
+                'filename': 'innogames_stable.list',
+                'source': 'deb http://update-int.ig.local/ innogames stable',
+                'key': [
+                    "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+                    "Version: GnuPG v1.4.10 (GNU/Linux)",
+                    "",
+                    "mQINBE1JNIYBEADWZJRGs4vzkffGhbCQcrBcMnnq/ogY4ebzv2P",
+                    "cT1KbyXjmulJG6KqTf6cmecU77UVIJluxfhZEoPBUdIFWRSbB/u",
+                    "e2G+pj2hwu4uSy2MOPtQaXnrrHJyA2EP0s//h+jJwh5KJ/ExNEX",
+                    "XpQqDKwik7xvn13Bg5mkP9rj3MIdN/muw4YDoyEHkEVy6VWHy8K",
+                    "ZOZqNv3ONlx/tv8mp5GCsyz8my+Ly61fauPFESVphQs/PsyXDzc",
+                    "c7BdA2Xprs6nc08tr2pm14Zhzuv1aDb3RbmIOC+KfSlBfdhgMNO",
+                    "DtnkoHugdXXunwQFOQKhKUoqrD06v3yluhooKVGzlOOB1wu6RPg",
+                    "SFrd2qR//c8ksM3kJfVBk+oovOU70/SYbv/JgLlQqdQW1yXUTsZ",
+                    "+MCBQvnP/Lbg48FxpuWiv2/XToiamR/DvpYY4kE6GFnBCFigVFN",
+                    "w+2LnK6iwBdb6zEqsRkc91czEtfdho61zbNajfNy293F3uRbmNN",
+                    "mClMLZTuxGx3abQiccQxCjFy4MVsrvqUSi3Q+OcGNpZ6Cnd4TSu",
+                    "lT2Uj9FpvJ77/eKg0YCGDffqfQjwGaThb8fU5TWSsmRWxDVTOn3",
+                    "xvMHOBWvoGR479+KngaohU5t+mBct3NfTYcXYOxA8EHZfXxvjJV",
+                    "u+4v1gYIyOPdOLNltKFd+yq3Z6UxAuw1mwARAQABtDxNYXR0aGl",
+                    "hcyBLbGVpbiAoVXBkYXRlLU1pcnJvcikgPG1hdHRoaWFzLmtsZW",
+                    "luQGlubm9nYW1lcy5kZT6JAjgEEwECACIFAk1JNIYCGwMGCwkIB",
+                    "wMCBhUIAgkKCwQWAgMBAh4BAheAAAoJEKoruC7fdZMUGk8P+wX0",
+                    "ZzJ4wqOWc/n3n3ZSxy9MbUa/Ry84woNr9dEtdhyEwpnlFxJYmWS",
+                    "qXBwHZNWZ3ENwWfZisPawtfNbujwxI83dAziiDtmllQg0kKWOFI",
+                    "7Qh7BhJNnq5sWA/CjtOcFsJGCBL5QMKX+u9xSSMvk7nUKaQ6VzE",
+                    "qzlR67DJigZc5LiCqR7LgXzDoACKAD6LZiv7Ft4ApSpnemvYEQt",
+                    "UbuptGqAcBF4TPeZw2DDKdaev6HOmWA0BvxO7/lGwxvsQ/x+c3F",
+                    "BBWhz81Vmv8kEpgQxj6pookPcvHX7jOCBWb3MfOkz6+2nw8b6NF",
+                    "RNu+/huMiHtFtGz0e7F5tdsMZpfbQVbBYERa8XKABcTLpK0wAT0",
+                    "n9RHQOQaeBfZ/OPYrZbKPsDXo/094J6Z9UffZMGPaEgt9+hR5Z6",
+                    "2//TEyEUHNoFukDBBJcy8c+GnPpmTQ17XzhxKI0pPJ2H5aDNeh5",
+                    "b3D6y0WXgpiOKiNxr0wX1t0pyDO1Y7JE/51qq7ETol0ezws7vVL",
+                    "rxFi0C7s2mjNWivS5J3PcvF+TK+a1CwYG0XDf3aV2OnxhDWz9YV",
+                    "yY8NLEmLzsbmCigzXy+1h23TBXaVlKXaw9k8dxnKM9UStc3hMIN",
+                    "50aqK0Tucbz2yj9+QQf9YHfzWOfqP9m0nm2CCmx1w+GZE9MLAhs",
+                    "zNrlTW7UN+hEyA1Z=mJCR",
+                    "-----END PGP PUBLIC KEY BLOCK-----"
+                ],
+            },
+            {
+                'name': 'basestretch_stable',
+                'filename': 'basestretch_stable.list',
+                'source': 'deb http://update-int.ig.local/ basestretch stable',
+                'key': [
+                    "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+                    "Version: GnuPG v1",
+                    "",
+                    "mQINBFjsyv0BEADlyvUwquhi/PzwaYIG2JMNHEMnUc3jKaHd3SA",
+                    "W6kRk6uzao9B18fBMRnuGFtfrmRxa7CvqTTcn3hXl8h7kZQICBH",
+                    "XJrNXB2KDs4gnNDXbjXBuLJyW5jVe8Ghn7GEJbzUAu+iNPBKi1U",
+                    "YkUoMSk+sAbXqOaUJQDJSaOU4A7C9wL1mAxsWNhucpCBtt9HTTn",
+                    "VWiZiLAtvop7LJEgXEpQbht/jW7mdMX5yAbWfYUJMdXFMCADz5r",
+                    "6mbtuun5BaDae31dgA//IPI+Im8PxJBgdyyETfhoSbThiFDk4K1",
+                    "UgXXlAwYxR7TVxPjvWN8HDlbBl4TvM29ppz8bZJARQx3h1SYIAr",
+                    "YJ2Xc9lQwsbK0KzL/w1NmZsiPztbpM0Fs0Q7+oQScxuIolpu4c7",
+                    "7siEged2R6dnXR/er+zN5/GgTdaIEcQnTRI9F8bZKrhIy/TSLgR",
+                    "nxZYFyNE30yQtJD2WR9fuh6zT72LY0rvqQcHw7Ze3qW2ZgORswd",
+                    "GWmasHMJ/LkXv75MiV4KMBwweYp6OW9ewisdrZEijQS0NEcZ+YF",
+                    "C288dLJeWLpPkzdczTO/v/bLDQ/Uk8aOcldtJfB4BjBW9v7JjvL",
+                    "cKtCMBsW5P4o3IjVJt+08FfGs7cyaHJifH6RCM2GBDUaNAoPPZm",
+                    "ioiKZcw6twMhdrjzVHiPFmolEXzItLmFHNwARAQABtDphZG1pbi",
+                    "AoSW5ub2dhbWVzIGRlYmlhbiByZXBvc2l0b3J5IGtleSkgPGl0Q",
+                    "Glubm9nYW1lcy5jb20+iQI3BBMBCgAhBQJY7Mr9AhsDBQsJCAcD",
+                    "BRUKCQgLBRYCAwEAAh4BAheAAAoJEKy7fO0+1wCYz5oP/iBSLv3",
+                    "h+DRCAMeV68EquhyOvGUIZuZ910wL7wW9lqoUmKCdrSoOvXxpE7",
+                    "z1TFegRfUtbnXYJYmELwp0SD5F/60ScCoW7bbTQdK4FHms0CYjU",
+                    "cJnRjRrQVyE0fiChql6CYif2tWWOR7L+COBeIKrSaqXDPw2X5A0",
+                    "mJ+QFRcVhNbz02FIfr1mIECVshN34x5RMnmJtd6ZNhcbldS26Fh",
+                    "xC5SrzFkAPExCFBVLiAsfEK51ED4QOfnRRYOlbBvDwL3XQBZtFV",
+                    "tznwI1DLg/JNVVXFM8sDei+eL3O5yoOVEuTBRvNH7ONlFRcBdFC",
+                    "dfSi1VvKVY2JEQX4R4BHyZvD/B2pcBeTM5puav5QuwKXppwHg4d",
+                    "Bbs1BrRsHWGMdqTJWGkwwVUdt3af6WSWD6BA+rv2I3DM7BMt6t/",
+                    "FK1BMapHGY2fj3gK8pWyi13R8tryr4ZdIa/RnwxWt8ySWclgDVS",
+                    "PxTcNE1Zn2fYDB/YkvTyF52dn3+6UW6mnjL45Hictqo9A6aOxre",
+                    "5dlwEyHXhurs/7UP0Ell20UEN1VsKDPE2V8pq+JFXQ+F2sLMEar",
+                    "4L5teopk78L7t0FibqmKcFRVgvseBbjm0xHfdTk4mXCDwbaBtX+",
+                    "E9qhd5e4brEYNx9I9I2fvXGw5sX6Qdty9HnEQOKGMshEAfl2iCz",
+                    "J56n4CAkPnU50v=KPbA",
+                    "-----END PGP PUBLIC KEY BLOCK-----"
+                ]
+            }
+        ]
+    }
 ]
 
 # The list is ordered from more important to less important.  The next
