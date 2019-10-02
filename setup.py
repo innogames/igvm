@@ -20,6 +20,7 @@ setup(
     },
     package_data={
         'igvm': [
+            'templates/aws_user_data.cfg',
             'templates/domain.xml',
             'templates/etc/network/interfaces',
             'templates/etc/fstab',
