@@ -54,6 +54,7 @@
 {% endif %}
       <virtualport type='openvswitch'/>
       <model type='virtio'/>
+      <driver name='vhost' queues='{{ num_cpu }}'/>
     </interface>
     <serial type='pty'>
       <target port='0'/>
