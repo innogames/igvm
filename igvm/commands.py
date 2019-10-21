@@ -227,32 +227,29 @@ def change_address(vm_hostname, new_address, offline=False):
                     vm.dataset_obj['datacenter_type'])
             )
 
-        old_address = vm.dataset_obj['intern_ip']
         new_address = ip_address(new_address)
 
-        if old_address == new_address:
+        if vm.dataset_obj['intern_ip'] == new_address:
             raise ConfigError('New IP address is the same as the old one!')
+
+        if not vm.hypervisor.get_vlan_network(new_address):
+            raise ConfigError('Current hypervisor does not support new subnet!')
 
         vm_was_running = vm.is_running()
 
-        vm.dataset_obj['intern_ip'] = new_address
-        vm.dataset_obj.commit()
-
-        if vm_was_running:
-            vm.shutdown()
-
-        try:
-            with Transaction() as transaction:
-                vm.hypervisor.mount_vm_storage(vm, transaction)
-                vm.run_puppet()
-                vm.hypervisor.redefine_vm(vm)
-                vm.hypervisor.umount_vm_storage(vm)
-                if vm_was_running:
-                    vm.start()
-        except BaseException:
-            vm.dataset_obj['intern_ip'] = old_address
-            vm.dataset_obj.commit()
-            raise
+        with Transaction() as transaction:
+            if vm_was_running:
+                vm.shutdown(
+                    transaction=transaction,
+                    check_vm_up_on_transaction=False,
+                )
+            vm.change_address(new_address, transaction=transaction)
+            vm.hypervisor.mount_vm_storage(vm, transaction=transaction)
+            vm.run_puppet()
+            vm.hypervisor.redefine_vm(vm)
+            vm.hypervisor.umount_vm_storage(vm)
+            if vm_was_running:
+                vm.start()
 
 
 @with_fabric_settings
