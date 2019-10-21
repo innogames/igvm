@@ -198,6 +198,24 @@ def parse_args():
         action='store_true',
         help='Perform IP address change offline',
     )
+    subparser.add_argument(
+        '--migrate',
+        action='store_true',
+        help='Migrate VM to new HV while changing IP address',
+    )
+    subparser.add_argument(
+        '--ignore-reserved',
+        dest='allow_reserved_hv',
+        action='store_true',
+        help='Allow migration to a Host which has the state online_reserved',
+    )
+    subparser.add_argument(
+        '--offline-transport',
+        default='drbd',
+        help=(
+            'Specify drbd (default) or netcat transport to migrate disk image'
+        ),
+    )
 
     subparser = subparsers.add_parser(
         'disk-set',

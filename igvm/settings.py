@@ -120,6 +120,7 @@ HYPERVISOR_ATTRIBUTES = [
     'libvirt_pool_used_gib',
     'num_cpu',
     'os',
+    'route_network',
     'state',
     {
         'vlan_networks': [

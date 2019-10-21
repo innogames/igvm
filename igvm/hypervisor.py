@@ -229,7 +229,7 @@ class Hypervisor(Host):
         if not self.get_vlan_network(vm.dataset_obj['intern_ip']):
             raise HypervisorError(
                 'Hypervisor "{}" does not support route_network "{}".'
-                .format(self.fqdn, vm.dataset_obj['route_network'])
+                .format(self.fqdn, vm.route_network)
             )
 
     def define_vm(self, vm, transaction=None):

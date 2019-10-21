@@ -717,11 +717,16 @@ class VM(Host):
     def restore_address(self):
         self.dataset_obj['intern_ip'] = self.old_address
         self.dataset_obj.commit()
+        self.route_network = self.old_network
 
-    def change_address(self, new_address, transaction=None):
+    def change_address(self, new_address, new_network, transaction=None):
+        # All queries to Serveradmin are kept in commands.py.
+        # That's why this metod receives both new address and new network.
         self.old_address = self.dataset_obj['intern_ip']
+        self.old_network = self.route_network
         self.dataset_obj['intern_ip'] = new_address
         self.dataset_obj.commit()
+        self.route_network = new_network
 
         if transaction:
             transaction.on_rollback('restore IP address', self.restore_address)
