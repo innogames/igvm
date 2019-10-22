@@ -2,6 +2,7 @@
 
 Copyright (c) 2018 InnoGames GmbH
 """
+from math import ceil
 
 import boto3
 import logging
@@ -11,7 +12,7 @@ import tqdm
 
 from base64 import b64decode
 from botocore.exceptions import ClientError
-from fabric.api import cd, get, hide, put, run, settings
+from fabric.api import cd, get, hide, put, run, settings, sudo
 from fabric.contrib.files import upload_template
 from fabric.exceptions import NetworkError
 from hashlib import sha1, sha256
@@ -713,3 +714,57 @@ class VM(Host):
 
     def copy_postboot_script(self, script):
         self.put('/buildvm-postboot', script, '0755')
+
+    def aws_disk_set(self, size: int, timeout_disk_resize: int = 60) -> None:
+        """AWS disk set
+
+        Resize a disk in AWS.
+
+        :param: size: New disk_size
+        :param: timeout_disk_resize: Timeout to for disk resizing within VM
+
+        :raises: VMError: Generic exception for VM errors of all kinds
+        """
+
+        ec2 = boto3.resource('ec2')
+
+        response = ec2.Instance(self.dataset_obj['aws_instance_id'])
+        for vol in response.volumes.all():
+            volume_id = vol.id
+            break
+
+        ec2 = boto3.client('ec2')
+        ec2.modify_volume(VolumeId=volume_id, Size=int(size))
+
+        partition = self.run('findmnt -nro SOURCE /')
+        disk = self.run('lsblk -nro PKNAME {}'.format(partition))
+        new_disk_size = self.run('lsblk -bdnro size /dev/{}'.format(disk))
+        new_disk_size_gib = int(new_disk_size) / 1024 / 1024 / 1024
+
+        while timeout_disk_resize and size != new_disk_size_gib:
+            timeout_disk_resize -= 1
+            time.sleep(1)
+            new_disk_size = self.run('lsblk -bdnro size /dev/{}'.format(disk))
+            new_disk_size_gib = int(new_disk_size) / 1024 / 1024 / 1024
+
+            if timeout_disk_resize == 0:
+                raise VMError('Timeout for disk resize reached')
+
+        with settings(
+            host_string=self.dataset_obj['hostname'],
+            warn_only=True,
+        ):
+            disk_resize = self.run('growpart /dev/{} 1'.format(disk))
+            if disk_resize.succeeded:
+                fs_resize = self.run('resize2fs {}'.format(partition))
+                if fs_resize.succeeded:
+                    log.info(
+                        'successfully resized disk of {} to {}GB'.format(
+                            self.dataset_obj['hostname'], size)
+                    )
+                    return
+
+            raise VMError('disk resize for {} failed'.format(
+                self.dataset_obj['hostname'])
+            )
+

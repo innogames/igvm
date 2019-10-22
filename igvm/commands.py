@@ -181,14 +181,6 @@ def disk_set(vm_hostname, size):
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(vm_hostname))
 
-        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
-            raise NotImplementedError(
-                'This operation is not yet supported for {}'.format(
-                    vm.dataset_obj['igvm_operation_mode'])
-            )
-
-        _check_defined(vm)
-
         current_size_gib = vm.dataset_obj['disk_size_gib']
         if size.startswith('+'):
             new_size_gib = current_size_gib + parse_size(size[1:], 'g')
@@ -200,7 +192,18 @@ def disk_set(vm_hostname, size):
         if new_size_gib == vm.dataset_obj['disk_size_gib']:
             raise Warning('Disk size is the same.')
 
-        vm.hypervisor.vm_set_disk_size_gib(vm, new_size_gib)
+        if vm.dataset_obj['igvm_operation_mode'] == 'aws':
+            vm.aws_disk_set(new_size_gib)
+        elif vm.dataset_obj['igvm_operation_mode'] == 'kvm':
+            _check_defined(vm)
+
+            vm.hypervisor.vm_set_disk_size_gib(vm, new_size_gib)
+
+        else:
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    vm.dataset_obj['igvm_operation_mode'])
+            )
 
         vm.dataset_obj['disk_size_gib'] = new_size_gib
         vm.dataset_obj.commit()
@@ -571,7 +574,6 @@ def vm_sync(vm_hostname):
             log.info(
                 '"{}" is already synchronized on Serveradmin.'.format(vm.fqdn)
             )
-
 
 @with_fabric_settings  # NOQA: C901
 def host_info(vm_hostname):
