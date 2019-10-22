@@ -273,10 +273,8 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
                 hostname=vm.dataset_obj['hostname'].rstrip('.ig.local'),
                 fqdn=vm.dataset_obj['hostname'],
                 apt_repos=AWS_CONFIG[0]['apt'],
-                puppet_master_addr=AWS_CONFIG[0]['puppet']['master_addr'],
                 puppet_master=vm.dataset_obj['puppet_master'],
                 puppet_ca=vm.dataset_obj['puppet_ca'],
-                puppet_ca_addr=AWS_CONFIG[0]['puppet']['ca_addr'],
             )
 
             vm.aws_build(
