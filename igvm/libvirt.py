@@ -24,7 +24,11 @@ def get_virtconn(fqdn):
     scripts_dir = path.join(path.dirname(__file__), 'scripts')
 
     if fqdn not in _conns:
-        url = 'qemu+ssh://{}{}/system?command={}/ssh_wrapper'.format(
+        url = (
+            'qemu+ssh://{}{}/system?'
+            'socket=/var/run/libvirt/libvirt-sock&'
+            'command={}/ssh_wrapper'
+        ).format(
             username, fqdn, scripts_dir
         )
         _conns[fqdn] = libvirt_open(url)
