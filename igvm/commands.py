@@ -793,9 +793,11 @@ def _get_hypervisor(hostname, allow_reserved=False):
 
 @contextmanager
 def _get_best_hypervisor(vm, hypervisor_states, offline=False):
+    hv_env = environ.get('IGVM_MODE', 'production')
+
     hypervisors = (Hypervisor(o) for o in Query({
         'servertype': 'hypervisor',
-        'environment': environ.get('IGVM_MODE', 'production'),
+        'environment': hv_env,
         'vlan_networks': vm.dataset_obj['route_network'],
         'state': Any(*hypervisor_states),
     }, HYPERVISOR_ATTRIBUTES))
@@ -835,7 +837,15 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
             hypervisor.release_lock()
         break
     else:
-        raise IGVMError('Cannot find a hypervisor')
+        raise IGVMError(
+            (
+                'Cannot find hypervisor matching environment: {}, '
+                'states: {}, vlan_network: {}'
+            ).format(
+                hv_env, ', '.join(hypervisor_states),
+                vm.dataset_obj['route_network'],
+            )
+        )
 
 
 @contextmanager
