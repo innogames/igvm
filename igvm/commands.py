@@ -284,6 +284,9 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
                 debug_puppet=debug_puppet,
                 postboot=user_data
             )
+            attributes = vm.aws_sync()
+            for attr, val in attributes.items():
+                vm.dataset_obj[attr] = val
         elif vm.dataset_obj['igvm_operation_mode'] == 'kvm':
             if vm.hypervisor:
                 es.enter_context(_lock_hv(vm.hypervisor))
@@ -546,15 +549,17 @@ def vm_sync(vm_hostname):
     This command collects actual resource allocation of a VM from the
     hypervisor and overwrites outdated attribute values in Serveradmin."""
     with _get_vm(vm_hostname) as vm:
-        if vm.dataset_obj['igvm_operation_mode'] != 'kvm':
+        if vm.dataset_obj['igvm_operation_mode'] == 'aws':
+            attributes = vm.aws_sync()
+        elif vm.dataset_obj['igvm_operation_mode'] == 'kvm':
+            _check_defined(vm)
+            attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
+        else:
             raise NotImplementedError(
                 'This operation is not yet supported for {}'.format(
                     vm.dataset_obj['igvm_operation_mode'])
             )
 
-        _check_defined(vm)
-
-        attributes = vm.hypervisor.vm_sync_from_hypervisor(vm)
         changed = []
         for attrib, value in attributes.items():
             current = vm.dataset_obj[attrib]
@@ -574,6 +579,7 @@ def vm_sync(vm_hostname):
             log.info(
                 '"{}" is already synchronized on Serveradmin.'.format(vm.fqdn)
             )
+
 
 @with_fabric_settings  # NOQA: C901
 def host_info(vm_hostname):

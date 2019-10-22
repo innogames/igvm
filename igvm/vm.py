@@ -2,9 +2,8 @@
 
 Copyright (c) 2018 InnoGames GmbH
 """
-from math import ceil
-
 import boto3
+import json
 import logging
 import os
 import time
@@ -12,7 +11,7 @@ import tqdm
 
 from base64 import b64decode
 from botocore.exceptions import ClientError
-from fabric.api import cd, get, hide, put, run, settings, sudo
+from fabric.api import cd, get, hide, put, run, settings
 from fabric.contrib.files import upload_template
 from fabric.exceptions import NetworkError
 from hashlib import sha1, sha256
@@ -768,3 +767,47 @@ class VM(Host):
                 self.dataset_obj['hostname'])
             )
 
+    def aws_sync(self) -> dict:
+        """AWS sync
+
+        Sync values like memory, disk_size_gib and num_cpu for AWS VMs.
+
+        :return: Values to sync as a dict of tuples
+        """
+
+        pricing = boto3.client('pricing', region_name='us-east-1')
+        response = pricing.get_products(
+            ServiceCode='AmazonEC2',
+            Filters=[
+                {
+                    'Type': 'TERM_MATCH',
+                    'Field': 'instanceType',
+                    'Value': self.dataset_obj['aws_instance_type'],
+                }
+            ],
+            MaxResults=1
+        )
+
+        price_list = json.loads(response['PriceList'][0])
+
+        memory = int(
+            price_list['product']['attributes']['memory'].split()[0]
+        ) * 1024
+
+        ec2 = boto3.resource('ec2')
+
+        response = ec2.Instance(self.dataset_obj['aws_instance_id'])
+        for vol in response.volumes.all():
+            volume_size = vol.size
+            break
+
+        cpu_options = response.cpu_options
+
+        sync_values = dict()
+        sync_values['memory'] = memory
+        sync_values['disk_size_gib'] = volume_size
+        sync_values['num_cpu'] = (
+            cpu_options['CoreCount'] * cpu_options['ThreadsPerCore']
+        )
+
+        return sync_values
