@@ -679,7 +679,7 @@ class VM(Host):
                     shell=False,
                 )
 
-        if self.dataset_obj['igvm_operation_mode'] == 'kvm':
+        if self.dataset_obj['datacenter_type'] == 'kvm.dct':
             self.block_autostart()
 
             puppet_command = (
