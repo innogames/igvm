@@ -68,29 +68,32 @@ KVM_HWMODEL_TO_CPUMODEL = {
     ],
 }
 
+P2P_MIGRATION = {
+    'uri': 'qemu+tls://{destination}/system',
+    'flags': VIR_MIGRATE_PEER2PEER | VIR_MIGRATE_TUNNELLED,
+}
 
 # There are various combinations of source and target HVs which come
 # with their own bugs and must be addressed separately.
 MIGRATE_CONFIG = {
+    # Using p2p migrations on Jessie causes qemu process to allocate
+    # as much memory as disk size on source HV.
     ('jessie', 'jessie'): {
-        # Using p2p migrations on Jessie causes qemu process to allocate
-        # as much memory as disk size on source HV.
         'uri': 'qemu+ssh://{destination}/system',
         'flags': 0,
     },
-    ('stretch', 'stretch'): {
-        # Live migration works only via p2p on Stretch. See Debian bug #796122.
-        'uri': 'qemu+tls://{destination}/system',
-        'flags': VIR_MIGRATE_PEER2PEER | VIR_MIGRATE_TUNNELLED,
-    },
-    ('stretch', 'jessie'): {
-        # Jessie can still correctly *receive* p2p migration.
-        'uri': 'qemu+tls://{destination}/system',
-        'flags': VIR_MIGRATE_PEER2PEER | VIR_MIGRATE_TUNNELLED,
-    },
-    # Jessie to Stretch is unsupported because VM after migration looses
+    # ('jessie', 'stretch') is unsupported because VM after migration looses
     # access to disk. After kernel reboots (not by panic, maybe by watchdog?)
     # it works fine again.
+    #
+    # Jessie can still correctly *receive* p2p migration.
+    ('stretch', 'jessie'): P2P_MIGRATION,
+    # Live migration works only via p2p on Stretch. See Debian bug #796122.
+    ('stretch', 'stretch'): P2P_MIGRATION,
+    ('stretch', 'buster'): P2P_MIGRATION,
+    # ('buster', 'stretch') impossible because of AppArmor on Buster
+    # "direct migration is not supported by the source host"
+    ('buster', 'buster'): P2P_MIGRATION,
 }
 
 # Arbitrarily chosen MAC address prefix with U/L bit set
