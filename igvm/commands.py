@@ -8,7 +8,7 @@ from os import environ
 from contextlib import contextmanager, ExitStack
 
 from adminapi.dataset import Query
-from adminapi.filters import Any, StartsWith
+from adminapi.filters import Any, StartsWith, Contains
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 from ipaddress import ip_address
@@ -210,7 +210,11 @@ def disk_set(vm_hostname, size):
 
 
 @with_fabric_settings
-def change_address(vm_hostname, new_address, offline=False):
+def change_address(
+    vm_hostname, new_address,
+    offline=False, migrate=False, allow_reserved_hv=False,
+    offline_transport='drbd',
+):
     """Change VMs IP address
 
     This is done by changing data in Serveradmin, running Puppet in VM and
@@ -227,32 +231,48 @@ def change_address(vm_hostname, new_address, offline=False):
                     vm.dataset_obj['datacenter_type'])
             )
 
-        old_address = vm.dataset_obj['intern_ip']
         new_address = ip_address(new_address)
 
-        if old_address == new_address:
+        if vm.dataset_obj['intern_ip'] == new_address:
             raise ConfigError('New IP address is the same as the old one!')
+
+        if not vm.hypervisor.get_vlan_network(new_address) and not migrate:
+            raise ConfigError('Current hypervisor does not support new subnet!')
+
+        new_network = Query(
+            {
+                'servertype': 'route_network',
+                'state': 'online',
+                'network_type': 'internal',
+                'intern_ip': Contains(new_address),
+            }
+        ).get()['hostname']
 
         vm_was_running = vm.is_running()
 
-        vm.dataset_obj['intern_ip'] = new_address
-        vm.dataset_obj.commit()
+        with Transaction() as transaction:
+            if vm_was_running:
+                vm.shutdown(
+                    transaction=transaction,
+                    check_vm_up_on_transaction=False,
+                )
+            vm.change_address(new_address, new_network, transaction=transaction)
 
-        if vm_was_running:
-            vm.shutdown()
-
-        try:
-            with Transaction() as transaction:
-                vm.hypervisor.mount_vm_storage(vm, transaction)
+            if migrate:
+                vm_migrate(
+                    vm_object=vm,
+                    run_puppet=True, offline=True, no_shutdown=True,
+                    allow_reserved_hv=allow_reserved_hv,
+                    offline_transport=offline_transport,
+                )
+            else:
+                vm.hypervisor.mount_vm_storage(vm, transaction=transaction)
                 vm.run_puppet()
                 vm.hypervisor.redefine_vm(vm)
                 vm.hypervisor.umount_vm_storage(vm)
-                if vm_was_running:
-                    vm.start()
-        except BaseException:
-            vm.dataset_obj['intern_ip'] = old_address
-            vm.dataset_obj.commit()
-            raise
+
+            if vm_was_running:
+                vm.start()
 
 
 @with_fabric_settings
@@ -321,40 +341,49 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
 
 
 @with_fabric_settings  # NOQA: C901
-def vm_migrate(vm_hostname, hypervisor_hostname=None,
+def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
                run_puppet=False, debug_puppet=False,
                offline=False, offline_transport='drbd',
                allow_reserved_hv=False, no_shutdown=False):
     """Migrate a VM to a new hypervisor."""
 
-    with ExitStack() as es:
-        vm = es.enter_context(
-            _get_vm(vm_hostname, allow_retired=True)
+    if not (bool(vm_hostname) ^ bool(vm_object)):
+        raise IGVMError(
+            'Only one of vm_hostname or vm_object can be given!'
         )
 
-        if vm.dataset_obj['datacenter_type'] != 'kvm.dct':
+    with ExitStack() as es:
+        if vm_object:
+            # VM given as object and hopefully already locked
+            _vm = vm_object
+        else:
+            _vm = es.enter_context(
+                _get_vm(vm_hostname, allow_retired=True)
+            )
+
+        if _vm.dataset_obj['datacenter_type'] != 'kvm.dct':
             raise NotImplementedError(
                 'This operation is not yet supported for {}'.format(
-                    vm.dataset_obj['datacenter_type'])
+                    _vm.dataset_obj['datacenter_type'])
             )
 
         if hypervisor_hostname:
             hypervisor = es.enter_context(_get_hypervisor(
                 hypervisor_hostname, allow_reserved=allow_reserved_hv
             ))
-            if vm.hypervisor.fqdn == hypervisor.fqdn:
+            if _vm.hypervisor.fqdn == hypervisor.fqdn:
                 raise IGVMError(
                     'Source and destination Hypervisor is the same!'
                 )
         else:
             hypervisor = es.enter_context(_get_best_hypervisor(
-                vm,
+                _vm,
                 ['online', 'online_reserved'] if allow_reserved_hv
                 else ['online'],
                 offline,
             ))
 
-        was_running = vm.is_running()
+        was_running = _vm.is_running()
 
         # There is no point of online migration, if the VM is already shutdown.
         if not was_running:
@@ -365,43 +394,43 @@ def vm_migrate(vm_hostname, hypervisor_hostname=None,
 
         # Validate destination hypervisor can run the VM (needs to happen after
         # setting new IP!)
-        hypervisor.check_vm(vm, offline)
+        hypervisor.check_vm(_vm, offline)
 
         # Require VM to be in sync with serveradmin
-        _check_attributes(vm)
+        _check_attributes(_vm)
 
-        vm.check_serveradmin_config()
+        _vm.check_serveradmin_config()
 
         with Transaction() as transaction:
-            vm.hypervisor.migrate_vm(
-                vm, hypervisor, offline, offline_transport, transaction,
+            _vm.hypervisor.migrate_vm(
+                _vm, hypervisor, offline, offline_transport, transaction,
                 no_shutdown,
             )
 
-            previous_hypervisor = vm.hypervisor
-            vm.hypervisor = hypervisor
+            previous_hypervisor = _vm.hypervisor
+            _vm.hypervisor = hypervisor
 
             def _reset_hypervisor():
-                vm.hypervisor = previous_hypervisor
+                _vm.hypervisor = previous_hypervisor
 
             transaction.on_rollback('reset hypervisor', _reset_hypervisor)
 
             if run_puppet:
-                hypervisor.mount_vm_storage(vm, transaction)
-                vm.run_puppet(debug=debug_puppet)
-                hypervisor.umount_vm_storage(vm)
+                hypervisor.mount_vm_storage(_vm, transaction)
+                _vm.run_puppet(debug=debug_puppet)
+                hypervisor.umount_vm_storage(_vm)
 
             if offline and was_running:
-                vm.start(transaction=transaction)
-            vm.reset_state()
+                _vm.start(transaction=transaction)
+            _vm.reset_state()
 
             # Update Serveradmin
-            vm.dataset_obj['hypervisor'] = hypervisor.dataset_obj['hostname']
-            vm.dataset_obj.commit()
+            _vm.dataset_obj['hypervisor'] = hypervisor.dataset_obj['hostname']
+            _vm.dataset_obj.commit()
 
         # If removing the existing VM fails we shouldn't risk undoing the newly
         # migrated one.
-        previous_hypervisor.undefine_vm(vm)
+        previous_hypervisor.undefine_vm(_vm)
 
 
 @with_fabric_settings
@@ -796,10 +825,12 @@ def _get_hypervisor(hostname, allow_reserved=False):
 
 @contextmanager
 def _get_best_hypervisor(vm, hypervisor_states, offline=False):
+    hv_env = environ.get('IGVM_MODE', 'production')
+
     hypervisors = (Hypervisor(o) for o in Query({
         'servertype': 'hypervisor',
-        'environment': environ.get('IGVM_MODE', 'production'),
-        'vlan_networks': vm.dataset_obj['route_network'],
+        'environment': hv_env,
+        'vlan_networks': vm.route_network,
         'state': Any(*hypervisor_states),
     }, HYPERVISOR_ATTRIBUTES))
 
@@ -838,7 +869,15 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
             hypervisor.release_lock()
         break
     else:
-        raise IGVMError('Cannot find a hypervisor')
+        raise IGVMError(
+            (
+                'Cannot find hypervisor matching environment: {}, '
+                'states: {}, vlan_network: {}'
+            ).format(
+                hv_env, ', '.join(hypervisor_states),
+                vm.route_network,
+            )
+        )
 
 
 @contextmanager
