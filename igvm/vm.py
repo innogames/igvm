@@ -2,27 +2,30 @@
 
 Copyright (c) 2018 InnoGames GmbH
 """
-import boto3
 import json
 import logging
 import os
+import random
 import time
-import tqdm
-
 from base64 import b64decode
-from botocore.exceptions import ClientError
-from fabric.api import cd, get, hide, put, run, settings
-from fabric.contrib.files import upload_template
-from fabric.exceptions import NetworkError
 from hashlib import sha1, sha256
 from io import BytesIO
 from re import compile as re_compile
 from typing import Optional
 from uuid import uuid4
 
+import boto3
+import tqdm
+from adminapi.dataset import Query
+from botocore.exceptions import ClientError
+from fabric.api import cd, get, hide, put, run, settings
+from fabric.contrib.files import upload_template
+from fabric.exceptions import NetworkError
+from fabric.operations import sudo
+
 from igvm.exceptions import ConfigError, RemoteCommandError, VMError
 from igvm.host import Host
-from igvm.settings import AWS_RETURN_CODES
+from igvm.settings import AWS_RETURN_CODES, COMMON_FABRIC_SETTINGS
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
 
@@ -669,15 +672,36 @@ class VM(Host):
         """Runs Puppet in chroot on the hypervisor."""
 
         if clear_cert:
-            with settings(
-                host_string=self.dataset_obj['puppet_ca'],
-                user='root',
-                warn_only=True,
-            ):
-                run(
-                    '/usr/bin/puppet cert clean {}'.format(self.fqdn),
-                    shell=False,
+            puppet_ca_type = Query(
+                {
+                    'hostname': self.dataset_obj['puppet_ca'],
+                },
+                ['servertype'],
+            ).get()['servertype']
+
+            if puppet_ca_type not in ['vm', 'public_domain']:
+                raise ConfigError(
+                    'Servertype {} not supported for puppet_ca'.format(
+                        puppet_ca_type,
+                    ),
                 )
+
+            if puppet_ca_type == 'vm':
+                self.clean_cert(self.dataset_obj['puppet_ca'])
+            else:
+                ca_query = Query(
+                    {'domain': self.dataset_obj['puppet_ca']},
+                    [{'lb_nodes': ['hostname', 'state']}],
+                )
+                ca_hosts = [
+                    lb_node['hostname']
+                    for res in ca_query
+                    for lb_node in res['lb_nodes']
+                    if lb_node['state'] in ['online', 'deploy_online']
+                ]
+                random.shuffle(ca_hosts)
+
+                self.clean_cert(ca_hosts[0])
 
         if self.dataset_obj['datacenter_type'] == 'kvm.dct':
             self.block_autostart()
@@ -702,6 +726,28 @@ class VM(Host):
                 raise VMError('Initial puppetrun failed') from e
 
             self.unblock_autostart()
+
+    def clean_cert(self, ca_host, user=None):
+        if 'user' in COMMON_FABRIC_SETTINGS:
+            user = COMMON_FABRIC_SETTINGS['user']
+
+        with settings(
+            host_string=ca_host,
+            user=user,
+            warn_only=True,
+        ):
+            version = sudo('/usr/bin/puppet --version', shell=False, quiet=True)
+
+            if not version.succeeded or int(version.split('.')[0]) < 6:
+                sudo('/usr/bin/puppet cert clean {}'.format(
+                    self.fqdn,
+                ), shell=False)
+            else:
+                sudo(
+                    '/opt/puppetlabs/bin/puppetserver ca clean '
+                    '--certname {}'.format(self.fqdn),
+                    shell=False,
+                )
 
     def block_autostart(self):
         fd = BytesIO()
