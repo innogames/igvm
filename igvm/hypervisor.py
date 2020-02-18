@@ -775,7 +775,7 @@ class Hypervisor(Host):
 
     def check_netcat(self, port):
         pid = self.run(
-            'pgrep -f "^/bin/nc.traditional -l -p {}"'
+            'pgrep -f "^/bin/nc.openbsd -l -p {}"'
             .format(port),
             warn_only=True,
             silent=True
@@ -787,7 +787,7 @@ class Hypervisor(Host):
             )
 
     def kill_netcat(self, port):
-        self.run('pkill -f "^/bin/nc.traditional -l -p {}"'.format(port))
+        self.run('pkill -f "^/bin/nc.openbsd -l -p {}"'.format(port))
 
     @contextmanager
     def netcat_to_device(self, device):
@@ -799,7 +799,7 @@ class Hypervisor(Host):
 
         # Using DD lowers load on device with big enough Block Size
         self.run(
-            'nohup /bin/nc.traditional -l -p {0} | dd of={1} obs=1048576 &'
+            'nohup /bin/nc.openbsd -l -p {0} | dd of={1} obs=1048576 &'
             .format(port, device)
         )
         try:
@@ -812,6 +812,6 @@ class Hypervisor(Host):
         # Using DD lowers load on device with big enough Block Size
         self.run(
             'dd if={0} ibs=1048576 | pv -f -s {1} '
-            '| /bin/nc.traditional -q 1 {2} {3}'
+            '| /bin/nc.openbsd -q 1 {2} {3}'
             .format(device, size, *listener)
         )
