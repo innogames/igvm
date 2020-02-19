@@ -66,7 +66,7 @@ class Host(object):
         settings = COMMON_FABRIC_SETTINGS.copy()
         settings.update({
             'abort_exception': RemoteCommandError,
-            'host_string': str(self.dataset_obj['intern_ip']),
+            'host_string': str(self.dataset_obj['hostname']),
         })
         settings.update(kwargs)
         return fabric.api.settings(*args, **settings)
