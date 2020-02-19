@@ -8,10 +8,11 @@ from __future__ import print_function
 from logging import INFO, basicConfig
 from os import environ
 from pipes import quote
-from re import match
+from re import match, split
 from tempfile import NamedTemporaryFile
 from unittest import TestCase
 from uuid import uuid4
+from math import log, ceil
 
 from adminapi.dataset import Query
 from fabric.api import env
@@ -65,12 +66,26 @@ if environ.get('BUILD_NUMBER'):
 else:
     JENKINS_BUILD = uuid4()
 
+if environ.get('PYTEST_XDIST_WORKER'):
+    PYTEST_XDIST_WORKER = int(
+        split('[a-zA-Z]+', environ['PYTEST_XDIST_WORKER'])[1]
+    )
+else:
+    PYTEST_XDIST_WORKER = 0
+
+if environ.get('PYTEST_XDIST_WORKER_COUNT'):
+    PYTEST_XDIST_WORKER_COUNT = int(environ['PYTEST_XDIST_WORKER_COUNT'])
+else:
+    PYTEST_XDIST_WORKER_COUNT = 0
+
+
 VM_NET = 'igvm-net-{}-aw.test.ig.local'.format(JENKINS_EXECUTOR)
 
-VM_HOSTNAME_PATTERN = 'igvm-{}-{}.test.ig.local'
+VM_HOSTNAME_PATTERN = 'igvm-{}-{}-{}.test.ig.local'
 VM_HOSTNAME = VM_HOSTNAME_PATTERN.format(
     JENKINS_BUILD,
     JENKINS_EXECUTOR,
+    PYTEST_XDIST_WORKER,
 )
 
 
@@ -95,12 +110,17 @@ def setUpModule():
     if len(HYPERVISORS) < 2:
         raise Exception('Not enough testing hypervisors found')
 
+    ip_address = get_next_address(VM_NET, 1)
+
+    # Delete all old Serveradmin objects first because we're not using
+    # Serveradmin's way of getting a free IP address and anything left
+    # will cause IP address conflict.
+    removeConflictingVMs(ip_address)
+
     query = Query()
     vm_obj = query.new_object('vm')
     vm_obj['hostname'] = VM_HOSTNAME
-    vm_obj['intern_ip'] = Query(
-        {'hostname': VM_NET}, ['intern_ip']
-    ).get_free_ip_addrs()
+    vm_obj['intern_ip'] = ip_address
     vm_obj['project'] = 'test'
     vm_obj['team'] = 'test'
 
@@ -115,6 +135,7 @@ def setUpModule():
             if match(('^([0-9]+_)?' + VM_HOSTNAME_PATTERN + '$').format(
                     '[0-9]+',
                     JENKINS_EXECUTOR,
+                    '[0-9]+',
                 ),
                 domain.name(),
             ):
@@ -126,6 +147,7 @@ def setUpModule():
             if match(('^([0-9]+_)?' + VM_HOSTNAME_PATTERN + '$').format(
                     '[0-9]+',
                     JENKINS_EXECUTOR,
+                    '[0-9]+',
                 ),
                 vol_name,
             ):
@@ -139,6 +161,13 @@ def setUpModule():
                 hv.get_storage_pool().storageVolLookupByName(
                     vol_name,
                 ).delete()
+
+
+def removeConflictingVMs(ip_addr):
+    query = Query({'intern_ip': ip_addr}, ['hostname'])
+    for obj in query:
+        obj.delete()
+    query.commit()
 
 
 def tearDownModule():
@@ -157,6 +186,23 @@ def cmd(cmd, *args, **kwargs):
         escaped_kwargs[key] = quote(str(value))
 
     return cmd.format(*escaped_args, **escaped_kwargs)
+
+
+def get_next_address(vm_net, index):
+    global PYTEST_XDIST_WORKER, PYTEST_XDIST_WORKER_COUNT
+
+    subnet_levels = ceil(log(PYTEST_XDIST_WORKER_COUNT, 2))
+    project_network = Query({'hostname': VM_NET}, ['intern_ip'] ).get()
+
+    try:
+        subnets = project_network['intern_ip'].subnets(subnet_levels)
+    except ValueError:
+        raise Exception(
+            ('Can\'t split {} into enough subnets '
+            'for {} parallel tests').format(vm_net, PYTEST_XDIST_WORKER_COUNT)
+        )
+
+    return [s for s in subnets][PYTEST_XDIST_WORKER][index]
 
 
 class IGVMTest(TestCase):
@@ -203,7 +249,7 @@ class IGVMTest(TestCase):
         self.uid_name = '{}_{}'.format(obj['object_id'], obj['hostname'])
 
     def tearDown(self):
-        """Clean up all HVs after every test"""
+        """Forcibly remove current test's VM from all HVs"""
 
         for hv in HYPERVISORS:
             hv.get_storage_pool().refresh()
@@ -571,9 +617,7 @@ class MigrationTest(IGVMTest):
         # We don't have a way to ask for new IP address from Serveradmin
         # and lock it for us. The method below will usually work fine.
         # When it starts failing, we must develop retry method.
-        new_address = next(
-            Query({'hostname': VM_NET}, ['intern_ip']).get_free_ip_addrs()
-        )
+        new_address = get_next_address(VM_NET, 2)
 
         change_address(VM_HOSTNAME, new_address, offline=True)
 
