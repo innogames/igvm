@@ -66,6 +66,9 @@ KVM_HWMODEL_TO_CPUMODEL = {
         'Dell_M620', 'Dell_M630', 'Dell_M640',
         'Dell_R620', 'Dell_R640',
     ],
+    'EPYC': [
+        'Dell_R6515',
+    ],
 }
 
 P2P_MIGRATION = {
