@@ -430,7 +430,7 @@ class VM(Host):
             result['status'] = 'new'
         return result
 
-    def build(self, run_puppet=True, debug_puppet=False, postboot=None):
+    def build(self, run_puppet=True, debug_puppet=False, postboot=None, rebuild=False):
         """Builds a VM."""
         hypervisor = self.hypervisor
         self.check_serveradmin_config()
@@ -457,6 +457,10 @@ class VM(Host):
 
             if run_puppet:
                 self.run_puppet(clear_cert=True, debug=debug_puppet)
+                if rebuild:
+                    self.run_puppet(clear_cert=True, debug=debug_puppet)
+                else:
+                    self.run_puppet(debug=debug_puppet)
 
             if postboot is not None:
                 self.copy_postboot_script(postboot)
@@ -672,37 +676,7 @@ class VM(Host):
         """Runs Puppet in chroot on the hypervisor."""
 
         if clear_cert:
-            puppet_ca_type = Query(
-                {
-                    'hostname': self.dataset_obj['puppet_ca'],
-                },
-                ['servertype'],
-            ).get()['servertype']
-
-            if puppet_ca_type not in ['vm', 'public_domain']:
-                raise ConfigError(
-                    'Servertype {} not supported for puppet_ca'.format(
-                        puppet_ca_type,
-                    ),
-                )
-
-            if puppet_ca_type == 'vm':
-                self.clean_cert(self.dataset_obj['puppet_ca'])
-            else:
-                ca_query = Query(
-                    {'domain': self.dataset_obj['puppet_ca']},
-                    [{'lb_nodes': ['hostname', 'state']}],
-                )
-                ca_hosts = [
-                    lb_node['hostname']
-                    for res in ca_query
-                    for lb_node in res['lb_nodes']
-                    if lb_node['state'] in ['online', 'deploy_online']
-                ]
-                random.shuffle(ca_hosts)
-
-                self.clean_cert(ca_hosts[0])
-
+            self.clean_cert()
         if self.dataset_obj['datacenter_type'] == 'kvm.dct':
             self.block_autostart()
 
@@ -727,9 +701,40 @@ class VM(Host):
 
             self.unblock_autostart()
 
-    def clean_cert(self, ca_host, user=None):
+    def clean_cert(self, user=None):
         if 'user' in COMMON_FABRIC_SETTINGS:
             user = COMMON_FABRIC_SETTINGS['user']
+
+        puppet_ca_type = Query(
+            {
+                'hostname': self.dataset_obj['puppet_ca'],
+            },
+            ['servertype'],
+        ).get()['servertype']
+
+        if puppet_ca_type not in ['vm', 'public_domain']:
+            raise ConfigError(
+                'Servertype {} not supported for puppet_ca'.format(
+                    puppet_ca_type,
+                ),
+            )
+
+        if puppet_ca_type == 'vm':
+            ca_host = self.dataset_obj['puppet_ca']
+        else:
+            ca_query = Query(
+                {'domain': self.dataset_obj['puppet_ca']},
+                [{'lb_nodes': ['hostname', 'state']}],
+            )
+            ca_hosts = [
+                lb_node['hostname']
+                for res in ca_query
+                for lb_node in res['lb_nodes']
+                if lb_node['state'] in ['online', 'deploy_online']
+            ]
+            random.shuffle(ca_hosts)
+
+            ca_hosts = ca_hosts[0]
 
         with settings(
             host_string=ca_host,

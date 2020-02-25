@@ -325,11 +325,15 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
 
             if rebuild and vm.hypervisor.vm_defined(vm):
                 vm.hypervisor.undefine_vm(vm)
+                is_rebuild = True
+            else:
+                is_rebuild = False
 
             vm.build(
                 run_puppet=run_puppet,
                 debug_puppet=debug_puppet,
                 postboot=postboot,
+                rebuild=is_rebuild
             )
         else:
             raise NotImplementedError(
@@ -550,6 +554,9 @@ def vm_delete(vm_hostname, retire=False):
                 'This operation is not yet supported for {}'.format(
                     vm.dataset_obj['datacenter_type'])
             )
+
+        # Delete the machines cert from puppet in case we want to build one with the same name in the future
+        vm.clean_cert()
 
         # Delete the serveradmin object of this VM
         # or update its state to 'retired' if retire is True.
