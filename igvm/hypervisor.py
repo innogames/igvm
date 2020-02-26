@@ -77,8 +77,8 @@ class Hypervisor(Host):
         ).attrib['type']
 
         if (
-            self._storage_type not in HOST_RESERVED_MEMORY or
-            self._storage_type not in RESERVED_DISK
+            self._storage_type not in HOST_RESERVED_MEMORY
+            or self._storage_type not in RESERVED_DISK
         ):
             raise HypervisorError(
                 'Unsupported storage type {} on hypervisor {}'
@@ -92,9 +92,10 @@ class Hypervisor(Host):
         for vol_name in self.get_storage_pool().listVolumes():
             if (
                 # Match the LV based on the object_id encoded within its name
-                vm.match_uid_name(vol_name) or
+                vm.match_uid_name(vol_name)
                 # XXX: Deprecated matching for LVs w/o an uid_name
-                domain and vol_name == domain.name()
+                or domain
+                and vol_name == domain.name()
             ):
                 return self.get_storage_pool().storageVolLookupByName(vol_name)
 
@@ -525,9 +526,10 @@ class Hypervisor(Host):
             name = domain.name()
             if not (
                 # Match the domain based on the object_id encoded in its name
-                vm.match_uid_name(name) or
+                vm.match_uid_name(name)
                 # XXX: Deprecated matching for domains w/o an uid_name
-                vm.fqdn == name or vm.fqdn.startswith(name + '.')
+                or vm.fqdn == name
+                or vm.fqdn.startswith(name + '.')
             ):
                 continue
 
@@ -570,13 +572,15 @@ class Hypervisor(Host):
             )
             target_hypervisor.create_vm_storage(vm, transaction)
             if offline_transport == 'drbd':
-                if (
-                    self.get_storage_type() != 'logical' or
-                    target_hypervisor.get_storage_type() != 'logical'
-                ):
+                is_lvm_storage = (
+                    self.get_storage_type() == 'logical'
+                    and target_hypervisor.get_storage_type() == 'logical'
+                )
+
+                if not is_lvm_storage:
                     raise NotImplementedError(
                         'DRBD migration is supported only between hypervisors '
-                        ' using LVM storage!'
+                        'using LVM storage!'
                     )
 
                 host_drbd = DRBD(self, vm, master_role=True)

@@ -78,11 +78,12 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
 
         for vm in hv.dataset_obj['vms']:
             vm_function = vm['function']
+            is_offline_migration = (
+                offline is not None
+                and (offline == [] or vm_function in offline)
+            )
 
-            if (
-                offline is not None and
-                (offline == [] or vm_function in offline)
-            ):
+            if is_offline_migration:
                 if dry_run:
                     log.info('Would migrate {} offline'.format(vm['hostname']))
                 else:
@@ -238,7 +239,8 @@ def change_address(
             raise ConfigError('New IP address is the same as the old one!')
 
         if not vm.hypervisor.get_vlan_network(new_address) and not migrate:
-            raise ConfigError('Current hypervisor does not support new subnet!')
+            err = 'Current hypervisor does not support new subnet!'
+            raise ConfigError(err)
 
         new_network = Query(
             {
@@ -257,7 +259,9 @@ def change_address(
                     transaction=transaction,
                     check_vm_up_on_transaction=False,
                 )
-            vm.change_address(new_address, new_network, transaction=transaction)
+            vm.change_address(
+                new_address, new_network, transaction=transaction,
+            )
 
             if migrate:
                 vm_migrate(
