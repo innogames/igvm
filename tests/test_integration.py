@@ -47,6 +47,7 @@ from igvm.settings import (
     VG_NAME,
 )
 from igvm.utils import parse_size
+from igvm.puppet import clean_cert
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -228,6 +229,7 @@ class IGVMTest(TestCase):
             'hypervisor',
             'repositories',
             'puppet_environment',
+            'puppet_ca',
         ]).get()
 
         # Fill in defaults in Serveradmin
@@ -246,6 +248,7 @@ class IGVMTest(TestCase):
         obj['puppet_environment'] = None
         obj['backup_disabled'] = True
         obj.commit()
+        clean_cert(obj)
         self.uid_name = '{}_{}'.format(obj['object_id'], obj['hostname'])
 
     def tearDown(self):
