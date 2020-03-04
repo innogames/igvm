@@ -6,11 +6,11 @@ Copyright (c) 2018 InnoGames GmbH
 import logging
 import re
 import time
-import concurrent.futures
 from uuid import uuid4
 from xml.dom import minidom
 from xml.etree import ElementTree
 
+from jinja2 import Environment, PackageLoader
 from libvirt import (
     VIR_DOMAIN_VCPU_MAXIMUM,
     VIR_DOMAIN_AFFECT_LIVE,
@@ -34,9 +34,7 @@ from igvm.settings import (
     VG_NAME,
     MIGRATE_CONFIG,
 )
-from igvm.utils import parse_size
-
-from jinja2 import Environment, PackageLoader
+from igvm.utils import parse_size, parallel
 
 log = logging.getLogger(__name__)
 
@@ -264,13 +262,19 @@ def migrate_live(source, destination, vm, domain):
     log.info('Starting online migration of vm {} from {} to {}'.format(
         vm, source, destination,
     ))
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
-    future = executor.submit(
+    future = parallel(
         migrate_background,
-        domain, source, destination,
-        migrate_params, migrate_flags,
-    )
+        args=[[
+            domain,
+            source,
+            destination,
+            migrate_params,
+            migrate_flags,
+        ]],
+        workers=1,
+        return_results=False,
+    )[0]
 
     try:
         while future.running():

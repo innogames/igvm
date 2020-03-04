@@ -4,14 +4,15 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
-from os import environ
+from collections import OrderedDict
 from contextlib import contextmanager, ExitStack
+from ipaddress import ip_address
+from os import environ
 
 from adminapi.dataset import Query
 from adminapi.filters import Any, StartsWith, Contains
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
-from ipaddress import ip_address
 from jinja2 import Environment, PackageLoader
 from libvirt import libvirtError
 
@@ -33,7 +34,7 @@ from igvm.settings import (
     VM_ATTRIBUTES,
 )
 from igvm.transaction import Transaction
-from igvm.utils import parse_size
+from igvm.utils import parse_size, parallel
 from igvm.vm import VM
 
 log = logging.getLogger(__name__)
@@ -77,11 +78,12 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
 
         for vm in hv.dataset_obj['vms']:
             vm_function = vm['function']
+            is_offline_migration = (
+                offline is not None
+                and (offline == [] or vm_function in offline)
+            )
 
-            if (
-                offline is not None and
-                (offline == [] or vm_function in offline)
-            ):
+            if is_offline_migration:
                 if dry_run:
                     log.info('Would migrate {} offline'.format(vm['hostname']))
                 else:
@@ -237,7 +239,8 @@ def change_address(
             raise ConfigError('New IP address is the same as the old one!')
 
         if not vm.hypervisor.get_vlan_network(new_address) and not migrate:
-            raise ConfigError('Current hypervisor does not support new subnet!')
+            err = 'Current hypervisor does not support new subnet!'
+            raise ConfigError(err)
 
         new_network = Query(
             {
@@ -256,7 +259,9 @@ def change_address(
                     transaction=transaction,
                     check_vm_up_on_transaction=False,
                 )
-            vm.change_address(new_address, new_network, transaction=transaction)
+            vm.change_address(
+                new_address, new_network, transaction=transaction,
+            )
 
             if migrate:
                 vm_migrate(
@@ -827,57 +832,66 @@ def _get_hypervisor(hostname, allow_reserved=False):
 def _get_best_hypervisor(vm, hypervisor_states, offline=False):
     hv_env = environ.get('IGVM_MODE', 'production')
 
+    # Get all (theoretically) possible HVs sorted by HV preferences
     hypervisors = (Hypervisor(o) for o in Query({
         'servertype': 'hypervisor',
         'environment': hv_env,
         'vlan_networks': vm.route_network,
         'state': Any(*hypervisor_states),
     }, HYPERVISOR_ATTRIBUTES))
+    hypervisors = sorted_hypervisors(HYPERVISOR_PREFERENCES, vm, hypervisors)
 
-    for hypervisor in sorted_hypervisors(
-        HYPERVISOR_PREFERENCES, vm, hypervisors
-    ):
-        # The actual resources are not checked during sorting for performance.
-        # We need to validate the hypervisor using the actual values before
-        # the final decision.
-        try:
-            hypervisor.acquire_lock()
-        except InvalidStateError as error:
-            log.warning(error)
-            continue
+    possible_hvs = OrderedDict()
+    for possible_hv in hypervisors:
+        possible_hvs[str(possible_hv)] = possible_hv
 
-        try:
-            hypervisor.check_vm(vm, offline)
-        except libvirtError as error:
-            hypervisor.release_lock()
-            log.warning(
-                'Preferred hypervisor "{}" is skipped: {}'.format(
-                    hypervisor, error)
-            )
-            continue
-        except HypervisorError as error:
-            hypervisor.release_lock()
-            log.warning(
-                'Preferred hypervisor "{}" is skipped: {}'.format(
-                    hypervisor, error)
-            )
-            continue
+    # Check all HVs in parallel. This will check live data on those HVs
+    # but without locking them. This allows us to do a real quick first
+    # filtering round. Below follows another one on the filtered HVs only.
+    results = parallel(
+        _check_vm,
+        identifiers=list(possible_hvs.keys()),
+        args=[
+            [possible_hv, vm, offline]
+            for possible_hv in possible_hvs.values()
+        ],
+    )
 
-        try:
-            yield hypervisor
-        finally:
-            hypervisor.release_lock()
-        break
-    else:
-        raise IGVMError(
-            (
-                'Cannot find hypervisor matching environment: {}, '
-                'states: {}, vlan_network: {}'
-            ).format(
-                hv_env, ', '.join(hypervisor_states),
-                vm.route_network,
-            )
+    # Remove unsupported HVs from the list
+    for checked_hv, success in results.items():
+        if not success:
+            possible_hvs.pop(checked_hv)
+
+    # No supported HV was found
+    not_found_err = IGVMError(
+        'Cannot find hypervisor matching environment: {}, '
+        'states: {}, vlan_network: {}, offline: {}'.format(
+            hv_env, ', '.join(hypervisor_states), vm.route_network, offline,
         )
+    )
+
+    if len(possible_hvs) == 0:
+        raise not_found_err
+
+    # Do another checking iteration, this time with HV locking
+    for possible_hv in possible_hvs.values():
+        try:
+            possible_hv.acquire_lock()
+        except InvalidStateError as e:
+            log.warning(e)
+            continue
+
+        if not _check_vm(possible_hv, vm, offline):
+            possible_hv.release_lock()
+            continue
+
+        try:
+            yield possible_hv
+            break
+        finally:
+            possible_hv.release_lock()
+    else:
+        raise not_found_err
 
 
 @contextmanager
@@ -894,3 +908,22 @@ def _check_attributes(vm):
     for attr, value in synced_attributes.items():
         if vm.dataset_obj[attr] != value:
             raise InconsistentAttributeError(vm, attr, value)
+
+
+def _check_vm(hv, vm, offline):
+    try:
+        hv.check_vm(vm, offline)
+
+        return True
+    except libvirtError as e:
+        log.warning(
+            'Preferred hypervisor "{}" is skipped: {}'.format(hv, e)
+        )
+
+        return False
+    except HypervisorError as e:
+        log.warning(
+            'Preferred hypervisor "{}" is skipped: {}'.format(hv, e)
+        )
+
+        return False

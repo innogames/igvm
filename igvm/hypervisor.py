@@ -3,14 +3,15 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 
-from contextlib import contextmanager
 import logging
 import math
+from contextlib import contextmanager
 from time import sleep
-
-from libvirt import VIR_DOMAIN_SHUTOFF
 from xml.etree import ElementTree
 
+from libvirt import VIR_DOMAIN_SHUTOFF
+
+from igvm.drbd import DRBD
 from igvm.exceptions import (
     ConfigError,
     HypervisorError,
@@ -18,7 +19,6 @@ from igvm.exceptions import (
     InvalidStateError,
     StorageError,
 )
-from igvm.drbd import DRBD
 from igvm.host import Host
 from igvm.kvm import (
     DomainProperties,
@@ -77,8 +77,8 @@ class Hypervisor(Host):
         ).attrib['type']
 
         if (
-            self._storage_type not in HOST_RESERVED_MEMORY or
-            self._storage_type not in RESERVED_DISK
+            self._storage_type not in HOST_RESERVED_MEMORY
+            or self._storage_type not in RESERVED_DISK
         ):
             raise HypervisorError(
                 'Unsupported storage type {} on hypervisor {}'
@@ -92,9 +92,10 @@ class Hypervisor(Host):
         for vol_name in self.get_storage_pool().listVolumes():
             if (
                 # Match the LV based on the object_id encoded within its name
-                vm.match_uid_name(vol_name) or
+                vm.match_uid_name(vol_name)
                 # XXX: Deprecated matching for LVs w/o an uid_name
-                domain and vol_name == domain.name()
+                or domain
+                and vol_name == domain.name()
             ):
                 return self.get_storage_pool().storageVolLookupByName(vol_name)
 
@@ -161,35 +162,10 @@ class Hypervisor(Host):
 
     def check_vm(self, vm, offline):
         """Check whether a VM can run on this hypervisor"""
-        if self.dataset_obj['state'] not in ['online', 'online_reserved']:
-            raise InvalidStateError(
-                'Hypervisor "{}" is not in online state ({}).'
-                .format(self.fqdn, self.dataset_obj['state'])
-            )
+        # Cheap checks should always be executed first to save time
+        # and fail early. Same goes for checks that are more likely to fail.
 
-        if self.vm_defined(vm):
-            raise HypervisorError(
-                'VM "{}" is already defined on "{}".'
-                .format(vm.fqdn, self.fqdn)
-            )
-
-        # Enough CPUs?
-        if vm.dataset_obj['num_cpu'] > self.dataset_obj['num_cpu']:
-            raise HypervisorError(
-                'Not enough CPUs. Destination Hypervisor has {0}, '
-                'but VM requires {1}.'
-                .format(self.dataset_obj['num_cpu'], vm.dataset_obj['num_cpu'])
-            )
-
-        # Enough memory?
-        free_mib = self.free_vm_memory()
-        if vm.dataset_obj['memory'] > free_mib:
-            raise HypervisorError(
-                'Not enough memory. '
-                'Destination Hypervisor has {:.2f} MiB but VM requires {} MiB '
-                .format(free_mib, vm.dataset_obj['memory'])
-            )
-
+        # Immediately check whether HV is even supported.
         if not offline:
             # Compatbile OS?
             os_pair = (vm.hypervisor.dataset_obj['os'], self.dataset_obj['os'])
@@ -215,6 +191,40 @@ class Hypervisor(Host):
                     .format(*hw_pair)
                 )
 
+        # HV in supported state?
+        if self.dataset_obj['state'] not in ['online', 'online_reserved']:
+            raise InvalidStateError(
+                'Hypervisor "{}" is not in online state ({}).'
+                .format(self.fqdn, self.dataset_obj['state'])
+            )
+
+        # Enough CPUs?
+        if vm.dataset_obj['num_cpu'] > self.dataset_obj['num_cpu']:
+            raise HypervisorError(
+                'Not enough CPUs. Destination Hypervisor has {0}, '
+                'but VM requires {1}.'
+                .format(self.dataset_obj['num_cpu'], vm.dataset_obj['num_cpu'])
+            )
+
+        # Proper VLAN?
+        if not self.get_vlan_network(vm.dataset_obj['intern_ip']):
+            raise HypervisorError(
+                'Hypervisor "{}" does not support route_network "{}".'
+                .format(self.fqdn, vm.route_network)
+            )
+
+        # Those checks below all require libvirt connection,
+        # so execute them last to avoid unnecessary overhead if possible.
+
+        # Enough memory?
+        free_mib = self.free_vm_memory()
+        if vm.dataset_obj['memory'] > free_mib:
+            raise HypervisorError(
+                'Not enough memory. '
+                'Destination Hypervisor has {:.2f} MiB but VM requires {} MiB '
+                .format(free_mib, vm.dataset_obj['memory'])
+            )
+
         # Enough disk?
         free_disk_space = self.get_free_disk_size_gib()
         vm_disk_size = float(vm.dataset_obj['disk_size_gib'])
@@ -225,11 +235,11 @@ class Hypervisor(Host):
                 .format(VG_NAME, RESERVED_DISK[self.get_storage_type()])
             )
 
-        # Proper VLAN?
-        if not self.get_vlan_network(vm.dataset_obj['intern_ip']):
+        # VM already defined? Least likely, if at all.
+        if self.vm_defined(vm):
             raise HypervisorError(
-                'Hypervisor "{}" does not support route_network "{}".'
-                .format(self.fqdn, vm.route_network)
+                'VM "{}" is already defined on "{}".'
+                .format(vm.fqdn, self.fqdn)
             )
 
     def define_vm(self, vm, transaction=None):
@@ -516,9 +526,10 @@ class Hypervisor(Host):
             name = domain.name()
             if not (
                 # Match the domain based on the object_id encoded in its name
-                vm.match_uid_name(name) or
+                vm.match_uid_name(name)
                 # XXX: Deprecated matching for domains w/o an uid_name
-                vm.fqdn == name or vm.fqdn.startswith(name + '.')
+                or vm.fqdn == name
+                or vm.fqdn.startswith(name + '.')
             ):
                 continue
 
@@ -561,13 +572,15 @@ class Hypervisor(Host):
             )
             target_hypervisor.create_vm_storage(vm, transaction)
             if offline_transport == 'drbd':
-                if (
-                    self.get_storage_type() != 'logical' or
-                    target_hypervisor.get_storage_type() != 'logical'
-                ):
+                is_lvm_storage = (
+                    self.get_storage_type() == 'logical'
+                    and target_hypervisor.get_storage_type() == 'logical'
+                )
+
+                if not is_lvm_storage:
                     raise NotImplementedError(
                         'DRBD migration is supported only between hypervisors '
-                        ' using LVM storage!'
+                        'using LVM storage!'
                     )
 
                 host_drbd = DRBD(self, vm, master_role=True)

@@ -8,6 +8,7 @@ from __future__ import division
 import logging
 import socket
 import time
+from concurrent import futures
 from os import path
 
 from paramiko import SSHConfig
@@ -167,3 +168,85 @@ def get_ssh_config(hostname):
             return ssh_config.lookup(hostname)
 
     return dict()
+
+
+def parallel(
+    fn,
+    workers=10,
+    return_results=True,
+    identifiers=None,
+    args=None,
+    kwargs=None,
+):
+    """Runs given function in separate threads for each argument/s given.
+
+    By default this function is blocking and returns the results when all
+    futures have resolved. If this is not desired then it is possible to get
+    back the raw futures by settings return_results=False.
+
+    It is possible to pass a list of identifiers that will be returned together
+    with the results when return_results=True. This can be helpful if a result
+    must be associated with something. Must be in the same order as args and
+    kwargs, if any. The other possibility would be to let fn itself return
+    some data structure that includes the necessary information.
+
+    :param: fns: Functions to execute
+    :param: workers: How many parallel worker threads
+    :param: return_results: Whether to return only the results after execution
+                            or to directly return the futures for more complex
+                            scenarios without waiting for their execution
+    :param: identifiers: List of identifiers that will be returned together
+                         with the corresponding results in the form of a dict
+    :param: args: List of lists to be passed as *args to each fn call
+    :param: kwargs: List of dicts to be passed as **kwargs to each fn call
+    """
+    # Check user input
+    if args is not None and kwargs is not None:
+        err = 'Amount of args must match those of kwargs'
+        assert len(args) == len(kwargs), err
+
+    if (args is not None or kwargs is not None) and identifiers is not None:
+        err = 'Amount of identifier must match those of kw/args'
+        n_args = len(args) if args is not None else len(kwargs)
+        assert n_args == len(identifiers), err
+
+    # Preprocessing for arguments lists
+    identifiers = [] if identifiers is None else identifiers
+    args = [] if args is None else args
+    kwargs = [] if kwargs is None else kwargs
+
+    if len(args) == 0 and len(kwargs) == 0:
+        args = [None]
+        kwargs = [None]
+    else:
+        if len(args) == 0:
+            args = [[] for _ in range(len(kwargs))]
+        if len(kwargs) == 0:
+            kwargs = [dict() for _ in range(len(args))]
+
+    # Initialize all the futures
+    executor = futures.ThreadPoolExecutor(max_workers=workers)
+    _futures = [
+        executor.submit(fn, *args[i], **kwargs[i])
+        for i in range(len(args))
+    ]
+
+    # Return only futures when requested
+    if not return_results:
+        return _futures
+
+    # Block until we received all results
+    if len(identifiers) > 0:
+        results = {}
+    else:
+        results = []
+
+    for i, future in enumerate(_futures):
+        result = future.result()
+
+        if len(identifiers) > 0:
+            results[identifiers[i]] = result
+        else:
+            results.append(result)
+
+    return results
