@@ -11,6 +11,7 @@ from os import environ
 
 from adminapi.dataset import Query
 from adminapi.filters import Any, StartsWith, Contains
+from fabric import state
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 from jinja2 import Environment, PackageLoader
@@ -26,6 +27,7 @@ from igvm.exceptions import (
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.hypervisor_preferences import sorted_hypervisors
+from igvm.libvirt import close_virtconn
 from igvm.settings import (
     AWS_CONFIG,
     AWS_RETURN_CODES,
@@ -881,7 +883,7 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
             log.warning(e)
             continue
 
-        if not _check_vm(possible_hv, vm, offline):
+        if not _check_vm(possible_hv, vm, offline, False):
             possible_hv.release_lock()
             continue
 
@@ -910,7 +912,7 @@ def _check_attributes(vm):
             raise InconsistentAttributeError(vm, attr, value)
 
 
-def _check_vm(hv, vm, offline):
+def _check_vm(hv, vm, offline, cleanup=True):
     try:
         hv.check_vm(vm, offline)
 
@@ -927,3 +929,15 @@ def _check_vm(hv, vm, offline):
         )
 
         return False
+    finally:
+        # Close the connections to the hypervisor again as this runs in a loop
+        # and can possibly exhaust the system file limit
+        if cleanup:
+            hv_hostname = str(hv)
+
+            if hv_hostname in state.connections:
+                transport = state.connections[hv_hostname].get_transport()
+                if transport:
+                    transport.close()
+
+            close_virtconn(hv_hostname)
