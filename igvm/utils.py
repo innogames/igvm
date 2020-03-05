@@ -15,7 +15,6 @@ from paramiko import SSHConfig
 
 from igvm.exceptions import TimeoutError
 
-
 _SIZE_FACTORS = {
     'T': 1024 ** 4,
     'G': 1024 ** 3,

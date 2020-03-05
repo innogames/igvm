@@ -36,6 +36,7 @@ from igvm.settings import (
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, parallel
 from igvm.vm import VM
+from igvm.puppet import clean_cert
 
 log = logging.getLogger(__name__)
 
@@ -335,6 +336,7 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
                 run_puppet=run_puppet,
                 debug_puppet=debug_puppet,
                 postboot=postboot,
+                clean_cert=rebuild,
             )
         else:
             raise NotImplementedError(
@@ -555,6 +557,9 @@ def vm_delete(vm_hostname, retire=False):
                 'This operation is not yet supported for {}'.format(
                     vm.dataset_obj['datacenter_type'])
             )
+
+        # Delete the machines cert from puppet in case we want to build one with the same name in the future
+        clean_cert(vm.dataset_obj)
 
         # Delete the serveradmin object of this VM
         # or update its state to 'retired' if retire is True.
