@@ -47,8 +47,7 @@ def clean_cert(vm, user=None):
         ]
         random.shuffle(ca_hosts)
 
-        ca_hosts = ca_hosts[0]
-
+        ca_host = ca_hosts[0]
     with settings(
         host_string=ca_host,
         user=user,
