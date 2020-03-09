@@ -4,6 +4,7 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
+import math
 from collections import OrderedDict
 from contextlib import contextmanager, ExitStack
 from ipaddress import ip_address
@@ -11,7 +12,6 @@ from os import environ
 
 from adminapi.dataset import Query
 from adminapi.filters import Any, StartsWith, Contains
-from fabric import state
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 from jinja2 import Environment, PackageLoader
@@ -27,7 +27,6 @@ from igvm.exceptions import (
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.hypervisor_preferences import sorted_hypervisors
-from igvm.libvirt import close_virtconn
 from igvm.settings import (
     AWS_CONFIG,
     AWS_RETURN_CODES,
@@ -855,64 +854,66 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
     # Check all HVs in parallel. This will check live data on those HVs
     # but without locking them. This allows us to do a real quick first
     # filtering round. Below follows another one on the filtered HVs only.
-    found = False
-    possible_hv = None
-    results = parallel(
-        _check_vm,
-        identifiers=list(possible_hvs.keys()),
-        args=[
-            [possible_hv, vm, offline]
-            for possible_hv in possible_hvs.values()
-        ],
-    )
+    chunk_size = 10
+    iterations = math.ceil(len(possible_hvs) / chunk_size)
+    found_hv = None
 
-    # Remove unsupported HVs from the list
-    for checked_hv, success in results.items():
-        if not success:
-            possible_hvs.pop(checked_hv)
+    # We are checking HVs in chunks. This will enable us to select HVs early
+    # without looping through all of them if unnecessary.
+    for i in range(iterations):
+        start_idx = i * chunk_size
+        end_idx = start_idx + chunk_size
+        hv_chunk = dict(list(possible_hvs.items())[start_idx:end_idx])
 
-    # No supported HV was found
-    not_found_err = IGVMError(
-        'Cannot find hypervisor matching environment: {}, '
-        'states: {}, vlan_network: {}, offline: {}'.format(
-            hv_env, ', '.join(hypervisor_states), vm.route_network, offline,
+        results = parallel(
+            _check_vm,
+            identifiers=list(hv_chunk.keys()),
+            args=[
+                [possible_hv, vm, offline]
+                for possible_hv in hv_chunk.values()
+            ],
+            workers=chunk_size,
         )
-    )
 
-    if len(possible_hvs) == 0:
-        raise not_found_err
+        # Remove unsupported HVs from the list
+        for checked_hv, success in results.items():
+            if not success:
+                hv_chunk.pop(checked_hv)
 
-    # Do another checking iteration, this time with HV locking
-    for possible_hv in possible_hvs.values():
-        try:
-            possible_hv.acquire_lock()
-        except InvalidStateError as e:
-            log.warning(e)
-            continue
+        # Do another checking iteration, this time with HV locking
+        for possible_hv in hv_chunk.values():
+            try:
+                possible_hv.acquire_lock()
+            except InvalidStateError as e:
+                log.warning(e)
+                continue
 
-        if not _check_vm(possible_hv, vm, offline, False):
-            possible_hv.release_lock()
-            continue
+            if not _check_vm(possible_hv, vm, offline):
+                possible_hv.release_lock()
+                continue
 
-        found = True
-        break
+            # HV found
+            found_hv = possible_hv
 
-    # No supported HV was found
-    if not found:
-        not_found_err = IGVMError(
+            break
+
+        if found_hv:
+            break
+
+    if not found_hv:
+        # No supported HV was found
+        raise IGVMError(
             'Cannot find hypervisor matching environment: {}, '
             'states: {}, vlan_network: {}, offline: {}'.format(
                 hv_env, ', '.join(hypervisor_states), vm.route_network, offline,
             )
         )
 
-        raise not_found_err
-
     # Yield the hypervisor locked for working on it
     try:
-        yield possible_hv
+        yield found_hv
     finally:
-        possible_hv.release_lock()
+        found_hv.release_lock()
 
 
 @contextmanager
@@ -931,32 +932,14 @@ def _check_attributes(vm):
             raise InconsistentAttributeError(vm, attr, value)
 
 
-def _check_vm(hv, vm, offline, cleanup=True):
+def _check_vm(hv, vm, offline):
     try:
         hv.check_vm(vm, offline)
 
         return True
-    except libvirtError as e:
+    except (libvirtError, HypervisorError) as e:
         log.warning(
             'Preferred hypervisor "{}" is skipped: {}'.format(hv, e)
         )
 
         return False
-    except HypervisorError as e:
-        log.warning(
-            'Preferred hypervisor "{}" is skipped: {}'.format(hv, e)
-        )
-
-        return False
-    finally:
-        # Close the connections to the hypervisor again as this runs in a loop
-        # and can possibly exhaust the system file limit
-        if cleanup:
-            hv_hostname = str(hv)
-
-            if hv_hostname in state.connections:
-                transport = state.connections[hv_hostname].get_transport()
-                if transport:
-                    transport.close()
-
-            close_virtconn(hv_hostname)
