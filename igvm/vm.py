@@ -429,7 +429,7 @@ class VM(Host):
             result['status'] = 'new'
         return result
 
-    def build(self, run_puppet=True, debug_puppet=False, postboot=None, clean_cert=False):
+    def build(self, run_puppet=True, debug_puppet=False, postboot=None, cleanup_cert=False):
         """Builds a VM."""
         hypervisor = self.hypervisor
         self.check_serveradmin_config()
@@ -446,6 +446,10 @@ class VM(Host):
             )
 
         with Transaction() as transaction:
+            # Clean up the certificate if the build fails for any reason
+            # TODO: FIND OUT WHY THIS DOESNT WORK
+            transaction.on_rollback('Inform about cert clean', log.info, 'Rolling back for vm {}'.format(self.dataset_obj['hostname']))
+            transaction.on_rollback('Clean cert', clean_cert, self.dataset_obj)
             # Perform operations on the hypervisor
             self.hypervisor.create_vm_storage(self, transaction)
             mount_path = self.hypervisor.format_vm_storage(self, transaction)
@@ -455,7 +459,7 @@ class VM(Host):
             self.prepare_vm()
 
             if run_puppet:
-                self.run_puppet(clear_cert=clean_cert, debug=debug_puppet)
+                self.run_puppet(clear_cert=cleanup_cert, debug=debug_puppet)
 
             if postboot is not None:
                 self.copy_postboot_script(postboot)
@@ -671,7 +675,7 @@ class VM(Host):
         """Runs Puppet in chroot on the hypervisor."""
 
         if clear_cert:
-                clean_cert(self.dataset_obj)
+            clean_cert(self.dataset_obj)
 
         if self.dataset_obj['datacenter_type'] == 'kvm.dct':
             self.block_autostart()

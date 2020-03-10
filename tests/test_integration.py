@@ -2,9 +2,8 @@
 
 Copyright (c) 2018 InnoGames GmbH
 """
-
 from __future__ import print_function
-
+import logging
 from logging import INFO, basicConfig
 from os import environ
 from pipes import quote
@@ -16,7 +15,9 @@ from math import log, ceil
 
 from adminapi.dataset import Query
 from fabric.api import env
+from fabric.context_managers import settings
 from fabric.network import disconnect_all
+from fabric.operations import sudo
 from libvirt import VIR_DOMAIN_RUNNING
 
 from igvm.commands import (
@@ -46,8 +47,13 @@ from igvm.settings import (
     HYPERVISOR_ATTRIBUTES,
     VG_NAME,
 )
+from igvm.puppet import (
+    clean_cert,
+    get_puppet_ca
+)
 from igvm.utils import parse_size
-from igvm.puppet import clean_cert
+
+logger = logging.getLogger(__name__)
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -271,6 +277,12 @@ class IGVMTest(TestCase):
                     hv.get_storage_pool().storageVolLookupByName(
                         vol_name,
                     ).delete()
+        #Clean up certs after tearing down vm
+        obj = Query({'hostname': VM_HOSTNAME}, [
+            'hostname',
+            'puppet_ca',
+        ]).get()
+        clean_cert(obj)
 
     def check_vm_present(self):
         # Operate on fresh object
@@ -305,6 +317,14 @@ class IGVMTest(TestCase):
                     hv.run(
                         'test ! -b /dev/{}/{}'.format(VG_NAME, self.uid_name)
                     )
+
+    def check_vm_cert_cleaned(self):
+        vm = Query({'hostname': VM_HOSTNAME}, ['hostname', 'puppet_ca']).get()
+        puppet_ca = get_puppet_ca(vm)
+        with settings(host_string=puppet_ca):
+            result = sudo("puppet cert print {}".format(VM_HOSTNAME))
+        logger.info("puppet cert print {}".format(VM_HOSTNAME))
+        return result
 
 
 class BuildTest(IGVMTest):
@@ -355,6 +375,10 @@ class BuildTest(IGVMTest):
             vm_build(VM_HOSTNAME)
 
         self.check_vm_absent()
+
+        #self.assertEqual(self.check_vm_cert_cleaned(), False)
+        result = self.check_vm_cert_cleaned()
+        logger.info(result.success)
 
     def test_rebuild(self):
         vm_build(VM_HOSTNAME)

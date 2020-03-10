@@ -336,7 +336,7 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
                 run_puppet=run_puppet,
                 debug_puppet=debug_puppet,
                 postboot=postboot,
-                clean_cert=rebuild,
+                cleanup_cert=rebuild,
             )
         else:
             raise NotImplementedError(
