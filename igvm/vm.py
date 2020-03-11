@@ -613,26 +613,17 @@ class VM(Host):
         self.dataset_obj['hostname'] = new_hostname
         self.check_serveradmin_config()
 
-        fd = BytesIO()
-        fd.write(bytes(new_hostname, 'utf-8'))
-        self.put('/etc/hostname', fd)
-        self.put('/etc/mailname', fd)
-
-        hosts_file = [
-            line
-            for line in self.run('cat /etc/hosts').splitlines()
-            if not line.startswith(str(self.dataset_obj['intern_ip']))
-        ]
-        hosts_file.append('{0}\t{1}'.format(
-            self.dataset_obj['intern_ip'], new_hostname
-        ))
-        self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
-
         with Transaction() as transaction:
             self.shutdown(transaction=transaction)
             self.hypervisor.redefine_vm(self, new_fqdn=new_hostname)
 
+            self.hypervisor.mount_vm_storage(self, transaction=transaction)
+
             self.dataset_obj.commit()
+            time.sleep(5)
+            self.run_puppet()
+
+            self.hypervisor.umount_vm_storage(self)
 
             self.start(transaction=transaction)
 
