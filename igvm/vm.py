@@ -170,7 +170,7 @@ class VM(Host):
         self.dataset_obj.commit()
 
         if transaction:
-            transaction.on_rollback('reset_hostname', self.revert_hostname)
+            transaction.on_rollback('revert_hostname', self.revert_hostname)
 
     def revert_hostname(self):
         """Revert the VM name to the previously defined name"""
