@@ -318,13 +318,20 @@ class IGVMTest(TestCase):
                         'test ! -b /dev/{}/{}'.format(VG_NAME, self.uid_name)
                     )
 
-    def check_vm_cert_cleaned(self):
+    def check_vm_cert_cleaned(self, retries=5):
         vm = Query({'hostname': VM_HOSTNAME}, ['hostname', 'puppet_ca']).get()
         puppet_ca = get_puppet_ca(vm)
-        with settings(host_string=puppet_ca):
-            result = sudo("puppet cert print {}".format(VM_HOSTNAME))
-        logger.info("puppet cert print {}".format(VM_HOSTNAME))
-        return result
+
+        with settings(host_string=puppet_ca, warn_only=True):
+            for i in range(retries):
+                result = sudo('puppet cert verify {}'.format(VM_HOSTNAME))
+
+                if result.return_code == 24:
+                    break
+
+        logger.info('Tried verify {} times'.format(i + 1))
+
+        self.assertEqual(24, result.return_code)
 
 
 class BuildTest(IGVMTest):
@@ -375,10 +382,7 @@ class BuildTest(IGVMTest):
             vm_build(VM_HOSTNAME)
 
         self.check_vm_absent()
-
-        #self.assertEqual(self.check_vm_cert_cleaned(), False)
-        result = self.check_vm_cert_cleaned()
-        logger.info(result.success)
+        self.check_vm_cert_cleaned()
 
     def test_rebuild(self):
         vm_build(VM_HOSTNAME)
