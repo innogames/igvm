@@ -447,9 +447,8 @@ class VM(Host):
 
         with Transaction() as transaction:
             # Clean up the certificate if the build fails for any reason
-            # TODO: FIND OUT WHY THIS DOESNT WORK
-            transaction.on_rollback('Inform about cert clean', log.info, 'Rolling back for vm {}'.format(self.dataset_obj['hostname']))
             transaction.on_rollback('Clean cert', clean_cert, self.dataset_obj)
+
             # Perform operations on the hypervisor
             self.hypervisor.create_vm_storage(self, transaction)
             mount_path = self.hypervisor.format_vm_storage(self, transaction)
