@@ -3,7 +3,6 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 from __future__ import print_function
-import logging
 from logging import INFO, basicConfig
 from os import environ
 from pipes import quote
@@ -53,7 +52,6 @@ from igvm.puppet import (
 )
 from igvm.utils import parse_size
 
-logger = logging.getLogger(__name__)
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -318,21 +316,6 @@ class IGVMTest(TestCase):
                         'test ! -b /dev/{}/{}'.format(VG_NAME, self.uid_name)
                     )
 
-    def check_vm_cert_cleaned(self, retries=5):
-        vm = Query({'hostname': VM_HOSTNAME}, ['hostname', 'puppet_ca']).get()
-        puppet_ca = get_puppet_ca(vm)
-
-        with settings(host_string=puppet_ca, warn_only=True):
-            for i in range(retries):
-                result = sudo('puppet cert verify {}'.format(VM_HOSTNAME))
-
-                if result.return_code == 24:
-                    break
-
-        logger.info('Tried verify {} times'.format(i + 1))
-
-        self.assertEqual(24, result.return_code)
-
 
 class BuildTest(IGVMTest):
     """Test many possible VM building scenarios"""
@@ -382,7 +365,6 @@ class BuildTest(IGVMTest):
             vm_build(VM_HOSTNAME)
 
         self.check_vm_absent()
-        self.check_vm_cert_cleaned()
 
     def test_rebuild(self):
         vm_build(VM_HOSTNAME)

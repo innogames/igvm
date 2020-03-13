@@ -53,7 +53,7 @@ def clean_cert(vm, user=None):
     if 'user' in COMMON_FABRIC_SETTINGS:
         user = COMMON_FABRIC_SETTINGS['user']
     ca_host = get_puppet_ca(vm)
-    log.info("Cleaning puppet for {} on {}".format(vm['hostname'], ca_host))
+    log.info("Cleaning puppet certificate for {} on {}".format(vm['hostname'], ca_host))
     with settings(
         host_string=ca_host,
         user=user,
@@ -62,11 +62,9 @@ def clean_cert(vm, user=None):
         version = sudo('/usr/bin/puppet --version', shell=False, quiet=True)
 
         if not version.succeeded or int(version.split('.')[0]) < 6:
-            result = sudo('/usr/bin/puppet cert clean {}'.format(
+            sudo('/usr/bin/puppet cert clean {}'.format(
                 vm['hostname'],
             ), shell=False)
-            log.info(result.stdout)
-            log.info(result.stderr)
         else:
             sudo(
                 '/opt/puppetlabs/bin/puppetserver ca clean '
