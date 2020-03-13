@@ -2,9 +2,7 @@
 
 Copyright (c) 2018 InnoGames GmbH
 """
-
 from __future__ import print_function
-
 from logging import INFO, basicConfig
 from os import environ
 from pipes import quote
@@ -16,7 +14,9 @@ from math import log, ceil
 
 from adminapi.dataset import Query
 from fabric.api import env
+from fabric.context_managers import settings
 from fabric.network import disconnect_all
+from fabric.operations import sudo
 from libvirt import VIR_DOMAIN_RUNNING
 
 from igvm.commands import (
@@ -46,8 +46,12 @@ from igvm.settings import (
     HYPERVISOR_ATTRIBUTES,
     VG_NAME,
 )
+from igvm.puppet import (
+    clean_cert,
+    get_puppet_ca
+)
 from igvm.utils import parse_size
-from igvm.puppet import clean_cert
+
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -271,6 +275,12 @@ class IGVMTest(TestCase):
                     hv.get_storage_pool().storageVolLookupByName(
                         vol_name,
                     ).delete()
+        #Clean up certs after tearing down vm
+        obj = Query({'hostname': VM_HOSTNAME}, [
+            'hostname',
+            'puppet_ca',
+        ]).get()
+        clean_cert(obj)
 
     def check_vm_present(self):
         # Operate on fresh object
