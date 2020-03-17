@@ -128,6 +128,7 @@ def setUpModule():
     vm_obj['intern_ip'] = ip_address
     vm_obj['project'] = 'test'
     vm_obj['team'] = 'test'
+    vm_obj['puppet_master'] = 'puppet-lb.test.ig.local'
 
     query.commit()
 
