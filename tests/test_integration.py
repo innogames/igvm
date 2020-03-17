@@ -9,7 +9,9 @@ from os import environ
 from tempfile import NamedTemporaryFile
 from unittest import TestCase
 
-from adminapi.dataset import Query, Any
+from adminapi.dataset import Query
+from adminapi.filters import Any
+
 from fabric.api import env
 from fabric.network import disconnect_all
 
@@ -24,6 +26,7 @@ from igvm.commands import (
     vm_define,
     vm_delete,
     vm_migrate,
+    vm_rename,
     vm_restart,
     vm_start,
     vm_stop,
@@ -151,9 +154,9 @@ class IGVMTest(TestCase):
             self.assertEqual(fqdn, vm.fqdn)
             self.assertEqual(vm.dataset_obj.is_dirty(), False)
 
-    def check_vm_absent(self, hv_name=None):
+    def check_vm_absent(self, vm_name=VM_HOSTNAME, hv_name=None):
         # Operate on fresh object
-        with _get_vm(VM_HOSTNAME, allow_retired=True) as vm:
+        with _get_vm(vm_name, allow_retired=True) as vm:
             if not hv_name:
                 hv_name = vm.dataset_obj['hypervisor']
 
@@ -508,6 +511,26 @@ class CommandTest(IGVMTest):
         self.check_vm_absent()
         vm_define(VM_HOSTNAME)
         self.check_vm_present()
+
+
+# class RenameTest(IGVMTest):
+#     """Test many possible VM building scenarios"""
+#
+#     def setUp(self):
+#         super(RenameTest, self).setUp()
+#         vm_build(VM_HOSTNAME)
+#         self.check_vm_present()
+#         with _get_vm(VM_HOSTNAME) as vm:
+#             # For contacting VM over shell
+#             self.vm = vm
+#
+#     def tearDown(self):
+#         super(RenameTest, self).tearDown()
+#
+#     def test_rename(self):
+#         # self.check_vm_absent(vm_name=VM_HOSTNAME_RENAMED)
+#         vm_rename(VM_HOSTNAME, new_hostname=VM_HOSTNAME_RENAMED, offline=True)
+#         # self.check_vm_absent(vm_name=VM_HOSTNAME)
 
 
 class MigrationTest(IGVMTest):
