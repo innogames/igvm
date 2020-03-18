@@ -88,15 +88,9 @@ class Hypervisor(Host):
 
     def get_volume_by_vm(self, vm):
         """Get logical volume information of a VM"""
-        domain = self._find_domain(vm)
         for vol_name in self.get_storage_pool().listVolumes():
-            if (
-                # Match the LV based on the object_id encoded within its name
-                vm.match_uid_name(vol_name)
-                # XXX: Deprecated matching for LVs w/o an uid_name
-                or domain
-                and vol_name == domain.name()
-            ):
+            # Match the LV based on the object_id encoded within its name
+            if vm.match_uid_name(vol_name):
                 return self.get_storage_pool().storageVolLookupByName(vol_name)
 
         raise StorageError(
@@ -524,13 +518,8 @@ class Hypervisor(Host):
         # the console.
         for domain in self.conn().listAllDomains():
             name = domain.name()
-            if not (
-                # Match the domain based on the object_id encoded in its name
-                vm.match_uid_name(name)
-                # XXX: Deprecated matching for domains w/o an uid_name
-                or vm.fqdn == name
-                or vm.fqdn.startswith(name + '.')
-            ):
+            # Match the domain based on the object_id encoded in its name
+            if not vm.match_uid_name(name):
                 continue
 
             if found is not None:
