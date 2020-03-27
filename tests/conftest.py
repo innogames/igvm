@@ -2,17 +2,20 @@
 
 Copyright (c) 2020 InnoGames GmbH
 """
+from datetime import datetime, timezone
 from math import ceil, log
 from re import match
 from shlex import quote
 
 from adminapi.dataset import Query
+from adminapi.exceptions import DatasetError
 from adminapi.filters import Any, Regexp
 from libvirt import VIR_DOMAIN_RUNNING
 
 from igvm.hypervisor import Hypervisor
 from igvm.settings import HYPERVISOR_ATTRIBUTES
 from tests import (
+    IGVM_LOCKED_TIMEOUT,
     JENKINS_EXECUTOR,
     PYTEST_XDIST_WORKER,
     PYTEST_XDIST_WORKER_COUNT,
@@ -93,6 +96,19 @@ def clean_hv(hv, pattern):
             ),
         )
         st_pool.storageVolLookupByName(vol_name).delete()
+
+    # Cleanup igvm_locked status after a timeout
+    if hv.dataset_obj['igvm_locked'] is not None:
+        now = datetime.utcnow().replace(tzinfo=timezone.utc)
+        diff = now - hv.dataset_obj['igvm_locked']
+
+        if diff >= IGVM_LOCKED_TIMEOUT:
+            try:
+                hv.release_lock()
+            except DatasetError:
+                # In case multiple workers try to release the same HV
+                # we will get commit errors which we can ignore.
+                pass
 
 
 def clean_serveradmin(filters):

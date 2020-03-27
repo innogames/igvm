@@ -4,6 +4,7 @@ Copyright (c) 2020 InnoGames GmbH
 """
 # Configuration of VMs used for tests
 # Keep in mind that the whole hostname must fit in 64 characters.
+from datetime import timedelta
 from os import environ
 from re import split
 
@@ -32,3 +33,6 @@ VM_HOSTNAME = VM_HOSTNAME_PATTERN.format(
     JENKINS_EXECUTOR,
     PYTEST_XDIST_WORKER,
 )
+
+# Amount of time after which the igvm_locked status should be cleared
+IGVM_LOCKED_TIMEOUT = timedelta(minutes=15)
