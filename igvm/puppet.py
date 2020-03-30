@@ -65,19 +65,14 @@ def clean_cert(vm, user=None, retries=60):
         version = sudo('/usr/bin/puppet --version', shell=False, quiet=True)
 
         if not version.succeeded or int(version.split('.')[0]) < 6:
-            res = sudo(
-                '/usr/bin/puppet cert verify {} '
-                '&& /usr/bin/puppet cert clean {}'.format(
-                    vm['hostname'], vm['hostname'],
-                ),
-            )
-
-            retry = 0
-            while res.return_code == 3 and retry < retries:
-                sleep(1)
-                retry += 1
+            # Every signing and revoking will have the CA regenerate the CRL
+            # file. There are already known problems in Puppet with dealing
+            # with such CRLs. Now if we revoke and/or sign some certificates
+            # in parallel, there is a chance we receive an OpenSSL error (3).
+            # In that case we cannot do anything but retry the operation.
+            for retry in range(1, retries + 1):
                 logger.info(
-                    'Retrying to clear certificate (retry {}/{})'.format(
+                    'Trying to clear certificate ({}/{})'.format(
                         retry, retries,
                     )
                 )
@@ -87,6 +82,16 @@ def clean_cert(vm, user=None, retries=60):
                         vm['hostname'], vm['hostname'],
                     ),
                     shell=False,
+                )
+                if res.return_code != 3:
+                    break
+
+                sleep(1)
+            else:
+                logger.error(
+                    'Failed to clear certificate for {} after {} tries'.format(
+                        vm['hostname'], retries,
+                    ),
                 )
         else:
             sudo(
