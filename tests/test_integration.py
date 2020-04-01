@@ -1,25 +1,20 @@
 """igvm - Integration Tests
 
-Copyright (c) 2018 InnoGames GmbH
+Copyright (c) 2020 InnoGames GmbH
 """
 from __future__ import print_function
+
 from logging import INFO, basicConfig
 from os import environ
-from pipes import quote
-from re import match, split
 from tempfile import NamedTemporaryFile
 from unittest import TestCase
-from uuid import uuid4
-from math import log, ceil
 
 from adminapi.dataset import Query
 from fabric.api import env
-from fabric.context_managers import settings
 from fabric.network import disconnect_all
-from fabric.operations import sudo
-from libvirt import VIR_DOMAIN_RUNNING
 
 from igvm.commands import (
+    _get_vm,
     change_address,
     disk_set,
     host_info,
@@ -32,26 +27,27 @@ from igvm.commands import (
     vm_start,
     vm_stop,
     vm_sync,
-    _get_vm,
 )
 from igvm.exceptions import (
     IGVMError,
-    InvalidStateError,
     InconsistentAttributeError,
+    InvalidStateError,
     VMError,
 )
 from igvm.hypervisor import Hypervisor
+from igvm.puppet import clean_cert
 from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
     HYPERVISOR_ATTRIBUTES,
     VG_NAME,
 )
-from igvm.puppet import (
-    clean_cert,
-    get_puppet_ca
-)
 from igvm.utils import parse_size
-
+from tests import VM_HOSTNAME, VM_NET
+from tests.conftest import (
+    clean_all,
+    cmd,
+    get_next_address,
+)
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -59,156 +55,9 @@ environ['IGVM_SSH_USER'] = 'igtesting'  # Enforce user for integration testing
 env.user = 'igtesting'
 environ['IGVM_MODE'] = 'testing'
 
-# Configuration of VMs used for tests
-# Keep in mind that the whole hostname must fit in 64 characters.
-if environ.get('EXECUTOR_NUMBER'):
-    JENKINS_EXECUTOR = '{:02}'.format(int(environ['EXECUTOR_NUMBER']))
-else:
-    JENKINS_EXECUTOR = 'manual'
 
-if environ.get('BUILD_NUMBER'):
-    JENKINS_BUILD = environ['BUILD_NUMBER']
-else:
-    JENKINS_BUILD = uuid4()
-
-if environ.get('PYTEST_XDIST_WORKER'):
-    PYTEST_XDIST_WORKER = int(
-        split('[a-zA-Z]+', environ['PYTEST_XDIST_WORKER'])[1]
-    )
-else:
-    PYTEST_XDIST_WORKER = 0
-
-if environ.get('PYTEST_XDIST_WORKER_COUNT'):
-    PYTEST_XDIST_WORKER_COUNT = int(environ['PYTEST_XDIST_WORKER_COUNT'])
-else:
-    PYTEST_XDIST_WORKER_COUNT = 0
-
-
-VM_NET = 'igvm-net-{}-aw.test.ig.local'.format(JENKINS_EXECUTOR)
-
-VM_HOSTNAME_PATTERN = 'igvm-{}-{}-{}.test.ig.local'
-VM_HOSTNAME = VM_HOSTNAME_PATTERN.format(
-    JENKINS_BUILD,
-    JENKINS_EXECUTOR,
-    PYTEST_XDIST_WORKER,
-)
-
-
-def setUpModule():
-    # Automatically find suitable HVs for tests.
-    # Terminate if this is impossible - we can't run tests without HVs.
-    global HYPERVISORS
-    vm_route_net = (
-        Query({'hostname': VM_NET}, ['route_network']).get()['route_network']
-    )
-
-    # We can access HVs as objects but that does not mean we can compare them
-    # to any objects returned from igvm - those will be different objects,
-    # created from scratch from Serveradmin data.
-    HYPERVISORS = [Hypervisor(o) for o in Query({
-        'servertype': 'hypervisor',
-        'environment': 'testing',
-        'vlan_networks': vm_route_net,
-        'state': 'online',
-    }, HYPERVISOR_ATTRIBUTES)]
-
-    if len(HYPERVISORS) < 2:
-        raise Exception('Not enough testing hypervisors found')
-
-    ip_address = get_next_address(VM_NET, 1)
-
-    # Delete all old Serveradmin objects first because we're not using
-    # Serveradmin's way of getting a free IP address and anything left
-    # will cause IP address conflict.
-    removeConflictingVMs(ip_address)
-
-    query = Query()
-    vm_obj = query.new_object('vm')
-    vm_obj['hostname'] = VM_HOSTNAME
-    vm_obj['intern_ip'] = ip_address
-    vm_obj['project'] = 'test'
-    vm_obj['team'] = 'test'
-    vm_obj['puppet_master'] = 'puppet-lb.test.ig.local'
-
-    query.commit()
-
-    # Cancelled builds are forcefully killed by Jenkins. They did not have the
-    # opportunity to clean up so we forcibly destroy everything found on any HV
-    # which would interrupt our work in the current JENKINS_EXECUTOR.
-    for hv in HYPERVISORS:
-        hv.get_storage_pool().refresh()
-        for domain in hv.conn().listAllDomains():
-            if match(('^([0-9]+_)?' + VM_HOSTNAME_PATTERN + '$').format(
-                    '[0-9]+',
-                    JENKINS_EXECUTOR,
-                    '[0-9]+',
-                ),
-                domain.name(),
-            ):
-                if domain.state()[0] == VIR_DOMAIN_RUNNING:
-                    domain.destroy()
-                domain.undefine()
-        st_pool = hv.get_storage_pool()
-        for vol_name in st_pool.listVolumes():
-            if match(('^([0-9]+_)?' + VM_HOSTNAME_PATTERN + '$').format(
-                    '[0-9]+',
-                    JENKINS_EXECUTOR,
-                    '[0-9]+',
-                ),
-                vol_name,
-            ):
-                vol_path = st_pool.storageVolLookupByName(vol_name).path()
-                hv.run(
-                    'mount | awk \'/{}/ {{print $3}}\' | '
-                    'xargs -r -n1 umount'.format(
-                        vol_name.replace('-', '--'),
-                    )
-                )
-                hv.get_storage_pool().storageVolLookupByName(
-                    vol_name,
-                ).delete()
-
-
-def removeConflictingVMs(ip_addr):
-    query = Query({'intern_ip': ip_addr}, ['hostname'])
-    for obj in query:
-        obj.delete()
-    query.commit()
-
-
-def tearDownModule():
-    query = Query({'hostname': VM_HOSTNAME}, ['hostname'])
-    for obj in query:
-        obj.delete()
-    query.commit()
+def teardown_module():
     disconnect_all()  # Will hang on Jessie + Python3
-
-
-def cmd(cmd, *args, **kwargs):
-    escaped_args = [quote(str(arg)) for arg in args]
-
-    escaped_kwargs = {}
-    for key, value in kwargs.items():
-        escaped_kwargs[key] = quote(str(value))
-
-    return cmd.format(*escaped_args, **escaped_kwargs)
-
-
-def get_next_address(vm_net, index):
-    global PYTEST_XDIST_WORKER, PYTEST_XDIST_WORKER_COUNT
-
-    subnet_levels = ceil(log(PYTEST_XDIST_WORKER_COUNT, 2))
-    project_network = Query({'hostname': VM_NET}, ['intern_ip'] ).get()
-
-    try:
-        subnets = project_network['intern_ip'].subnets(subnet_levels)
-    except ValueError:
-        raise Exception(
-            ('Can\'t split {} into enough subnets '
-            'for {} parallel tests').format(vm_net, PYTEST_XDIST_WORKER_COUNT)
-        )
-
-    return [s for s in subnets][PYTEST_XDIST_WORKER][index]
 
 
 class IGVMTest(TestCase):
@@ -218,76 +67,67 @@ class IGVMTest(TestCase):
         Get object from Serveradmin and initialize it to safe defaults.
         Don't assign VM to any of HVs yet!
         """
-        # igvm operates always on hostname of VM and queries it from
-        # Serveradmin whenever it needs. Because of that we must never store
-        # any igvm objects and query things anew each time.
-        obj = Query({'hostname': VM_HOSTNAME}, [
-            'hostname',
-            'state',
-            'backup_disabled',
-            'disk_size_gib',
-            'memory',
-            'num_cpu',
-            'os',
-            'environment',
-            'no_monitoring',
-            'hypervisor',
-            'repositories',
-            'puppet_environment',
-            'puppet_ca',
-        ]).get()
+        super().setUp()
 
-        # Fill in defaults in Serveradmin
-        obj['state'] = 'online'
-        obj['disk_size_gib'] = 3
-        obj['memory'] = 2048
-        obj['num_cpu'] = 2
-        obj['os'] = 'stretch'
-        obj['environment'] = 'testing'
-        obj['no_monitoring'] = True
-        obj['hypervisor'] = None
-        obj['repositories'] = [
+        # Check that enough HVs are available.
+        self.route_network = Query(
+            {'hostname': VM_NET},
+            ['route_network'],
+        ).get()['route_network']
+
+        self.hvs = [Hypervisor(o) for o in Query({
+            'environment': 'testing',
+            'servertype': 'hypervisor',
+            'state': 'online',
+            'vlan_networks': self.route_network,
+        }, HYPERVISOR_ATTRIBUTES)]
+
+        assert len(self.hvs) >= 2, 'Not enough testing hypervisors found'
+
+        # Cleanup all leftovers from previous tests or failures.
+        clean_all(self.route_network, VM_HOSTNAME)
+
+        # Create subject VM object
+        self.vm_obj = Query().new_object('vm')
+        self.vm_obj['backup_disabled'] = True
+        self.vm_obj['disk_size_gib'] = 3
+        self.vm_obj['environment'] = 'testing'
+        self.vm_obj['hostname'] = VM_HOSTNAME
+        self.vm_obj['hypervisor'] = None
+        self.vm_obj['intern_ip'] = get_next_address(VM_NET, 1)
+        self.vm_obj['memory'] = 2048
+        self.vm_obj['no_monitoring'] = True
+        self.vm_obj['num_cpu'] = 2
+        self.vm_obj['os'] = 'stretch'
+        self.vm_obj['project'] = 'test'
+        self.vm_obj['puppet_environment'] = None
+        self.vm_obj['repositories'] = [
             'int:basestretch:stable',
             'int:innogames:stable',
         ]
-        obj['puppet_environment'] = None
-        obj['backup_disabled'] = True
-        obj.commit()
-        clean_cert(obj)
-        self.uid_name = '{}_{}'.format(obj['object_id'], obj['hostname'])
+        self.vm_obj['state'] = 'online'
+        self.vm_obj['team'] = 'test'
+        self.vm_obj.commit()
+
+        self.uid_name = '{}_{}'.format(
+            self.vm_obj['object_id'],
+            self.vm_obj['hostname'],
+        )
+
+        # Make sure we can make a fresh build
+        clean_cert(self.vm_obj)
 
     def tearDown(self):
         """Forcibly remove current test's VM from all HVs"""
+        super().tearDown()
 
-        for hv in HYPERVISORS:
-            hv.get_storage_pool().refresh()
-            for domain in hv.conn().listAllDomains():
-                if domain.name() == self.uid_name:
-                    if domain.state()[0] == VIR_DOMAIN_RUNNING:
-                        domain.destroy()
-                    domain.undefine()
-            for vol_name in hv.get_storage_pool().listVolumes():
-                if vol_name == self.uid_name:
-                    hv.run(
-                        'mount | grep -q "/dev/{vg}/{vm}" && '
-                        ' umount /dev/{vg}/{vm} || true;'
-                        .format(vg=VG_NAME, vm=self.uid_name)
-                    )
-                    hv.get_storage_pool().storageVolLookupByName(
-                        vol_name,
-                    ).delete()
-        #Clean up certs after tearing down vm
-        obj = Query({'hostname': VM_HOSTNAME}, [
-            'hostname',
-            'puppet_ca',
-        ]).get()
-        clean_cert(obj)
+        clean_cert(self.vm_obj)
+        clean_all(self.route_network, VM_HOSTNAME)
 
     def check_vm_present(self):
         # Operate on fresh object
         with _get_vm(VM_HOSTNAME) as vm:
-
-            for hv in HYPERVISORS:
+            for hv in self.hvs:
                 if hv.dataset_obj['hostname'] == vm.dataset_obj['hypervisor']:
                     # Is it on correct HV?
                     self.assertEqual(hv.vm_defined(vm), True)
@@ -310,7 +150,7 @@ class IGVMTest(TestCase):
             if not hv_name:
                 hv_name = vm.dataset_obj['hypervisor']
 
-            for hv in HYPERVISORS:
+            for hv in self.hvs:
                 if hv.dataset_obj['hostname'] == hv_name:
                     self.assertEqual(hv.vm_defined(vm), False)
                     hv.run(
@@ -320,12 +160,6 @@ class IGVMTest(TestCase):
 
 class BuildTest(IGVMTest):
     """Test many possible VM building scenarios"""
-
-    def setUp(self):
-        super(BuildTest, self).setUp()
-
-    def tearDown(self):
-        super(BuildTest, self).tearDown()
 
     def test_build_stretch(self):
         vm_build(VM_HOSTNAME)
