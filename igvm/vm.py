@@ -634,17 +634,13 @@ class VM(Host):
             self.shutdown(transaction=transaction)
 
             self.hypervisor.redefine_vm(self, new_fqdn=new_hostname)
-            print(self.previous_hostname)
-            transaction.on_rollback(
-                'undo_redefine',
-                self.hypervisor.redefine_vm,
-                self,
-                new_fqdn=self.previous_hostname
+            log.warning(
+                'Domain redefinition cannot be rolled back properly. Your '
+                'domain is still defined with the new name.'
             )
 
             self.hypervisor.mount_vm_storage(self, transaction=transaction)
 
-            time.sleep(5)
             self.run_puppet()
 
             self.hypervisor.umount_vm_storage(self)
