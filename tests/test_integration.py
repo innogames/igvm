@@ -21,6 +21,7 @@ from igvm.commands import (
     mem_set,
     vcpu_set,
     vm_build,
+    vm_define,
     vm_delete,
     vm_migrate,
     vm_restart,
@@ -42,8 +43,10 @@ from igvm.settings import (
     HYPERVISOR_CPU_THRESHOLDS,
     KVM_HWMODEL_TO_CPUMODEL,
     VG_NAME,
+    VM_ATTRIBUTES
 )
 from igvm.utils import parse_size
+from igvm.vm import VM
 from tests import VM_HOSTNAME, VM_NET
 from tests.conftest import (
     clean_all,
@@ -493,6 +496,19 @@ class CommandTest(IGVMTest):
                 list(dest_hv_obj['igvm_migration_log']),
                 ['{} +{}'.format(timestamp, round(cpu_usage_vm_dest))]
             )
+
+    def test_vm_define(self):
+        vm_dataset_obj = Query({'hostname': VM_HOSTNAME}, VM_ATTRIBUTES).get()
+
+        hv = Hypervisor(vm_dataset_obj['hypervisor'])
+        vm = VM(vm_dataset_obj, hv)
+
+        vm_stop(VM_HOSTNAME)
+        hv.undefine_vm(vm, keep_storage=True)
+
+        self.check_vm_absent()
+        vm_define(VM_HOSTNAME)
+        self.check_vm_present()
 
 
 class MigrationTest(IGVMTest):

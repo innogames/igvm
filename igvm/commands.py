@@ -636,6 +636,27 @@ def vm_sync(vm_hostname):
             )
 
 
+def vm_define(vm_hostname):
+    """Define VM on hypervisor
+
+    This command executes necessary code to just define the VM aka create the
+    domain.xml for libvirt. It is a convenience command to restore a domain
+    in case you lost your SSH session while the domain was not defined.
+
+    :param: vm_hostname: hostname of VM
+    """
+
+    vm_dataset_obj = Query({'hostname': vm_hostname}, VM_ATTRIBUTES).get()
+    hv = Hypervisor(vm_dataset_obj['hypervisor'])
+    vm = VM(vm_dataset_obj, hv)
+
+    hv.define_vm(vm)
+    vm.start()
+
+    log.info('VM {} defined and booted on {}'.format(
+        vm_hostname, vm_dataset_obj['hypervisor']['hostname']))
+
+
 @with_fabric_settings  # NOQA: C901
 def host_info(vm_hostname):
     """Extract runtime information about a VM
