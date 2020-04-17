@@ -61,14 +61,9 @@ KVM_DEFAULT_MAX_CPUS = 24
 # Mapping to determine the libvirt CPU model based on serveradmin hw_model
 KVM_HWMODEL_TO_CPUMODEL = {
     'Nehalem': ['Dell_R510', 'Dell_M610', 'Dell_M710'],
-    'SandyBridge': [
-        'Dell_R320',
-        'Dell_M620', 'Dell_M630', 'Dell_M640',
-        'Dell_R620', 'Dell_R640',
-    ],
-    'EPYC': [
-        'Dell_R6515',
-    ],
+    'SandyBridge': ['Dell_R320', 'Dell_M620', 'Dell_R620'],
+    'Haswell': ['Dell_M630', 'Dell_M640', 'Dell_R640'],
+    'EPYC': ['Dell_R6515'],
 }
 
 P2P_MIGRATION = {
