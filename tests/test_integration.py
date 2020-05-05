@@ -101,6 +101,8 @@ class IGVMTest(TestCase):
         self.vm_obj['os'] = 'stretch'
         self.vm_obj['project'] = 'test'
         self.vm_obj['puppet_environment'] = None
+        self.vm_obj['puppet_ca'] = 'testing-puppetca.innogames.de'
+        self.vm_obj['puppet_master'] = 'puppet-lb.test.ig.local'
         self.vm_obj['repositories'] = [
             'int:basestretch:stable',
             'int:innogames:stable',
