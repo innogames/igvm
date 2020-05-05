@@ -65,6 +65,24 @@ def clean_cert(vm, user=None, retries=60):
         version = sudo('/usr/bin/puppet --version', shell=False, quiet=True)
 
         if not version.succeeded or int(version.split('.')[0]) < 6:
+            # Check whether there is a valid certificate to be cleaned at all.
+            res = sudo('/usr/bin/puppet cert verify {}'.format(
+                vm['hostname'],
+            ), shell=False, quiet=True)
+
+            # Exit code 24 means there is no valid certificate. In such a case
+            # we can skip the revoking entirely and prevent the CA from
+            # scanning the whole CRL (which can be lengthy).
+            if res.return_code == 24:
+                logger.info(
+                    'Skip revoking of {} because there is no valid '
+                    'certificate known to the CA'.format(
+                        vm['hostname'],
+                    )
+                )
+
+                return
+
             # Every signing and revoking will have the CA regenerate the CRL
             # file. There are already known problems in Puppet with dealing
             # with such CRLs. Now if we revoke and/or sign some certificates
@@ -76,13 +94,10 @@ def clean_cert(vm, user=None, retries=60):
                         retry, retries,
                     )
                 )
-                res = run(
-                    'sudo /usr/bin/puppet cert verify {} '
-                    '&& sudo /usr/bin/puppet cert clean {}'.format(
-                        vm['hostname'], vm['hostname'],
-                    ),
-                    shell=False,
-                )
+                res = sudo('/usr/bin/puppet cert clean {}'.format(
+                    vm['hostname'],
+                ), shell=False)
+
                 if res.return_code != 3:
                     break
 
