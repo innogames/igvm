@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from io import BytesIO
 from logging import getLogger
 from time import sleep
+from igvm.exceptions import RemoteCommandError
 
 log = getLogger(__name__)
 
@@ -43,12 +44,28 @@ class DRBD(object):
         return 8000 + dev_minor
 
     def get_device_size(self):
-        return int(self.hv.run(
+        out = self.hv.run(
             'lvs --noheadings '
             '-o lv_size '
             '--units b --nosuffix {}/{}'
             .format(self.vg_name, self.lv_name)
-        ).strip())
+        )
+
+        for line in out.splitlines():
+            try:
+                return int(line.strip())
+            except ValueError:
+                # Sometimes extra lines are appended when the LVM tries to parse
+                # PV information on DRBD devices, those lines can be ignored:
+                # ----- 8< -----
+                # /dev/drbd29: open failed: Wrong medium type
+                #   10737418240
+                # ----- >8 -----
+                continue
+        raise RemoteCommandError(
+            'Can\t read device {}/{} size: {}'.format(
+                self.vg_name, self.lv_name, out
+        ))
 
     @contextmanager
     def start(self, peer):
