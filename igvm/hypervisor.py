@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from time import sleep
 from xml.etree import ElementTree
 
+from igvm.vm import VM
 from libvirt import VIR_DOMAIN_SHUTOFF
 
 from igvm.drbd import DRBD
@@ -817,3 +818,57 @@ class Hypervisor(Host):
             '| /bin/nc.openbsd -q 1 {2} {3}'
             .format(device, size, *listener)
         )
+
+    def hv_pcpus_used_by_vm(self, vm: VM) -> float:
+        """pCPUs used by VM
+
+        Calculate the physical CPUs the VM will use on a potential destination
+        hypervisor.
+
+        :param: vm: VM object
+
+        :return: Amount of pCPUs as float
+        """
+
+        vm_performance_value = vm.vm_performance_value()
+
+        # We can't save floats in graphite cache of serveradmin and therefore
+        # divide it by the value we multiplied it before.
+        hv_perffactor_dest = self.dataset_obj['cpu_perffactor'] / 1000
+        hv_pcpus_dest = vm_performance_value / hv_perffactor_dest
+
+        return float(hv_pcpus_dest)
+
+    def hv_predict_vm_cpu_util(self, vm: VM) -> float:
+        """Predict VM CPU util
+
+        Predict the CPU usage the VM will produce on a potential destination
+        hypervisor.
+
+        :param: vm: VM object
+
+        :return: Cpu utilisation in percent as float
+        """
+
+        hv_pcpus_dest = self.hv_pcpus_used_by_vm(vm)
+        hv_num_cpu_dest = self.dataset_obj['num_cpu']
+        hv_vm_cpu_util_dest = (hv_pcpus_dest / hv_num_cpu_dest) * 100
+
+        return float(hv_vm_cpu_util_dest)
+
+    def hv_cpu_util_overall(self, vm: VM) -> float:
+        """HV CPU util overall
+
+        Calculate the overall CPU usage of a hypervisor incl. the actual
+        migrated VM
+
+        :param: vm: VM object
+
+        :return: Cpu utilisation in percent as float
+        """
+
+        hv_cpu_util_dest = self.hv_predict_vm_cpu_util(vm)
+        hv_cpu_util_pct_dest = self.dataset_obj['cpu_util_pct']
+        hv_cpu_util_overall = hv_cpu_util_pct_dest + hv_cpu_util_dest
+
+        return float(hv_cpu_util_overall)

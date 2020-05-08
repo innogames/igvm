@@ -15,6 +15,7 @@ from igvm.hypervisor_preferences import (
     HashDifference,
     HypervisorAttributeValue,
     HypervisorAttributeValueLimit,
+    HypervisorCpuUsageLimit,
     InsufficientResource,
     OtherVMs,
     OverAllocation,
@@ -113,6 +114,7 @@ except KeyError:
 IMAGE_PATH = '/tmp'
 
 HYPERVISOR_ATTRIBUTES = [
+    'cpu_perffactor',
     'cpu_util_pct',
     'cpu_util_vm_pct',
     'hardware_model',
@@ -171,6 +173,7 @@ VM_ATTRIBUTES = [
     'igvm_locked',
     'intern_ip',
     'io_weight',
+    'load_99',
     'mac',
     'memory',
     'num_cpu',
@@ -290,6 +293,17 @@ AWS_CONFIG = [
     }
 ]
 
+# The loadtested CPU usage thresholds per hypervisor hardware model,
+# before we are experiencing reasonable steal time.
+HYPERVISOR_CPU_THRESHOLDS = {
+    'Dell_M610': 50,  # untested
+    'Dell_M710': 50,  # untested
+    'Dell_M620': 60,
+    'Dell_M630': 70,
+    'Dell_M640': 75,
+    'Dell_R6515': 50,
+}
+
 # The list is ordered from more important to less important.  The next
 # preference is only going to be checked when the previous ones return all
 # the same values.
@@ -309,6 +323,14 @@ HYPERVISOR_PREFERENCES = [
     # for the given time_range and dismisses it as target when it is over
     # the value of threshold.
     HypervisorAttributeValueLimit('cpu_util_vm_pct', 45),
+    # Calculates the performance_value of the given VM, which is comparable
+    # across hypervisor hardware models. It uses this value to predict the
+    # CPU usage of the VM on the destination hypervisor and dismisses all
+    # targets with a value above the threshold.
+    HypervisorCpuUsageLimit(
+        'hardware_model',
+        HYPERVISOR_CPU_THRESHOLDS,
+    ),
     # Don't migrate two redundant VMs together
     OtherVMs([
         'project',

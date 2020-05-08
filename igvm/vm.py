@@ -826,3 +826,26 @@ class VM(Host):
         )
 
         return sync_values
+
+    def vm_performance_value(self) -> float:
+        """VM Performance Value
+
+        Calculate the performance_value of the VM by multiplying the
+        load_99 of the VM with the cpu_perffactor of the HV.
+        Use the num_cpu instead of load_99 value, if load_99 > num_cpu.
+
+        :return: performance_value of VM as float
+        """
+
+        # We can't save floats in graphite cache of serveradmin and therefore
+        # divide it by the value we multiplied it before.
+        vm_load_99 = self.dataset_obj['load_99'] / 1000
+        hv_perffactor_src = self.hypervisor.dataset_obj[
+                                'cpu_perffactor'] / 1000
+        vm_num_cpu = self.dataset_obj['num_cpu']
+
+        vm_performance_value = (
+            vm_load_99 if vm_load_99 < vm_num_cpu else vm_num_cpu
+        ) * hv_perffactor_src
+
+        return float(vm_performance_value)
