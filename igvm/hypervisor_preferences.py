@@ -130,6 +130,36 @@ class HypervisorAttributeValueLimit(object):
         return value is not None and value > self.limit
 
 
+class HypervisorCpuUsageLimit():
+    """Check for CPU usage of the hypervisor incl. the predicted CPU usage
+    of the VM to be migrated.
+
+    Make any hypervisor less likely chosen, which would be above its threshold.
+    """
+    def __init__(self, hardware_model: str, hv_cpu_thresholds: dict):
+        self.hardware_model = hardware_model
+        self.hv_cpu_thresholds = hv_cpu_thresholds
+
+    def __repr__(self):
+        args = repr(self.hardware_model) + ', ' + repr(self.hv_cpu_thresholds)
+
+        return '{}({})'.format(type(self).__name__, args)
+
+    def __call__(self, vm, hv) -> bool:
+        # New VM has no hypervisor attribute yet.
+        if not vm.hypervisor:
+            return False
+
+        hv_model = hv.dataset_obj[self.hardware_model]
+        hv_cpu_threshold = float(self.hv_cpu_thresholds[hv_model])
+        hv_cpu_util_overall = hv.hv_cpu_util_overall(vm)
+
+        return (
+                hv_cpu_util_overall is not None
+                and hv_cpu_util_overall > hv_cpu_threshold
+        )
+
+
 class OverAllocation(object):
     """Check for an attribute being over allocated than the current one"""
     def __init__(self, attribute):
