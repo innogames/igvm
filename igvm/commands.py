@@ -853,6 +853,8 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
     # Check all HVs in parallel. This will check live data on those HVs
     # but without locking them. This allows us to do a real quick first
     # filtering round. Below follows another one on the filtered HVs only.
+    found = False
+    possible_hv = None
     results = parallel(
         _check_vm,
         identifiers=list(possible_hvs.keys()),
@@ -890,13 +892,25 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
             possible_hv.release_lock()
             continue
 
-        try:
-            yield possible_hv
-            break
-        finally:
-            possible_hv.release_lock()
-    else:
+        found = True
+        break
+
+    # No supported HV was found
+    if not found:
+        not_found_err = IGVMError(
+            'Cannot find hypervisor matching environment: {}, '
+            'states: {}, vlan_network: {}, offline: {}'.format(
+                hv_env, ', '.join(hypervisor_states), vm.route_network, offline,
+            )
+        )
+
         raise not_found_err
+
+    # Yield the hypervisor locked for working on it
+    try:
+        yield possible_hv
+    finally:
+        possible_hv.release_lock()
 
 
 @contextmanager
