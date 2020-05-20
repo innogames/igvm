@@ -25,7 +25,7 @@ class InsufficientResource(object):
     def __init__(self, hv_attribute, vm_attribute, multiplier=1, reserved=0):
         self.hv_attribute = hv_attribute
         self.vm_attribute = vm_attribute
-        self.multiplier = multiplier # TODO: Use identical units in Serveradmin.
+        self.multiplier = multiplier  # TODO Use identical units in Serveradmin
         self.reserved = reserved
 
     def __repr__(self):
@@ -151,12 +151,20 @@ class HypervisorCpuUsageLimit():
             return False
 
         hv_model = hv.dataset_obj[self.hardware_model]
+
+        # Bail out if hardware_model is not in HYPERVISOR_CPU_THRESHOLDS list
+        if hv_model not in self.hv_cpu_thresholds:
+            log.warning(
+                'Missing setting for "{}" in HYPERVISOR_CPU_THRESHOLDS'.format(
+                    hv_model))
+            return False
+
         hv_cpu_threshold = float(self.hv_cpu_thresholds[hv_model])
         hv_cpu_util_overall = hv.hv_cpu_util_overall(vm)
 
         return (
-                hv_cpu_util_overall is not None
-                and hv_cpu_util_overall > hv_cpu_threshold
+            hv_cpu_util_overall is not None and
+            hv_cpu_util_overall > hv_cpu_threshold
         )
 
 
