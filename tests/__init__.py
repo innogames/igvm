@@ -23,7 +23,7 @@ else:
 if environ.get('PYTEST_XDIST_WORKER_COUNT'):
     PYTEST_XDIST_WORKER_COUNT = int(environ['PYTEST_XDIST_WORKER_COUNT'])
 else:
-    PYTEST_XDIST_WORKER_COUNT = 0
+    PYTEST_XDIST_WORKER_COUNT = 1
 
 
 VM_NET = 'igvm-net-{}-aw.test.ig.local'.format(JENKINS_EXECUTOR)
