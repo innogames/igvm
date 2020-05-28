@@ -65,7 +65,7 @@ KVM_HWMODEL_TO_CPUMODEL = {
     'SandyBridge': [
         'Dell_R320',
         'Dell_M620', 'Dell_M630', 'Dell_M640',
-        'Dell_R620', 'Dell_R640',
+        'Dell_R430', 'Dell_R620', 'Dell_R640',
     ],
     'EPYC': [
         'Dell_R6515',
@@ -297,10 +297,15 @@ AWS_CONFIG = [
 # before we are experiencing reasonable steal time.
 HYPERVISOR_CPU_THRESHOLDS = {
     'Dell_M610': 50,  # untested
-    'Dell_M710': 50,  # untested
     'Dell_M620': 60,
     'Dell_M630': 70,
     'Dell_M640': 75,
+    'Dell_M710': 50,  # untested
+    'Dell_R320': 50,  # untested
+    'Dell_R430': 25,  # only one non relevant host
+    'Dell_R510': 50,  # untested
+    'Dell_R620': 25,  # only two hosts in retired state
+    'Dell_R640': 75,
     'Dell_R6515': 50,
 }
 
