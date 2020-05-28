@@ -9,7 +9,7 @@ from os import environ
 from tempfile import NamedTemporaryFile
 from unittest import TestCase
 
-from adminapi.dataset import Query
+from adminapi.dataset import Query, Any
 from fabric.api import env
 from fabric.network import disconnect_all
 
@@ -39,6 +39,8 @@ from igvm.puppet import clean_cert
 from igvm.settings import (
     COMMON_FABRIC_SETTINGS,
     HYPERVISOR_ATTRIBUTES,
+    HYPERVISOR_CPU_THRESHOLDS,
+    KVM_HWMODEL_TO_CPUMODEL,
     VG_NAME,
 )
 from igvm.utils import parse_size
@@ -158,6 +160,33 @@ class IGVMTest(TestCase):
                     hv.run(
                         'test ! -b /dev/{}/{}'.format(VG_NAME, self.uid_name)
                     )
+
+
+class SettingsHardwareModelTest(TestCase):
+    """Test that all hardware_models of all hypervisors have a cpu threshold
+    value defined in HYPERVISOR_CPU_THRESHOLDS dict"""
+
+    def setUp(self):
+        self.hardware_models = set([
+            x['hardware_model'] for x in Query({
+                'servertype': 'hypervisor',
+                'project': 'ndco',
+                'state': Any('online', 'online_reserved'),
+            }, ['hardware_model'])
+        ])
+
+    def test_hypervisor_cpu_thresholds(self):
+        for model in self.hardware_models:
+            self.assertIn(model, HYPERVISOR_CPU_THRESHOLDS)
+
+    def test_kvm_hwmodel_to_cpumodel(self):
+        models = [
+            cpu_model for cpu_models in KVM_HWMODEL_TO_CPUMODEL.values()
+            for cpu_model in cpu_models]
+        for model in self.hardware_models:
+            self.assertIn(
+                model, models,
+                msg='Missing hardware_model in KVM_HWMODEL_TO_CPUMODEL')
 
 
 class BuildTest(IGVMTest):
