@@ -6,7 +6,7 @@ Copyright (c) 2018 InnoGames GmbH
 import logging
 import math
 from contextlib import contextmanager
-from time import sleep
+from time import sleep, time
 from xml.etree import ElementTree
 
 from igvm.vm import VM
@@ -869,6 +869,44 @@ class Hypervisor(Host):
 
         hv_cpu_util_dest = self.hv_predict_vm_cpu_util(vm)
         hv_cpu_util_pct_dest = self.dataset_obj['cpu_util_pct']
-        hv_cpu_util_overall = hv_cpu_util_pct_dest + hv_cpu_util_dest
+        hv_cpu_util_log = self.hv_evaluate_migration_log()
+        hv_cpu_util_overall = sum([
+            hv_cpu_util_pct_dest,
+            hv_cpu_util_dest,
+            hv_cpu_util_log,
+        ])
 
         return float(hv_cpu_util_overall)
+
+    def hv_evaluate_migration_log(self) -> int:
+        """HV evaluate migration log
+
+        Calculate the added cpu usage from previous migrations
+
+        :return: added cpu usage from migrations as integer
+        """
+
+        hv_migration_log = self.dataset_obj['igvm_migration_log']
+        added_cpu_usage = 0
+        for entry in hv_migration_log:
+            cpu_usage_log = entry.split(' ')[1]
+            added_cpu_usage = added_cpu_usage + int(cpu_usage_log)
+
+        return added_cpu_usage
+
+    def hv_add_migration_log(self, vm: VM, operator: str) -> None:
+        """HV add migration log
+
+        add the cpu usage value of a vm to the source and destination
+        hypervisors migration log
+
+        :param vm: VM object
+        :param operator: plus or minus for source and dest HV
+        """
+
+        cpu_usage_vm = self.hv_predict_vm_cpu_util(vm)
+        timestamp = int(time())
+        log_entry = '{} {}{}'.format(timestamp, operator, round(cpu_usage_vm))
+
+        self.dataset_obj['igvm_migration_log'].add(log_entry)
+        self.dataset_obj.commit()
