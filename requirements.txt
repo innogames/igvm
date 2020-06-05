@@ -7,3 +7,4 @@ libvirt-python
 jinja2
 boto3
 tqdm
+mock

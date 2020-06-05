@@ -14,9 +14,8 @@ else:
     JENKINS_EXECUTOR = 'manual'
 
 if environ.get('PYTEST_XDIST_WORKER'):
-    PYTEST_XDIST_WORKER = int(
-        split('[a-zA-Z]+', environ['PYTEST_XDIST_WORKER'])[1]
-    )
+    parts = split('[a-zA-Z]+', environ['PYTEST_XDIST_WORKER'])
+    PYTEST_XDIST_WORKER = int(parts[-1])
 else:
     PYTEST_XDIST_WORKER = 0
 
