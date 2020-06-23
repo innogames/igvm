@@ -5,25 +5,34 @@ Copyright (c) 2018 InnoGames GmbH
 import json
 import logging
 import os
-import random
 import time
 from base64 import b64decode
 from hashlib import sha1, sha256
 from io import BytesIO
+from pathlib import Path
 from re import compile as re_compile
-from typing import Optional
+from typing import Optional, List, Union
 from uuid import uuid4
 
 import boto3
 import tqdm
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, CapacityNotAvailableError
 from fabric.api import cd, get, hide, put, run, settings
 from fabric.contrib.files import upload_template
 from fabric.exceptions import NetworkError
+from json.decoder import JSONDecodeError
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 from igvm.exceptions import ConfigError, RemoteCommandError, VMError
 from igvm.host import Host
-from igvm.settings import AWS_RETURN_CODES, COMMON_FABRIC_SETTINGS
+from igvm.settings import (
+    AWS_ECU_FACTOR,
+    AWS_RETURN_CODES,
+    AWS_INSTANCES_OVERVIEW_FILE,
+    AWS_INSTANCES_OVERVIEW_FILE_etag,
+    AWS_INSTANCES_OVERVIEW_URL,
+)
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
 from igvm.puppet import clean_cert
@@ -502,36 +511,46 @@ class VM(Host):
 
         ec2 = boto3.client('ec2')
 
-        try:
-            response = ec2.run_instances(
-                ImageId=self.dataset_obj['aws_image_id'],
-                InstanceType=self.dataset_obj['aws_instance_type'],
-                KeyName=self.dataset_obj['aws_key_name'],
-                SecurityGroupIds=list(
-                    self.dataset_obj['aws_security_group_ids']),
-                SubnetId=self.dataset_obj['aws_subnet_id'],
-                Placement={
-                    'AvailabilityZone': self.dataset_obj['aws_placement']
-                },
-                PrivateIpAddress=str(self.dataset_obj['intern_ip']),
-                UserData='' if postboot is None else postboot,
-                TagSpecifications=[
-                    {
-                        'ResourceType': 'instance',
-                        'Tags': [
-                            {
-                                'Key': 'Name',
-                                'Value': self.dataset_obj['hostname'],
-                            },
-                        ]
+        vm_types_overview = self.aws_get_instances_overview()
+        if vm_types_overview:
+            vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
+        else:
+            vm_types = [self.dataset_obj['aws_instance_type']]
+
+        for vm_type in vm_types:
+            try:
+                response = ec2.run_instances(
+                    ImageId=self.dataset_obj['aws_image_id'],
+                    InstanceType=vm_type,
+                    KeyName=self.dataset_obj['aws_key_name'],
+                    SecurityGroupIds=list(
+                        self.dataset_obj['aws_security_group_ids']),
+                    SubnetId=self.dataset_obj['aws_subnet_id'],
+                    Placement={
+                        'AvailabilityZone': self.dataset_obj['aws_placement']
                     },
-                ],
-                DryRun=False,
-                MinCount=1,
-                MaxCount=1)
-            log.info(response)
-        except ClientError as e:
-            raise VMError(e)
+                    PrivateIpAddress=str(self.dataset_obj['intern_ip']),
+                    UserData='' if postboot is None else postboot,
+                    TagSpecifications=[
+                        {
+                            'ResourceType': 'instance',
+                            'Tags': [
+                                {
+                                    'Key': 'Name',
+                                    'Value': self.dataset_obj['hostname'],
+                                },
+                            ]
+                        },
+                    ],
+                    DryRun=False,
+                    MinCount=1,
+                    MaxCount=1)
+                log.info(response)
+                break
+            except ClientError as e:
+                raise VMError(e)
+            except CapacityNotAvailableError as e:
+                continue
 
         if run_puppet:
             self.run_puppet(clear_cert=True, debug=debug_puppet)
@@ -849,3 +868,100 @@ class VM(Host):
         ) * hv_perffactor_src
 
         return float(vm_performance_value)
+
+    def aws_get_instances_overview(
+            self, timeout: int = 5) -> Union[List, None]:
+        """AWS Get Instances Overview
+
+        Load or download the latest instances.json, which contains
+        a complete overview about all instance_types, their configuration,
+        performance and pricing.
+
+        :param: timeout: Timeout value for the head/get request
+
+        :return: VM types overview as list
+                 or None, if the parsing/download failed
+        """
+
+        url = AWS_INSTANCES_OVERVIEW_URL
+        file = Path(AWS_INSTANCES_OVERVIEW_FILE)
+        etag_file = Path(AWS_INSTANCES_OVERVIEW_FILE_etag)
+
+        try:
+            head_req = Request(url, method='HEAD')
+            resp = urlopen(head_req, timeout=timeout)
+            if resp.status == 200:
+                etag = dict(resp.info())['ETag']
+            else:
+                log.warning('Could not retrieve ETag from {}'.format(url))
+                etag = None
+
+            if file.exists() and etag_file.exists() and etag:
+                with open(AWS_INSTANCES_OVERVIEW_FILE_etag) as f:
+                    prev_etag = f.read()
+                if etag == prev_etag:
+                    with open(AWS_INSTANCES_OVERVIEW_FILE) as f:
+                        return json.load(f)
+
+            resp = urlopen(url, timeout=timeout)
+            if etag:
+                with open(AWS_INSTANCES_OVERVIEW_FILE_etag, 'w') as f:
+                    f.write(etag)
+            with open(AWS_INSTANCES_OVERVIEW_FILE, 'w') as f:
+                content = resp.read().decode('utf-8')
+                f.write(content)
+                return json.loads(content)
+        except (HTTPError, JSONDecodeError) as e:
+            log.warning('Could not retrieve instances overview')
+            log.warning(e)
+            log.info('Proceeding with instance_type: {}'.format(
+                self.dataset_obj['aws_instance_type'])
+            )
+            return None
+
+    def aws_get_fitting_vm_types(self, overview: List) -> List:
+        """AWS Get Fitting VM types
+
+        Use the performance_value of the VM and multiply it with a static
+        factor to get the targeted ECU of AWS +-25% (which is kind of a
+        performance_value). Crawl the instances overview for fitting
+        vm_types for this targeted ECU range.
+
+        :param: overview: instances.json with a complete
+                          instance_types overview
+
+        :return: Fitting VM types as list
+        """
+
+        vm_performance_value = self.vm_performance_value()
+        region = self.dataset_obj['aws_placement'][:-1]
+
+        ecu_target = {
+            'min':
+                (vm_performance_value * AWS_ECU_FACTOR) -
+                (vm_performance_value * AWS_ECU_FACTOR * 0.25),
+            'max':
+                (vm_performance_value * AWS_ECU_FACTOR) +
+                (vm_performance_value * AWS_ECU_FACTOR * 0.25)
+        }
+
+        vm_types = dict()
+
+        for t in overview:
+            if region not in t['pricing']:
+                continue
+            if t['memory'] < (self.dataset_obj['memory'] / 1024):
+                continue
+            if 'ECU' not in t or not isinstance(t['ECU'], (int, float)):
+                continue
+            if ecu_target['min'] > t['ECU'] or ecu_target['max'] < t['ECU']:
+                continue
+
+            vm_types[t['instance_type']] = t
+
+        vm_types = sorted(vm_types.keys(), key=lambda x: (
+            vm_types[x]['pricing'][region]['linux']['ondemand'],
+            vm_types[x]['ECU'])
+        )
+
+        return vm_types

@@ -199,13 +199,13 @@ AWS_RETURN_CODES = {
     'stopped': 80,
 }
 
+AWS_INSTANCES_OVERVIEW_URL = 'https://www.ec2instances.info/instances.json'
+AWS_INSTANCES_OVERVIEW_FILE = '/tmp/AWS_INSTANCES_OVERVIEW_FILE.json'
+AWS_INSTANCES_OVERVIEW_FILE_etag = '/tmp/AWS_INSTANCES_OVERVIEW_FILE.etag'
+AWS_ECU_FACTOR = 7
+
 AWS_CONFIG = [
     {
-        # TODO: remove this puppet config and use internal project based puppet
-        'puppet': {
-            'ca_addr': '212.53.146.132',
-            'master_addr': '212.53.146.131',
-        },
         'apt': [
             {
                 'name': 'innogames_stable',
