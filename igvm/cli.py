@@ -24,7 +24,7 @@ from igvm.commands import (
     vm_restart,
     vm_start,
     vm_stop,
-    vm_sync,
+    vm_sync, vm_define,
 )
 from igvm.libvirt import close_virtconns
 
@@ -394,6 +394,13 @@ def parse_args():
         nargs='*',
         help='Migrate VMs matching the given serveradmin function offline',
     )
+
+    subparser = subparsers.add_parser(
+        'define',
+        description=vm_define.__doc__,
+    )
+    subparser.set_defaults(func=vm_define)
+    subparser.add_argument('vm_hostname', help='Hostname of the guest system')
 
     return vars(top_parser.parse_args())
 
