@@ -24,7 +24,7 @@ from igvm.commands import (
     vm_restart,
     vm_start,
     vm_stop,
-    vm_sync, vm_define,
+    vm_sync, vm_define, daemonize,
 )
 from igvm.libvirt import close_virtconns
 
@@ -401,12 +401,17 @@ def parse_args():
         help='Migrate VMs matching the given serveradmin function offline',
     )
 
-    subparser = subparsers.add_parser(
-        'define',
-        description=vm_define.__doc__,
-    )
+    subparser = subparsers.add_parser('define', description=vm_define.__doc__)
     subparser.set_defaults(func=vm_define)
     subparser.add_argument('vm_hostname', help='Hostname of the guest system')
+
+    subparser = subparsers.add_parser('daemonize',
+                                      description=daemonize.__doc__)
+    subparser.set_defaults(func=daemonize)
+    subparser.add_argument('--check_interval', default=60, type=int,
+                           help='Check every n seconds for VMs build/migrate')
+    subparser.add_argument('--attribute', default='igvm_action',
+                           help='Serveradmin attribute to query for')
 
     return vars(top_parser.parse_args())
 

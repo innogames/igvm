@@ -2,15 +2,18 @@
 
 Copyright (c) 2018 InnoGames GmbH
 """
-
+import json
 import logging
 import math
+import sys
 from collections import OrderedDict
 from contextlib import contextmanager, ExitStack
 from ipaddress import ip_address
 from os import environ
+from time import sleep, time
 
 from adminapi.dataset import Query
+from adminapi.exceptions import DatasetError
 from adminapi.filters import Any, StartsWith, Contains
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
@@ -804,6 +807,68 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
             )
 
         vm.rename(new_hostname)
+
+
+def daemonize(check_interval=60, attribute='igvm_action'):
+    """Start IGVM in daemon mode
+
+    When starting IGVM in daemon mode it will check every `check_interval`
+    seconds for VMs that have build or migrate as value for `attribute` in
+    Serveradmin and apply the given action.
+
+    VMs which are processed will have the value in_progress and remove it when
+    ready.
+
+    :param check_interval:
+    :param attribute:
+    """
+
+    try:
+        while True:
+            vms_query = Query(
+                {'servertype': 'vm', attribute: Any('build', 'migrate')},
+                ['hostname', attribute])
+
+            # Process one VM at a time then start over again.
+            for vm in vms_query:
+                start = int(time())
+                action = vm[attribute]
+                log.info('Starting to {} {}'.format(action, vm['hostname']))
+
+                vm[attribute] = 'in_progress'
+                try:
+                    vm.commit()
+                except DatasetError:
+                    # Another daemon might have grabbed this VM
+                    continue
+
+                try:
+                    if action == 'build':
+                        vm_build(vm['hostname'])
+                    if action == 'migrate':
+                        vm_migrate(vm['hostname'])
+                except Exception as ex:
+                    # Try to mark as failed before dying ...
+                    vm[attribute] = 'failed'
+                    vm.commit()
+
+                    raise ex
+
+                vm[attribute] = 'successful'
+                vm.commit()
+
+                duration = int(time()) - start
+                log.info('Finished after {} seconds.\n'.format(duration))
+
+                # Terminate libvirt connections to HVs otherwise they stay
+                # open until the daemon ends which we don't want.
+                disconnect_all()
+
+            log.info('Going to sleep for {} seconds'.format(check_interval))
+            sleep(check_interval)
+    except KeyboardInterrupt:
+        log.info('Exiting on demand due to pressing CTRL+C ...')
+        sys.exit(0)
 
 
 @contextmanager
