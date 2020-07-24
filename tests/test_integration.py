@@ -50,7 +50,7 @@ from igvm.settings import (
 )
 from igvm.utils import parse_size
 from igvm.vm import VM
-from tests import VM_HOSTNAME, VM_NET
+from tests import VM_HOSTNAME, VM_HOSTNAME_RENAMED, VM_NET
 from tests.conftest import (
     clean_all,
     cmd,
@@ -134,9 +134,9 @@ class IGVMTest(TestCase):
         clean_cert(self.vm_obj)
         clean_all(self.route_network, VM_HOSTNAME)
 
-    def check_vm_present(self):
+    def check_vm_present(self, vm_name=VM_HOSTNAME):
         # Operate on fresh object
-        with _get_vm(VM_HOSTNAME) as vm:
+        with _get_vm(vm_name) as vm:
             for hv in self.hvs:
                 if hv.dataset_obj['hostname'] == vm.dataset_obj['hypervisor']:
                     # Is it on correct HV?
@@ -512,25 +512,15 @@ class CommandTest(IGVMTest):
         vm_define(VM_HOSTNAME)
         self.check_vm_present()
 
+    def test_vm_rename(self):
+        """Test vm_rename
 
-# class RenameTest(IGVMTest):
-#     """Test many possible VM building scenarios"""
-#
-#     def setUp(self):
-#         super(RenameTest, self).setUp()
-#         vm_build(VM_HOSTNAME)
-#         self.check_vm_present()
-#         with _get_vm(VM_HOSTNAME) as vm:
-#             # For contacting VM over shell
-#             self.vm = vm
-#
-#     def tearDown(self):
-#         super(RenameTest, self).tearDown()
-#
-#     def test_rename(self):
-#         # self.check_vm_absent(vm_name=VM_HOSTNAME_RENAMED)
-#         vm_rename(VM_HOSTNAME, new_hostname=VM_HOSTNAME_RENAMED, offline=True)
-#         # self.check_vm_absent(vm_name=VM_HOSTNAME)
+        Make sure renaming a VM works as expected without breaking while
+        runtime.
+        """
+
+        vm_rename(VM_HOSTNAME, new_hostname=VM_HOSTNAME_RENAMED, offline=True)
+        self.check_vm_present(VM_HOSTNAME_RENAMED)
 
 
 class MigrationTest(IGVMTest):
