@@ -114,7 +114,6 @@ class IGVMTest(TestCase):
             'int:innogames:stable',
         ]
         self.vm_obj['state'] = 'online'
-        self.vm_obj['team'] = 'test'
         self.vm_obj.commit()
 
         self.uid_name = '{}_{}'.format(
