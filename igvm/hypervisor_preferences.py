@@ -160,7 +160,7 @@ class HypervisorCpuUsageLimit():
             return False
 
         hv_cpu_threshold = float(self.hv_cpu_thresholds[hv_model])
-        hv_cpu_util_overall = hv.hv_cpu_util_overall(vm)
+        hv_cpu_util_overall = hv.estimate_cpu_usage(vm)
 
         return (
             hv_cpu_util_overall is not None and

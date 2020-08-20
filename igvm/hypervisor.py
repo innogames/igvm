@@ -829,92 +829,104 @@ class Hypervisor(Host):
             .format(device, size, *listener)
         )
 
-    def hv_pcpus_used_by_vm(self, vm: VM) -> float:
-        """pCPUs used by VM
+    def estimate_cpu_cores_used(self, vm: VM) -> float:
+        """Estimate the number of CPU cores used by the VM
 
-        Calculate the physical CPUs the VM will use on a potential destination
-        hypervisor.
+        Estimate the number of CPU cores used by the VM on the Hypervisor
+        based on the known data of the past 24 hours by using the mathematical
+        quotient of the VM performance value and the Hypervisors
+        cpu_perffactor.
 
         :param: vm: VM object
 
-        :return: Amount of pCPUs as float
+        :return: number of CPU cores used on Hypervisor
         """
 
-        vm_performance_value = vm.vm_performance_value()
+        vm_performance_value = vm.performance_value()
 
-        # We can't save floats in graphite cache of serveradmin and therefore
-        # divide it by the value we multiplied it before.
-        hv_perffactor_dest = self.dataset_obj['cpu_perffactor'] / 1000
-        hv_pcpus_dest = vm_performance_value / hv_perffactor_dest
+        # Serveradmin can not handle floats right now so we safe them as
+        # multiple ones of thousand and just divide them here again.
+        hv_cpu_perffactor = self.dataset_obj['cpu_perffactor'] / 1000
+        cpu_cores_used = vm_performance_value / hv_cpu_perffactor
 
-        return float(hv_pcpus_dest)
+        return float(cpu_cores_used)
 
-    def hv_predict_vm_cpu_util(self, vm: VM) -> float:
-        """Predict VM CPU util
+    def estimate_vm_cpu_usage(self, vm: VM) -> float:
+        """Estimate CPU usage of a VM on the Hypervisor
 
-        Predict the CPU usage the VM will produce on a potential destination
-        hypervisor.
+        Estimate the CPU usage (as percent) on the Hypervisor.
+
+        :param: vm: VM object
+
+        :return: CPU usage on Hypervisor (as percent)
+        """
+
+        vm_cpu_cores = self.estimate_cpu_cores_used(vm)
+        hv_num_cpu = self.dataset_obj['num_cpu']
+        cpu_usage = (vm_cpu_cores / hv_num_cpu) * 100
+
+        return float(cpu_usage)
+
+    def estimate_cpu_usage(self, vm: VM) -> float:
+        """Estimate the Hypervisor CPU usage with given VM
+
+        Estimate the total CPU usage of the Hypervisor with the given VM on top
+        based on the data we have from the past 24 hours.
 
         :param: vm: VM object
 
         :return: Cpu utilisation in percent as float
         """
 
-        hv_pcpus_dest = self.hv_pcpus_used_by_vm(vm)
-        hv_num_cpu_dest = self.dataset_obj['num_cpu']
-        hv_vm_cpu_util_dest = (hv_pcpus_dest / hv_num_cpu_dest) * 100
+        vm_cpu_usage = self.estimate_vm_cpu_usage(vm)
+        hv_cpu_usage = self.dataset_obj['cpu_util_pct']
 
-        return float(hv_vm_cpu_util_dest)
-
-    def hv_cpu_util_overall(self, vm: VM) -> float:
-        """HV CPU util overall
-
-        Calculate the overall CPU usage of a hypervisor incl. the actual
-        migrated VM
-
-        :param: vm: VM object
-
-        :return: Cpu utilisation in percent as float
-        """
-
-        hv_cpu_util_dest = self.hv_predict_vm_cpu_util(vm)
-        hv_cpu_util_pct_dest = self.dataset_obj['cpu_util_pct']
-        hv_cpu_util_log = self.hv_evaluate_migration_log()
-        hv_cpu_util_overall = sum([
-            hv_cpu_util_pct_dest,
-            hv_cpu_util_dest,
-            hv_cpu_util_log,
+        # Take into account cpu_util_pct is outdated
+        #
+        # Take into account recent migrations from and to the Hypervisor to
+        # avoid moving too many VMs to the same Hypervisor or discarding the
+        # Hypervisor as candidate because the cpu_util_pct is not up-to-date
+        # yet.
+        #
+        # The migration_log logs the migration of the past 24 hours after that
+        # the cpu_util_pct should have up-to-date values.
+        cpu_usage = sum([
+            hv_cpu_usage,
+            vm_cpu_usage,
+            self.cpu_usage_of_recent_migrations(),
         ])
 
-        return float(hv_cpu_util_overall)
+        return float(cpu_usage)
 
-    def hv_evaluate_migration_log(self) -> int:
-        """HV evaluate migration log
+    def cpu_usage_of_recent_migrations(self) -> int:
+        """Summarized CPU usage of recent VM migrations
 
-        Calculate the added cpu usage from previous migrations
+        Summarize the CPU usage of VMs recently migrated from or to this
+        Hypervisor and return the total.
 
-        :return: added cpu usage from migrations as integer
+        :return: Total CPU usage of recently moved VMs
         """
 
-        hv_migration_log = self.dataset_obj['igvm_migration_log']
-        added_cpu_usage = 0
-        for entry in hv_migration_log:
-            cpu_usage_log = entry.split(' ')[1]
-            added_cpu_usage = added_cpu_usage + int(cpu_usage_log)
+        migration_log = self.dataset_obj['igvm_migration_log']
+        total_cpu_usage = 0
+        for vm_migration_log in migration_log:
+            cpu_usage = vm_migration_log.split(' ')[1]
+            total_cpu_usage = total_cpu_usage + int(cpu_usage)
 
-        return added_cpu_usage
+        return total_cpu_usage
 
-    def hv_add_migration_log(self, vm: VM, operator: str) -> None:
-        """HV add migration log
+    def log_migration(self, vm: VM, operator: str) -> None:
+        """Log migration to or from Hypervisor
 
-        add the cpu usage value of a vm to the source and destination
-        hypervisors migration log
+        Save the estimated CPU usage of the VM to the migration log to be able
+        to take recent migrations into account when this Hypervisor is selected
+        as possible candidate.
 
         :param vm: VM object
-        :param operator: plus or minus for source and dest HV
+        :param operator: plus for migration to HV, minus for migration from HV
         """
 
-        cpu_usage_vm = self.hv_predict_vm_cpu_util(vm)
+        cpu_usage_vm = self.estimate_vm_cpu_usage(vm)
         timestamp = int(time())
         log_entry = '{} {}{}'.format(timestamp, operator, round(cpu_usage_vm))
 
