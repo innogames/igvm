@@ -27,6 +27,7 @@ from igvm.exceptions import (
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.hypervisor_preferences import sorted_hypervisors
+from igvm.puppet import clean_cert
 from igvm.settings import (
     AWS_CONFIG,
     AWS_RETURN_CODES,
@@ -37,7 +38,6 @@ from igvm.settings import (
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, parallel
 from igvm.vm import VM
-from igvm.puppet import clean_cert
 
 log = logging.getLogger(__name__)
 
@@ -284,7 +284,7 @@ def change_address(
 
 @with_fabric_settings
 def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
-             allow_reserved_hv=False, rebuild=False):
+             allow_reserved_hv=False, rebuild=False, enforce_vm_env=False):
     """Create a VM and start it
 
     Puppet in run once to configure baseline networking.
@@ -321,6 +321,7 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
                     ['online', 'online_reserved'] if allow_reserved_hv
                     else ['online'],
                     True,
+                    enforce_vm_env,
                 ))
                 vm.dataset_obj['hypervisor'] = \
                     vm.hypervisor.dataset_obj['hostname']
@@ -352,7 +353,8 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
 def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
                run_puppet=False, debug_puppet=False,
                offline=False, offline_transport='drbd',
-               allow_reserved_hv=False, no_shutdown=False):
+               allow_reserved_hv=False, no_shutdown=False,
+               enforce_vm_env=False):
     """Migrate a VM to a new hypervisor."""
 
     if not (bool(vm_hostname) ^ bool(vm_object)):
@@ -389,6 +391,7 @@ def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
                 ['online', 'online_reserved'] if allow_reserved_hv
                 else ['online'],
                 offline,
+                enforce_vm_env,
             ))
 
         was_running = _vm.is_running()
@@ -879,16 +882,25 @@ def _get_hypervisor(hostname, allow_reserved=False):
 
 
 @contextmanager
-def _get_best_hypervisor(vm, hypervisor_states, offline=False):
-    hv_env = environ.get('IGVM_MODE', 'production')
+def _get_best_hypervisor(
+        vm, hypervisor_states, offline=False, enforce_vm_env=False):
 
-    # Get all (theoretically) possible HVs sorted by HV preferences
-    hypervisors = (Hypervisor(o) for o in Query({
+    hv_filter = {
         'servertype': 'hypervisor',
-        'environment': hv_env,
         'vlan_networks': vm.route_network,
         'state': Any(*hypervisor_states),
-    }, HYPERVISOR_ATTRIBUTES))
+    }
+
+    # Enforce IGVM_MODE used for tests
+    if 'IGVM_MODE' in environ:
+        hv_filter['environment'] = environ.get('IGVM_MODE')
+    else:
+        if enforce_vm_env:
+            hv_filter['environment'] = vm.dataset_obj['environment']
+
+    # Get all (theoretically) possible HVs sorted by HV preferences
+    hypervisors = (Hypervisor(o) for o in
+                   Query(hv_filter, HYPERVISOR_ATTRIBUTES))
     hypervisors = sorted_hypervisors(HYPERVISOR_PREFERENCES, vm, hypervisors)
 
     possible_hvs = OrderedDict()
@@ -949,7 +961,8 @@ def _get_best_hypervisor(vm, hypervisor_states, offline=False):
         raise IGVMError(
             'Cannot find hypervisor matching environment: {}, '
             'states: {}, vlan_network: {}, offline: {}'.format(
-                hv_env, ', '.join(hypervisor_states), vm.route_network, offline,
+                hv_filter['environment'],
+                ', '.join(hypervisor_states), vm.route_network, offline,
             )
         )
 
