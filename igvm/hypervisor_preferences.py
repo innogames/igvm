@@ -168,6 +168,30 @@ class HypervisorCpuUsageLimit():
         )
 
 
+class HypervisorEnvironmentValue():
+    """Check if the environment of the hypervisor fits with the VM env.
+
+    Make any hypervisor less likely chosen, which would have a different
+    environment.
+    """
+    def __init__(self, hv_env: str):
+        self.hv_env = hv_env
+
+    def __repr__(self):
+        args = repr(self.hv_env)
+
+        return '{}({})'.format(type(self).__name__, args)
+
+    def __call__(self, vm, hv) -> bool:
+        hypervisor_env = hv.dataset_obj[self.hv_env]
+        vm_env = vm.dataset_obj['environment']
+
+        if hypervisor_env == vm_env:
+            return True
+
+        return False
+
+
 class OverAllocation(object):
     """Check for an attribute being over allocated than the current one"""
     def __init__(self, attribute):
