@@ -829,42 +829,43 @@ class Hypervisor(Host):
             .format(device, size, *listener)
         )
 
-    def hv_pcpus_used_by_vm(self, vm: VM) -> float:
-        """pCPUs used by VM
+    def estimate_cpu_cores_used(self, vm: VM) -> float:
+        """Estimate the number of CPU cores used by the VM
 
-        Calculate the physical CPUs the VM will use on a potential destination
-        hypervisor.
-
-        :param: vm: VM object
-
-        :return: Amount of pCPUs as float
-        """
-
-        vm_performance_value = vm.vm_performance_value()
-
-        # We can't save floats in graphite cache of serveradmin and therefore
-        # divide it by the value we multiplied it before.
-        hv_perffactor_dest = self.dataset_obj['cpu_perffactor'] / 1000
-        hv_pcpus_dest = vm_performance_value / hv_perffactor_dest
-
-        return float(hv_pcpus_dest)
-
-    def hv_predict_vm_cpu_util(self, vm: VM) -> float:
-        """Predict VM CPU util
-
-        Predict the CPU usage the VM will produce on a potential destination
-        hypervisor.
+        Estimate the number of CPU cores used by the VM on the Hypervisor
+        based on the known data of the past 24 hours by using the mathematical
+        quotient of the VM performance value and the Hypervisors
+        cpu_perffactor.
 
         :param: vm: VM object
 
-        :return: Cpu utilisation in percent as float
+        :return: number of CPU cores used on Hypervisor
         """
 
-        hv_pcpus_dest = self.hv_pcpus_used_by_vm(vm)
-        hv_num_cpu_dest = self.dataset_obj['num_cpu']
-        hv_vm_cpu_util_dest = (hv_pcpus_dest / hv_num_cpu_dest) * 100
+        vm_performance_value = vm.performance_value()
 
-        return float(hv_vm_cpu_util_dest)
+        # Serveradmin can not handle floats right now so we safe them as
+        # multiple ones of thousand and just divide them here again.
+        hv_cpu_perffactor = self.dataset_obj['cpu_perffactor'] / 1000
+        cpu_cores_used = vm_performance_value / hv_cpu_perffactor
+
+        return float(cpu_cores_used)
+
+    def estimate_cpu_usage(self, vm: VM) -> float:
+        """Estimate CPU usage on Hypervisor
+
+        Estimate the CPU usage (as percent) on the Hypervisor.
+
+        :param: vm: VM object
+
+        :return: CPU usage on Hyperviosr (as percent)
+        """
+
+        vm_cpu_cores = self.estimate_cpu_cores_used(vm)
+        hv_num_cpu = self.dataset_obj['num_cpu']
+        cpu_usage = (vm_cpu_cores / hv_num_cpu) * 100
+
+        return float(cpu_usage)
 
     def hv_cpu_util_overall(self, vm: VM) -> float:
         """HV CPU util overall
@@ -877,7 +878,7 @@ class Hypervisor(Host):
         :return: Cpu utilisation in percent as float
         """
 
-        hv_cpu_util_dest = self.hv_predict_vm_cpu_util(vm)
+        hv_cpu_util_dest = self.estimate_cpu_usage(vm)
         hv_cpu_util_pct_dest = self.dataset_obj['cpu_util_pct']
         hv_cpu_util_log = self.hv_evaluate_migration_log()
         hv_cpu_util_overall = sum([
@@ -914,7 +915,7 @@ class Hypervisor(Host):
         :param operator: plus or minus for source and dest HV
         """
 
-        cpu_usage_vm = self.hv_predict_vm_cpu_util(vm)
+        cpu_usage_vm = self.estimate_cpu_usage(vm)
         timestamp = int(time())
         log_entry = '{} {}{}'.format(timestamp, operator, round(cpu_usage_vm))
 

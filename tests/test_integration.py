@@ -469,7 +469,7 @@ class CommandTest(IGVMTest):
             hv.dataset_obj.commit()
 
         src_hv = self.vm.hypervisor.dataset_obj['hostname']
-        cpu_usage_vm_src = self.vm.hypervisor.hv_predict_vm_cpu_util(self.vm)
+        cpu_usage_vm_src = self.vm.hypervisor.estimate_cpu_usage(self.vm)
         timestamp = 1234567890
 
         vm_migrate(
@@ -493,7 +493,7 @@ class CommandTest(IGVMTest):
                     {'hostname': vm.hypervisor.dataset_obj['hostname']},
                     ['igvm_migration_log']).get()
             )
-            cpu_usage_vm_dest = vm.hypervisor.hv_predict_vm_cpu_util(vm)
+            cpu_usage_vm_dest = vm.hypervisor.estimate_cpu_usage(vm)
             self.assertEqual(
                 list(dest_hv_obj['igvm_migration_log']),
                 ['{} +{}'.format(timestamp, round(cpu_usage_vm_dest))]
