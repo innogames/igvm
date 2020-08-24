@@ -522,6 +522,10 @@ class CommandTest(IGVMTest):
         vm_rename(VM_HOSTNAME, new_hostname=VM_HOSTNAME_RENAMED, offline=True)
         self.check_vm_present(VM_HOSTNAME_RENAMED)
 
+        # Tests in IGVM are not isolated so we have to revert our changes or
+        # the following test will fail.
+        vm_rename(VM_HOSTNAME_RENAMED, new_hostname=VM_HOSTNAME, offline=True)
+
 
 class MigrationTest(IGVMTest):
     def setUp(self):
