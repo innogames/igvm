@@ -2,7 +2,6 @@
 
 Copyright (c) 2020 InnoGames GmbH
 """
-from __future__ import print_function
 
 from logging import INFO, basicConfig
 from os import environ
@@ -66,7 +65,7 @@ environ['IGVM_MODE'] = 'testing'
 
 
 def teardown_module():
-    disconnect_all()  # Will hang on Jessie + Python3
+    disconnect_all()
 
 
 class IGVMTest(TestCase):
@@ -107,13 +106,13 @@ class IGVMTest(TestCase):
         self.vm_obj['memory'] = 2048
         self.vm_obj['no_monitoring'] = True
         self.vm_obj['num_cpu'] = 2
-        self.vm_obj['os'] = 'stretch'
+        self.vm_obj['os'] = 'buster'
         self.vm_obj['project'] = 'test'
         self.vm_obj['puppet_environment'] = None
         self.vm_obj['puppet_ca'] = 'testing-puppetca.innogames.de'
         self.vm_obj['puppet_master'] = 'puppet-lb.test.ig.local'
         self.vm_obj['repositories'] = [
-            'int:basestretch:stable',
+            'int:basebuster:stable',
             'int:innogames:stable',
         ]
         self.vm_obj['state'] = 'online'
