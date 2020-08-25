@@ -32,7 +32,10 @@ VM_HOSTNAME = VM_HOSTNAME_PATTERN.format(
     JENKINS_EXECUTOR,
     PYTEST_XDIST_WORKER,
 )
-VM_HOSTNAME_RENAMED = 'renamed-' + VM_HOSTNAME
+VM_HOSTNAME_RENAMED = 'igvm-vm-rename-{}-{}.test.ig.local'.format(
+    JENKINS_EXECUTOR,
+    PYTEST_XDIST_WORKER,
+)
 
 # Amount of time after which the igvm_locked status should be cleared
 IGVM_LOCKED_TIMEOUT = timedelta(minutes=15)

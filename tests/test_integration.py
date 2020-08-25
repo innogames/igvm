@@ -520,7 +520,12 @@ class CommandTest(IGVMTest):
         """
 
         vm_rename(VM_HOSTNAME, new_hostname=VM_HOSTNAME_RENAMED, offline=True)
+        # If this tests fails you must manually remove the VM from the HVs
         self.check_vm_present(VM_HOSTNAME_RENAMED)
+
+        # Rename VM back to its original afterwards to make sure the cleanup
+        # task of IGVM can delete it.
+        vm_rename(VM_HOSTNAME_RENAMED, new_hostname=VM_HOSTNAME, offline=True)
 
 
 class MigrationTest(IGVMTest):
