@@ -433,18 +433,18 @@ def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
             _vm.reset_state()
 
             # Add migration log entries to hypervisor and previous_hypervisor
-            hypervisor.hv_add_migration_log(_vm, '+')
+            hypervisor.log_migration(_vm, '+')
             transaction.on_rollback(
                 'reset hypervisor log',
-                hypervisor.hv_add_migration_log,
+                hypervisor.log_migration,
                 _vm,
                 '-',
             )
 
-            previous_hypervisor.hv_add_migration_log(_vm, '-')
+            previous_hypervisor.log_migration(_vm, '-')
             transaction.on_rollback(
                 'reset previous hypervisor log',
-                previous_hypervisor.hv_add_migration_log,
+                previous_hypervisor.log_migration,
                 _vm,
                 '+',
             )

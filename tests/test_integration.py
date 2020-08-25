@@ -458,15 +458,15 @@ class CommandTest(IGVMTest):
         self.vm.shutdown()
         host_info(VM_HOSTNAME)
 
-    @patch('igvm.vm.VM.vm_performance_value', return_value=5.0)
+    @patch('igvm.vm.VM.performance_value', return_value=5.0)
     @patch('igvm.hypervisor.time', return_value=1234567890)
-    def test_igvm_migration_log(self, mock_vm_performance_value, mock_time):
+    def test_igvm_migration_log(self, performance_value, mock_time):
         for hv in self.hvs:
             hv.dataset_obj['igvm_migration_log'].clear()
             hv.dataset_obj.commit()
 
         src_hv = self.vm.hypervisor.dataset_obj['hostname']
-        cpu_usage_vm_src = self.vm.hypervisor.hv_predict_vm_cpu_util(self.vm)
+        cpu_usage_vm_src = self.vm.hypervisor.estimate_vm_cpu_usage(self.vm)
         timestamp = 1234567890
 
         vm_migrate(
@@ -490,7 +490,7 @@ class CommandTest(IGVMTest):
                     {'hostname': vm.hypervisor.dataset_obj['hostname']},
                     ['igvm_migration_log']).get()
             )
-            cpu_usage_vm_dest = vm.hypervisor.hv_predict_vm_cpu_util(vm)
+            cpu_usage_vm_dest = vm.hypervisor.estimate_vm_cpu_usage(vm)
             self.assertEqual(
                 list(dest_hv_obj['igvm_migration_log']),
                 ['{} +{}'.format(timestamp, round(cpu_usage_vm_dest))]

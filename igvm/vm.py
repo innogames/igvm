@@ -846,28 +846,39 @@ class VM(Host):
 
         return sync_values
 
-    def vm_performance_value(self) -> float:
-        """VM Performance Value
+    def performance_value(self) -> float:
+        """VM performance value
 
-        Calculate the performance_value of the VM by multiplying the
-        load_99 of the VM with the cpu_perffactor of the HV.
-        Use the num_cpu instead of load_99 value, if load_99 > num_cpu.
+        The performance value is the mathematical product of the load average
+        of a VM and a artificial performance factor of a Hypervisor.
+
+        load_99 is the 99 percentile of the load average (1 minute) of the past
+        24 hours.
+
+        cpu_perffactor is a artificial factor for the Hypervisor hardware to
+        allow comparison between different CPU models. The better the CPU
+        the higher the factor.
+
+        See https://github.com/innogames/igcollect -> linux_cpu_perffactor.py
 
         :return: performance_value of VM as float
         """
 
-        # We can't save floats in graphite cache of serveradmin and therefore
-        # divide it by the value we multiplied it before.
-        vm_load_99 = self.dataset_obj['load_99'] / 1000
-        hv_perffactor_src = self.hypervisor.dataset_obj[
-                                'cpu_perffactor'] / 1000
+        # Serveradmin can not handle floats right now so we safe them as
+        # multiple ones of thousand and just divide them here again.
+        vm_load_99 = self.dataset_obj['load_99'] / 1000  # Default 0
         vm_num_cpu = self.dataset_obj['num_cpu']
+        hv_cpu_perffactor = self.hypervisor.dataset_obj[
+                                'cpu_perffactor'] / 1000  # Default 1000
 
-        vm_performance_value = (
+        # If load_99 is higher than the number of vCPUs we use the number of
+        # the vCPUs to avoid returning fantastic numbers no hardware can ever
+        # serve.
+        estimated_load = (
             vm_load_99 if vm_load_99 < vm_num_cpu else vm_num_cpu
-        ) * hv_perffactor_src
+        ) * hv_cpu_perffactor
 
-        return float(vm_performance_value)
+        return float(estimated_load)
 
     def aws_get_instances_overview(
             self, timeout: int = 5) -> Union[List, None]:
@@ -933,7 +944,7 @@ class VM(Host):
         :return: Fitting VM types as list
         """
 
-        vm_performance_value = self.vm_performance_value()
+        vm_performance_value = self.performance_value()
         region = self.dataset_obj['aws_placement'][:-1]
 
         ecu_target = {
