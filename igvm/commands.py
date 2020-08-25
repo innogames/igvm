@@ -780,13 +780,7 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
         if vm.dataset_obj['datacenter_type'] != 'kvm.dct':
             raise NotImplementedError(
                 'This operation is not yet supported for {}'.format(
-                    vm.dataset_obj['datacenter_type']
-                )
-            )
-
-        if vm.dataset_obj['puppet_disabled']:
-            raise ConfigError(
-                'Rename command only works with Puppet enabled'
+                    vm.dataset_obj['datacenter_type'])
             )
 
         _check_defined(vm)

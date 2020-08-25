@@ -160,23 +160,6 @@ class VM(Host):
         """Resizes the host memory."""
         self.hypervisor.vm_set_memory(self, memory)
 
-    def set_hostname(self, new_hostname, transaction=None):
-        """Changes the hostname of a VM"""
-        self.previous_hostname = self.dataset_obj['hostname']
-
-        self.dataset_obj['hostname'] = new_hostname
-        self.check_serveradmin_config()
-
-        self.dataset_obj.commit()
-
-        if transaction:
-            transaction.on_rollback('revert_hostname', self.revert_hostname)
-
-    def revert_hostname(self):
-        """Revert the VM name to the previously defined name"""
-        if hasattr(self, 'previous_hostname'):
-            self.set_hostname(self.previous_hostname)
-
     def check_serveradmin_config(self):
         """Validate relevant Serveradmin attributes"""
 
@@ -627,23 +610,29 @@ class VM(Host):
 
     def rename(self, new_hostname):
         """Rename the VM"""
+        self.dataset_obj['hostname'] = new_hostname
+        self.check_serveradmin_config()
+
+        fd = BytesIO()
+        fd.write(bytes(new_hostname, 'utf-8'))
+        self.put('/etc/hostname', fd)
+        self.put('/etc/mailname', fd)
+
+        hosts_file = [
+            line
+            for line in self.run('cat /etc/hosts').splitlines()
+            if not line.startswith(str(self.dataset_obj['intern_ip']))
+        ]
+        hosts_file.append('{0}\t{1}'.format(
+            self.dataset_obj['intern_ip'], new_hostname
+        ))
+        self.run("echo '{0}' > /etc/hosts".format('\n'.join(hosts_file)))
+
         with Transaction() as transaction:
-            self.set_hostname(new_hostname, transaction=transaction)
-            self.check_serveradmin_config()
-
             self.shutdown(transaction=transaction)
-
             self.hypervisor.redefine_vm(self, new_fqdn=new_hostname)
-            log.warning(
-                'Domain redefinition cannot be rolled back properly. Your '
-                'domain is still defined with the new name.'
-            )
 
-            self.hypervisor.mount_vm_storage(self, transaction=transaction)
-
-            self.run_puppet()
-
-            self.hypervisor.umount_vm_storage(self)
+            self.dataset_obj.commit()
 
             self.start(transaction=transaction)
 
