@@ -104,13 +104,13 @@ class IGVMTest(TestCase):
         self.vm_obj['memory'] = 2048
         self.vm_obj['no_monitoring'] = True
         self.vm_obj['num_cpu'] = 2
-        self.vm_obj['os'] = 'stretch'
+        self.vm_obj['os'] = 'buster'
         self.vm_obj['project'] = 'test'
         self.vm_obj['puppet_environment'] = None
         self.vm_obj['puppet_ca'] = 'testing-puppetca.innogames.de'
         self.vm_obj['puppet_master'] = 'puppet-lb.test.ig.local'
         self.vm_obj['repositories'] = [
-            'int:basestretch:stable',
+            'int:basebuster:stable',
             'int:innogames:stable',
         ]
         self.vm_obj['state'] = 'online'
@@ -195,7 +195,7 @@ class SettingsHardwareModelTest(TestCase):
 class BuildTest(IGVMTest):
     """Test many possible VM building scenarios"""
 
-    def test_build_stretch(self):
+    def test_vm_build(self):
         vm_build(VM_HOSTNAME)
         self.check_vm_present()
 
