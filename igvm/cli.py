@@ -177,6 +177,12 @@ def parse_args():
             ' operator to shut down VM.'
         ),
     )
+    subparser.add_argument(
+        '--enforce-vm-env',
+        dest='enforce_vm_env',
+        action='store_true',
+        help='Build or migrate VM only to a HV with the same environment of VM'
+    )
 
     subparser = subparsers.add_parser(
         'change-address',

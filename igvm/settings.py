@@ -16,6 +16,7 @@ from igvm.hypervisor_preferences import (
     HypervisorAttributeValue,
     HypervisorAttributeValueLimit,
     HypervisorCpuUsageLimit,
+    HypervisorEnvironmentValue,
     InsufficientResource,
     OtherVMs,
     OverAllocation,
@@ -123,6 +124,7 @@ HYPERVISOR_ATTRIBUTES = [
     'cpu_perffactor',
     'cpu_util_pct',
     'cpu_util_vm_pct',
+    'environment',
     'hardware_model',
     'hostname',
     'igvm_locked',
@@ -332,6 +334,9 @@ HYPERVISOR_PREFERENCES = [
         multiplier=1024,
         reserved=2048,
     ),
+    # Compares the environment of the VM with the environment of the
+    # hypervisor. It makes hypervisors of different envs less likely chosen.
+    HypervisorEnvironmentValue('environment'),
     # Checks the maximum vCPU usage (95 percentile) of the given hypervisor
     # for the given time_range and dismisses it as target when it is over
     # the value of threshold.
