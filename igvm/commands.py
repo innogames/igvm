@@ -959,12 +959,9 @@ def _get_best_hypervisor(
     if not found_hv:
         # No supported HV was found
         raise IGVMError(
-            'Cannot find hypervisor matching environment: {}, '
-            'states: {}, vlan_network: {}, offline: {}'.format(
-                hv_filter['environment'],
-                ', '.join(hypervisor_states), vm.route_network, offline,
-            )
-        )
+            'Automatically finding the best Hypervisor failed! '
+            'Can not find a suitable hypervisor with the preferences and '
+            'the Query: {}'.format(hv_filter))
 
     # Yield the hypervisor locked for working on it
     try:
