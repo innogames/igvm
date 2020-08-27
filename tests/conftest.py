@@ -47,11 +47,11 @@ def clean_all(route_network, vm_hostname=None):
 
     # If a VM hostname is given, only that will be cleaned from HVs.
     if vm_hostname is None:
-        pattern = '^([0-9]+_)?{}$'.format(
+        pattern = '^([0-9]+_)?(vm-rename-)?{}$'.format(
             VM_HOSTNAME_PATTERN.format(JENKINS_EXECUTOR, '[0-9]+'),
         )
     else:
-        pattern = '^([0-9]+_)?{}$'.format(vm_hostname)
+        pattern = '^([0-9]+_)?(vm-rename-)?{}$'.format(vm_hostname)
 
     # Clean HVs one by one.
     for hv in hvs:

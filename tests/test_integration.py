@@ -11,9 +11,9 @@ from unittest import TestCase
 
 from adminapi.dataset import Query
 from adminapi.filters import Any
-
 from fabric.api import env
 from fabric.network import disconnect_all
+from mock import patch
 
 from igvm.commands import (
     _get_vm,
@@ -50,13 +50,12 @@ from igvm.settings import (
 )
 from igvm.utils import parse_size
 from igvm.vm import VM
-from tests import VM_HOSTNAME, VM_HOSTNAME_RENAMED, VM_NET
+from tests import VM_HOSTNAME, VM_NET
 from tests.conftest import (
     clean_all,
     cmd,
     get_next_address,
 )
-from mock import patch
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -519,13 +518,10 @@ class CommandTest(IGVMTest):
         runtime.
         """
 
-        vm_rename(VM_HOSTNAME, new_hostname=VM_HOSTNAME_RENAMED, offline=True)
-        # If this tests fails you must manually remove the VM from the HVs
-        self.check_vm_present(VM_HOSTNAME_RENAMED)
+        new_name = '{}-{}'.format('vm-rename', VM_HOSTNAME)
 
-        # Rename VM back to its original afterwards to make sure the cleanup
-        # task of IGVM can delete it.
-        vm_rename(VM_HOSTNAME_RENAMED, new_hostname=VM_HOSTNAME, offline=True)
+        vm_rename(VM_HOSTNAME, new_hostname=new_name, offline=True)
+        self.check_vm_present(VM_HOSTNAME)
 
 
 class MigrationTest(IGVMTest):
