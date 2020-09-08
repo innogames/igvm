@@ -490,16 +490,6 @@ def _place_numa(hypervisor, vm, tree, props):
     _del_if_exists(tree, 'cpu/numa')
 
     if props.numa_mode == DomainProperties.NUMA_SPREAD:
-        # We currently don't have any other hypervisors, so this script *might*
-        # do something weird.
-        # You may remove this check if it ever triggers and you've verified
-        # that it actually did something sane.
-        if len(pcpu_sets) != 2:
-            log.warn('WARNING: Found {0} NUMA nodes instead of 2. '
-                     'Please double-check the placement!')
-            log.warn('Waiting ten seconds to annoy you... :-)')
-            time.sleep(10)
-
         # Virtual node -> virtual cpu
         vcpu_sets = [
             ','.join(str(j) for j in range(i, num_vcpus, num_nodes))
