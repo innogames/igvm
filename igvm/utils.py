@@ -26,36 +26,6 @@ _SIZE_FACTORS = {
 log = logging.getLogger(__name__)
 
 
-class LazyCompare(object):
-    """Lazily execute the given function to compare its result"""
-    def __init__(self, func, *args):
-        self.func = func
-        self.args = args
-        self.executed = False
-        self.result = None
-
-    def __lt__(self, other):
-        return self.sort_key() < other.sort_key()
-
-    def __le__(self, other):
-        return self.sort_key() <= other.sort_key()
-
-    def __eq__(self, other):
-        return self.sort_key() == other.sort_key()
-
-    def __ge__(self, other):
-        return self.sort_key() >= other.sort_key()
-
-    def __gt__(self, other):
-        return self.sort_key() > other.sort_key()
-
-    def sort_key(self):
-        if not self.executed:
-            self.executed = True
-            self.result = self.func(*self.args)
-        return self.result
-
-
 def retry_wait_backoff(fn_check, fail_msg, max_wait=20):
     """Continuously checks a conditional callback and retries with
     exponential backoff intervals until the condition is true.
