@@ -511,18 +511,6 @@ class CommandTest(IGVMTest):
         vm_define(VM_HOSTNAME)
         self.check_vm_present()
 
-    def test_vm_rename(self):
-        """Test vm_rename
-
-        Make sure renaming a VM works as expected without breaking while
-        runtime.
-        """
-
-        new_name = '{}-{}'.format('vm-rename', VM_HOSTNAME)
-
-        vm_rename(VM_HOSTNAME, new_hostname=new_name, offline=True)
-        self.check_vm_present(VM_HOSTNAME)
-
 
 class MigrationTest(IGVMTest):
     def setUp(self):
@@ -612,3 +600,51 @@ class MigrationTest(IGVMTest):
             )
 
         self.check_vm_present()
+
+
+class RenameTest(CommandTest):
+    """Rename test
+
+    Dedicated class for the vm_rename command to ensure that in case of a
+    failure or abortion previous hosts with the "renamed" hostname are also
+    cleaned up.
+    """
+
+    def setUp(self):
+        super(RenameTest, self).setUp()
+
+        # IGVMTest class will make sure puppet certificates for previous
+        # hosts have been removed so we only need to take care of left overs
+        # of renamed hosts.
+        vm = self.vm.dataset_obj
+        vm['hostname'] = RenameTest._get_renamed_hostname(vm['hostname'])
+        clean_cert(vm)
+
+    def tearDown(self):
+        clean_cert(self.vm_obj)
+        clean_all(self.route_network, VM_HOSTNAME)
+
+        # Same as in setUp we need to take care of the renamed hosts.
+        vm = self.vm.dataset_obj
+
+        # Depending on where it aborts it might still be renamed
+        if 'vm-rename' not in vm['hostname']:
+            vm['hostname'] = RenameTest._get_renamed_hostname(vm['hostname'])
+
+        clean_cert(vm)
+        clean_all(vm['hostname'])
+
+    def test_vm_rename(self):
+        """Test vm_rename
+
+        Make sure renaming a VM works as expected without breaking while
+        runtime.
+        """
+
+        new_name = RenameTest._get_renamed_hostname(VM_HOSTNAME)
+        vm_rename(VM_HOSTNAME, new_hostname=new_name, offline=True)
+        self.check_vm_present(new_name)
+
+    @staticmethod
+    def _get_renamed_hostname(hostname: str) -> str:
+        return '{}-{}'.format('vm-rename', hostname)
