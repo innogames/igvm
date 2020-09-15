@@ -320,13 +320,13 @@ class PreferenceEvaluator(object):
         # Calculate the overall preference score of the target hv
         self.total = (sum_prefs / (n_prefs - matched_prefs + 1)) / n_prefs
 
-        print('{} on {}: {}/{} prefs, value {}'.format(
-            str(self.vm),
-            str(self.hv),
-            matched_prefs,
-            n_prefs,
-            self.total,
-        ))
+        # print('{} on {}: {}/{} prefs, value {}'.format(
+        #     str(self.vm),
+        #     str(self.hv),
+        #     matched_prefs,
+        #     n_prefs,
+        #     self.total,
+        # ))
 
         return self.total
 
@@ -429,7 +429,8 @@ def sorted_hypervisors(preferences, vm, hypervisors):
         if total > best[0]:
             best = (total, hv)
 
-    print('best hv: {} ({})'.format(str(best[1]), best[0]))
+    # print('best hv: {} ({})'.format(str(best[1]), best[0]))
+    yield best[1]
 
     # for comparables, hypervisor in sorted_hvs:
     #     for executed, comparable in enumerate(comparables):
