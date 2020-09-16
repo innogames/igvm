@@ -1,0 +1,25 @@
+[[source]]
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[dev-packages]
+mock = "*"
+
+[requires]
+python_version = "3.7"
+
+[packages]
+netaddr = "*"
+cffi = "*"
+paramiko = "*"
+fabric3 = "*"
+libvirt-python = "*"
+jinja2 = "*"
+boto3 = "*"
+tqdm = "*"
+
+[packages.adminapi]
+git = "https://github.com/innogames/serveradmin.git"
+editable = true
+ref = "master"
