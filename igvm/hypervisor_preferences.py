@@ -1,18 +1,14 @@
 """igvm - Hypervisor Selection Preferences
 
-This module contains preferences to select hypervisors.  Preferences return
-a value of any comparable datatype.  Only the return values of the same
-preference is compared with each other.  Smaller values mark hypervisors
-as more preferred.  Keep in mind that for booleans false is less than true.
-See sorted_hypervisors() function below for the details of sorting.
+This module contains preference classes to select Hypervisors. Preferences
+return either a score of range 0.0 - 1.0 inclusive, or a boolean value, which
+is only there for convenience and converts to float.
+A higher score means that a Hypervisor should be favored, while a low one
+discourages a HV. If False or 0.0 is given, that means a HV does not fulfill
+the requirements at all and is excluded.
 
-Copyright (c) 2018 InnoGames GmbH
+Copyright (c) 2020 InnoGames GmbH
 """
-# This module contains the preferences as simple classes.  We try to keep
-# them reusable, even though most of them are not reused.  Some of the classes
-# are so simple that they could as well just be a function, but kept
-# as classes to have a consistent style.
-import math
 from logging import getLogger
 from typing import Union, List
 
@@ -20,12 +16,24 @@ log = getLogger(__name__)
 
 
 class HypervisorPreference(object):
+    """The base class for all HV preferences."""
+
     def get_preference(self, vm, hv) -> Union[float, bool]:
+        """Calculates a preference value to indicate how good a HV fits.
+
+        @param vm: The VM object to check against the HV.
+        @param hv: The HV object to check against the VM.
+        @return: A float or a bool. The bool is just for convenience and will
+                 be converted to a float. A value of 0.0 means the HV does not
+                 fulfill the requirement at all. But a value of 1.0 means it is
+                 a very good candidate for this particular preference.
+        @rtype: Union[float, bool]
+        """
         raise NotImplementedError('get_preference is not implemented')
 
 
 class InsufficientResource(HypervisorPreference):
-    """Check a resource of hypervisor would be sufficient"""
+    """Check whether a resource of a hypervisor would be sufficient."""
 
     def __init__(
         self,
@@ -50,8 +58,9 @@ class InsufficientResource(HypervisorPreference):
     def get_preference(self, vm, hv) -> Union[float, bool]:
         # Treat freshly created HVs always passing this check
         if not hv.dataset_obj[self.hv_attribute]:
-            return 1.
+            return True
 
+        # Calculate the remaining "size" of the resource
         total_size = hv.dataset_obj[self.hv_attribute] * self.multiplier
         vms_size = sum(
             vm[self.vm_attribute]
@@ -60,17 +69,17 @@ class InsufficientResource(HypervisorPreference):
         )
         remaining_size = total_size - vms_size - self.reserved
 
-        # does not fit at all
+        # Does not fit at all
         vm_size = vm.dataset_obj[self.vm_attribute]
         if remaining_size < vm_size:
             return False
 
-        # normalize the resource usage
+        # Normalize the expected resource consumption
         return 1 - (vm_size / remaining_size)
 
 
 class OtherVMs(HypervisorPreference):
-    """Count the other VMs on the hypervisor with the same attributes"""
+    """Count the other VMs on the hypervisor with the same attributes."""
 
     def __init__(self, attributes=[], values=None) -> None:
         assert values is None or len(attributes) == len(values)
@@ -87,32 +96,48 @@ class OtherVMs(HypervisorPreference):
         return '{}({})'.format(type(self).__name__, args)
 
     def get_preference(self, vm, hv) -> Union[float, bool]:
-        result = 0
+        # If there are no VMs at all that makes a perfect match.
+        if len(hv.dataset_obj['vms']) == 0:
+            return 1.
+
+        # Count similar VMs on the HV.
+        n_similar = 0
         for other_vm in hv.dataset_obj['vms']:
+            # Exclude ourselves.
             if other_vm['hostname'] == vm.dataset_obj['hostname']:
                 continue
 
+            # Check for specifically given attribute values.
             if self.values and not all(
                 vm.dataset_obj[a] == v
                 for a, v in zip(self.attributes, self.values)
             ):
                 continue
 
-            if all(
+            # Check for same attribute values.
+            if not all(
                 other_vm[attr] == vm.dataset_obj[attr]
                 for attr in self.attributes
             ):
-                result += 1
+                continue
 
-        # no similar vms on this hv, that's a good candidate
-        if result == 0 or len(hv.dataset_obj['vms']) == 0:
+            # There is indeed a similar VM on the HV.
+            n_similar += 1
+
+        # No similar vms on this hv, that's a good candidate.
+        if n_similar == 0:
             return 1.
 
-        # normalize the amount of similar vms
-        result = 1 - (result / len(hv.dataset_obj['vms']))
+        # Normalize the amount of similar vms. This is kind of difficult to do,
+        # because we have no idea what is the maximum amount of VMs on a HV.
+        # It solely depends on how loaded a HV is and how many resources are
+        # left. Hence we can only give some "virtual" score here. We are
+        # setting the maximum to an imaginary 100 VMs.
+        # TODO: come up with something better. idea: take all HVs into account
+        result = 1 - (n_similar / 100)
 
-        # this is not a hard criteria, but we want to highly discourage
-        # similar vms ending up on the same hv, so we apply a harsh factor
+        # This is not a hard criteria, but we want to highly discourage
+        # similar vms ending up on the same hv, so we apply a harsh factor.
         if result == 0.:
             return 0.01
 
@@ -120,18 +145,12 @@ class OtherVMs(HypervisorPreference):
 
 
 class HypervisorAttributeValue(HypervisorPreference):
-    """Return an attribute value of the hypervisor
+    """Return a score based on a percentage-based attribute value."""
 
-    We are also handling None in here assuming that it is less than
-    anything else.  This is coincidentally matching with the None comparison
-    on Python 2.  Although our rationale is that those hypervisors being
-    brand new.
-    """
+    def __init__(self, attribute: str) -> None:
+        self.attribute: str = attribute
 
-    def __init__(self, attribute):
-        self.attribute = attribute
-
-    def __repr__(self):
+    def __repr__(self) -> str:
         args = repr(self.attribute)
 
         return '{}({})'.format(type(self).__name__, args)
@@ -139,23 +158,18 @@ class HypervisorAttributeValue(HypervisorPreference):
     def get_preference(self, vm, hv) -> Union[float, bool]:
         value = hv.dataset_obj[self.attribute]
 
-        # if there is no value we assume it's a fresh hv
+        # If there is no value we assume it's a fresh HV.
         if value is None:
             return 1.
 
-        # normalize the value. this is only valid for "exhaution values" like
-        # cpu_util_pct and iops_avg
+        # Normalize the value. This is only valid for percentage values like
+        # cpu_util_pct and iops_avg. Arbitrary numbers are somewhat difficult
+        # to put into context.
         return 1 - (value / 100)
 
 
 class HypervisorAttributeValueLimit(HypervisorPreference):
-    """Compare an attribute value of the hypervisor with the given limit
-
-    We are also handling None in here assuming that it is not exceeding
-    the limit.  This is coincidentally matching with the None comparison
-    on Python 2.  Although our rationale is that those hypervisors being
-    brand new.
-    """
+    """Score a percentage-based attribute value against a given limit."""
 
     def __init__(self, attribute: str, limit: int) -> None:
         self.attribute: str = attribute
@@ -169,15 +183,17 @@ class HypervisorAttributeValueLimit(HypervisorPreference):
     def get_preference(self, vm, hv) -> Union[float, bool]:
         value = hv.dataset_obj[self.attribute]
 
-        # if there is no value we assume it's a fresh hv
+        # If there is no value we assume it's a fresh HV.
         if value is None:
             return 1.
 
+        # When the actual value is above the limit, we strike out that HV.
         if value > self.limit:
             return False
 
-        # normalize the value. this is only valid for "exhaution values" like
-        # cpu_util_pct and iops_avg
+        # Normalize the value. This is only valid for percentage values like
+        # cpu_util_pct and iops_avg. Arbitrary numbers are somewhat difficult
+        # to put into context.
         return 1 - (value / 100)
 
 
@@ -188,43 +204,47 @@ class HypervisorCpuUsageLimit(HypervisorPreference):
     Make any hypervisor less likely chosen, which would be above its threshold.
     """
 
-    def __init__(self, hardware_model: str, hv_cpu_thresholds: dict):
-        self.hardware_model = hardware_model
-        self.hv_cpu_thresholds = hv_cpu_thresholds
+    def __init__(self, hardware_model: str, hv_cpu_thresholds: dict) -> None:
+        self.hardware_model: str = hardware_model
+        self.hv_cpu_thresholds: dict = hv_cpu_thresholds
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         args = repr(self.hardware_model) + ', ' + repr(self.hv_cpu_thresholds)
 
         return '{}({})'.format(type(self).__name__, args)
 
     def get_preference(self, vm, hv) -> Union[float, bool]:
-        # New VM has no hypervisor attribute yet.
+        # New VM has no hypervisor attribute, yet, so we cannot calculate a
+        # score here. We will just allow all HVs to take that VM for now.
         if not vm.hypervisor:
-            return False
+            return True
 
         hv_model = hv.dataset_obj[self.hardware_model]
 
-        # Bail out if hardware_model is not in HYPERVISOR_CPU_THRESHOLDS list
+        # Bail out if hardware_model is not in HYPERVISOR_CPU_THRESHOLDS list.
         if hv_model not in self.hv_cpu_thresholds:
             log.warning(
                 'Missing setting for "{}" in HYPERVISOR_CPU_THRESHOLDS'.format(
-                    hv_model))
+                    hv_model,
+                ),
+            )
             return False
 
         hv_cpu_threshold = float(self.hv_cpu_thresholds[hv_model])
         hv_cpu_util_overall = hv.estimate_cpu_usage(vm)
 
-        # if there is no value we assume it's a fresh hv
+        # If there is no value we assume it's a fresh hv.
         if hv_cpu_util_overall is None:
-            return 1.
+            return True
 
-        # since this is a limiting preference, we don't want any vm end up on
+        # Since this is a limiting preference, we don't want any vm end up on
         # the hv that would exceed the cpu threshold
         if hv_cpu_util_overall > hv_cpu_threshold:
             return False
 
-        # normalize the value. this is only valid for "exhaution values" like
-        # cpu_util_pct and iops_avg
+        # Normalize the value. This is only valid for percentage values like
+        # cpu_util_pct and iops_avg. Arbitrary numbers are somewhat difficult
+        # to put into context.
         return 1 - (hv_cpu_util_overall / hv_cpu_threshold)
 
 
@@ -235,10 +255,10 @@ class HypervisorEnvironmentValue(HypervisorPreference):
     environment.
     """
 
-    def __init__(self, hv_env: str):
-        self.hv_env = hv_env
+    def __init__(self, hv_env: str) -> None:
+        self.hv_env: str = hv_env
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         args = repr(self.hv_env)
 
         return '{}({})'.format(type(self).__name__, args)
@@ -247,18 +267,18 @@ class HypervisorEnvironmentValue(HypervisorPreference):
         hypervisor_env = hv.dataset_obj[self.hv_env]
         vm_env = vm.dataset_obj['environment']
 
-        # if the environment is matching, this is our candidate!
+        # If the environment is matching, this is our candidate!
         if hypervisor_env == vm_env:
             return 1.
 
-        # unfortunately we don't always have enough hvs to ensure the same
-        # environment. therefore we will just highly discourage the hv
-        # instead of excluding it
+        # Unfortunately we don't always have enough HVs to ensure the same
+        # environment. Therefore we will just highly discourage the hv
+        # instead of excluding it.
         return 0.01
 
 
 class OverAllocation(HypervisorPreference):
-    """Check for an attribute being over allocated than the current one"""
+    """Check for an attribute being over-allocated than the current one."""
 
     def __init__(self, attribute) -> None:
         self.attribute = attribute
@@ -269,32 +289,34 @@ class OverAllocation(HypervisorPreference):
         return '{}({})'.format(type(self).__name__, args)
 
     def get_preference(self, vm, hv) -> Union[float, bool]:
+        # Calculate the current HVs overbooking "level".
         cur_hv_cpus = sum(
             v[self.attribute] for v in vm.hypervisor.dataset_obj['vms']
         )
         cur_hv_rl_cpus = vm.hypervisor.dataset_obj[self.attribute]
         cur_ovr_allc = float(cur_hv_cpus) / float(cur_hv_rl_cpus)
 
+        # Calculate by how much we would overbook the target HV.
         tgt_hv_cpus = vm.dataset_obj[self.attribute] + sum(
             v[self.attribute] for v in hv.dataset_obj['vms']
         )
         tgt_hv_rl_cpus = hv.dataset_obj[self.attribute]
         tgt_ovr_allc = float(tgt_hv_cpus) / float(tgt_hv_rl_cpus)
 
-        # whether the target hv would be more overbooked than the current one
+        # Whether the target hv would be more overbooked than the current one.
         rel_overbooking = tgt_ovr_allc / cur_ovr_allc
         if rel_overbooking > 1.:
             return .01
 
-        # normalize the value. this is no hard criteria, except for non-
-        # overbookable resources like disk. hence we can allow overbooked cpus.
-        # for cpus the avg load is more important, for anything else non-
-        # overbookable we will leave the corresponding hard-check for later
+        # Normalize the value. This is no hard criteria, except for non-
+        # overbookable resources like disk. Hence we can allow overbooked cpus.
+        # For cpus the avg load is more important, for anything else non-
+        # overbookable we will leave the corresponding hard-check for later.
         return 1 - rel_overbooking
 
 
 class PreferenceEvaluator(object):
-    def __init__(self, preferences: List[HypervisorPreference]):
+    def __init__(self, preferences: List[HypervisorPreference]) -> None:
         self.preferences = preferences
 
     def get_preference(self, vm, hv) -> float:
@@ -304,20 +326,20 @@ class PreferenceEvaluator(object):
 
         log.debug('Checking {}..'.format(str(hv)))
 
-        # Checking HV against all preferences
+        # Checking HV against all preferences.
         for p in self.preferences:
             result = float(p.get_preference(vm, hv))
 
-            # We expect normalized values from 0 - 1
+            # We expect normalized values from 0 - 1.
             if result < 0. or result > 1.:
                 raise ValueError(
-                    'preference must be expressed in a 0.0 - 1.0 range, '
-                    '{} given'.format(result)
+                    'Preference must be expressed in a 0.0 - 1.0 range, '
+                    '{} given.'.format(result)
                 )
 
-            # Add up the scores
+            # Add up the individual preference scores.
             if result > 0.:
-                log.debug('Preference {} matches with score {}'.format(
+                log.debug('Preference {} matches with score {}.'.format(
                     str(p),
                     result,
                 ))
@@ -325,9 +347,9 @@ class PreferenceEvaluator(object):
                 matched_prefs += 1
                 sum_prefs += result
             else:
-                log.debug('Preference {} does not match'.format(str(p)))
+                log.debug('Preference {} does not match.'.format(str(p)))
 
-        # Exclude HV if only one criteria has failed
+        # Exclude HV if only one criteria has failed.
         if matched_prefs < n_prefs:
             log.debug(
                 'Hypervisor "{}" excluded, only {}/{} prefs match.'.format(
@@ -339,10 +361,10 @@ class PreferenceEvaluator(object):
 
             return 0.
 
-        # Calculate the overall preference score of the target hv
+        # Calculate the overall preference score of the target HV.
         total = (sum_prefs / (n_prefs - matched_prefs + 1)) / n_prefs
 
-        log.debug('Matching {}/{} prefs with a total score of {}'.format(
+        log.debug('Matching {}/{} prefs with a total score of {}.'.format(
             matched_prefs,
             n_prefs,
             total,
@@ -357,14 +379,16 @@ class PreferenceEvaluator(object):
 
 
 class PreferredHypervisor(object):
-    def __init__(self, hv, score: float):
+    """Sortable container holding a HV object along with it's score."""
+
+    def __init__(self, hv, score: float) -> None:
         self._hv = hv
         self._score = score
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> bool:
         return self._score < other.score()
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return self._score == other.score()
 
     def hv(self):
@@ -375,42 +399,27 @@ class PreferredHypervisor(object):
 
 
 def sorted_hypervisors(preferences, vm, hypervisors):
-    """Sort the hypervisor by their preference
+    """Sort the hypervisors by their preference scores.
 
-    The most preferred ones will be yielded first.  The caller may then verify
-    and use the hypervisors.  For sorting, we simply put the results
-    of the preferences to any array for every hypervisor, and let Python
-    sort the arrays.  Unlike semantically-low-level programming languages
-    like C, Python can compare arrays just fine.  It would recursively compare
-    the elements of the arrays with each other, and stop when they differ.
-
-    As we know that most of the time it wouldn't be necessary to compare
-    all elements of the arrays with each other, we don't need to prepare
-    the results of the preferences for every hypervisor.  We use LazyCompare
-    class to let them be prepared lazily.  When Python needs to compare
-    and element of the array first time, the preference is going to be
-    executed for that hypervisor by LazyCompare.
-
-    The LazyCompare optimization has one other benefit of providing some
-    visibility about the selection.  After the sorting is done, we can check
-    which preferences are actually executed for the selected hypervisor,
-    and log which preference caused this hypervisor to be sorted after
-    the previous or before the next one.
+    The most preferred ones will be yielded first. The caller may then verify
+    and use the Hypervisors. Hypervisors with higher scores will be favored
+    compared to others, though Hypervisors with a score of zero will be
+    excluded altogether.
     """
-    log.debug('Sorting hypervisors by preference...')
+    log.debug('Sorting hypervisors by preference score..')
 
     evaluator = PreferenceEvaluator(preferences)
     preferred_hvs = []
 
-    # Collect all hvs that are possible to migrate to
+    # Collect all HVs that are possible to migrate to.
     for hv in hypervisors:
         total = evaluator.get_preference(vm, hv)
         if total > 0.:
             preferred_hvs.append(PreferredHypervisor(hv, total))
 
-    # Sort reversed as we want hvs with higher scores first
+    # Sort reversed as we want hvs with higher scores first.
     preferred_hvs = sorted(preferred_hvs, reverse=True)
 
-    # Yield sorted hvs
+    # Yield sorted hvs.
     for preferred_hv in preferred_hvs:
         yield preferred_hv.hv()
