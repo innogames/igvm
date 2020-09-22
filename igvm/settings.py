@@ -372,6 +372,4 @@ HYPERVISOR_PREFERENCES = [
     HypervisorAttributeValue('iops_avg'),
     # Prefer the hypervisor with less VMs from the same cluster
     OtherVMs(['project', 'environment', 'game_market']),
-    # As the last resort, choose the hypervisor with less VMs
-    OtherVMs(),
 ]
