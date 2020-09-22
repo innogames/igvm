@@ -1024,6 +1024,7 @@ def _get_best_hypervisor(
 
     # Yield the hypervisor locked for working on it
     try:
+        log.info('Picked {} as destination Hypervisor'.format(str(found_hv)))
         yield found_hv
     finally:
         found_hv.release_lock()

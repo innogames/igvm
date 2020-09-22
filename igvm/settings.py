@@ -154,6 +154,7 @@ HYPERVISOR_ATTRIBUTES = [
             'num_cpu',
             'project',
             'served_game',
+            'state',
         ],
     },
 ]

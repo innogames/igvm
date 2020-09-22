@@ -291,91 +291,84 @@ class OverAllocation(HypervisorPreference):
 
 
 class PreferenceEvaluator(object):
-    def __init__(self, vm, hv, preferences: List[HypervisorPreference]):
-        self.vm = vm
-        self.hv = hv
+    def __init__(self, preferences: List[HypervisorPreference]):
         self.preferences = preferences
-        self.total: Optional[float] = None
 
-    def get_preference(self) -> float:
-        if self.total:
-            return self.total
-
+    def get_preference(self, vm, hv) -> float:
         n_prefs = len(self.preferences)
         matched_prefs = 0
         sum_prefs = 0.
 
+        log.debug('Checking {}..'.format(str(hv)))
+
+        # Checking HV against all preferences
         for p in self.preferences:
-            result = float(p.get_preference(self.vm, self.hv))
+            result = float(p.get_preference(vm, hv))
+
+            # We expect normalized values from 0 - 1
             if result < 0. or result > 1.:
                 raise ValueError(
                     'preference must be expressed in a 0.0 - 1.0 range, '
                     '{} given'.format(result)
                 )
 
+            # Add up the scores
             if result > 0.:
+                log.debug('Preference {} matches with score {}'.format(
+                    str(p),
+                    result,
+                ))
+
                 matched_prefs += 1
                 sum_prefs += result
+            else:
+                log.debug('Preference {} does not match'.format(str(p)))
+
+        # Exclude HV if only one criteria has failed
+        if matched_prefs < n_prefs:
+            log.debug(
+                'Hypervisor "{}" excluded, only {}/{} prefs match.'.format(
+                    str(hv),
+                    matched_prefs,
+                    n_prefs,
+                )
+            )
+
+            return 0.
 
         # Calculate the overall preference score of the target hv
-        self.total = (sum_prefs / (n_prefs - matched_prefs + 1)) / n_prefs
+        total = (sum_prefs / (n_prefs - matched_prefs + 1)) / n_prefs
 
-        # print('{} on {}: {}/{} prefs, value {}'.format(
-        #     str(self.vm),
-        #     str(self.hv),
-        #     matched_prefs,
-        #     n_prefs,
-        #     self.total,
-        # ))
+        log.debug('Matching {}/{} prefs with a total score of {}'.format(
+            matched_prefs,
+            n_prefs,
+            total,
+        ))
 
-        return self.total
+        log.info('Hypervisor "{}" selected with a {} score.'.format(
+            str(hv),
+            total,
+        ))
+
+        return total
 
 
-class PreferenceCompare(object):
-    """Lazily execute the given function to compare its result"""
-    def __init__(
-        self,
-        preference: HypervisorPreference,
-        vm,
-        hv,
-    ):
-        self.preference: HypervisorPreference = preference
-        self.vm = vm
-        self.hv = hv
-        self.executed: bool = False
-        self.result: float = 0.
+class PreferredHypervisor(object):
+    def __init__(self, hv, score: float):
+        self._hv = hv
+        self._score = score
 
     def __lt__(self, other):
-        return self.get_preference() < other.get_preference()
-
-    def __le__(self, other):
-        return self.get_preference() <= other.get_preference()
+        return self._score < other.score()
 
     def __eq__(self, other):
-        return self.get_preference() == other.get_preference()
+        return self._score == other.score()
 
-    def __ge__(self, other):
-        return self.get_preference() >= other.get_preference()
+    def hv(self):
+        return self._hv
 
-    def __gt__(self, other):
-        return self.get_preference() > other.get_preference()
-
-    def get_preference(self) -> float:
-        if not self.executed:
-            self.executed = True
-
-            result = float(self.preference.get_preference(
-                self.vm,
-                self.hv,
-            ))
-            if result < 0. or result > 1.:
-                raise ValueError(
-                    'preference must be expressed in a 0.0 - 1.0 range, '
-                    '{} given'.format(result)
-                )
-            self.result = result
-
-        return self.result
+    def score(self) -> float:
+        return self._score
 
 
 def sorted_hypervisors(preferences, vm, hypervisors):
@@ -403,44 +396,18 @@ def sorted_hypervisors(preferences, vm, hypervisors):
     """
     log.debug('Sorting hypervisors by preference...')
 
-    # hv_comparators = {
-    #     h: [PreferenceCompare(p, vm, h) for p in preferences]
-    #     for h in hypervisors
-    # }
-    # filter(
-    #     lambda hv, prefs: 1,
-    #     hv_comparators
-    # )
-    #
-    # comparators = filter(lambda x: x[0] > 0., [
-    #     ([PreferenceCompare(p, vm, h) for p in preferences], h)
-    #     for h in hypervisors
-    # ])
-    # sorted_hvs = sorted(comparators)
+    evaluator = PreferenceEvaluator(preferences)
+    preferred_hvs = []
 
-    # =SUM(B2:B11)/(10-COUNTIF(B2:B11, ">0") + 1)
-
-    best = (.0, None)
-
+    # Collect all hvs that are possible to migrate to
     for hv in hypervisors:
-        evaluator = PreferenceEvaluator(vm, hv, preferences)
-        total = evaluator.get_preference()
+        total = evaluator.get_preference(vm, hv)
+        if total > 0.:
+            preferred_hvs.append(PreferredHypervisor(hv, total))
 
-        if total > best[0]:
-            best = (total, hv)
+    # Sort reversed as we want hvs with higher scores first
+    preferred_hvs = sorted(preferred_hvs, reverse=True)
 
-    # print('best hv: {} ({})'.format(str(best[1]), best[0]))
-    yield best[1]
-
-    # for comparables, hypervisor in sorted_hvs:
-    #     for executed, comparable in enumerate(comparables):
-    #         if not comparable.executed:
-    #             break
-    #     else:
-    #         executed = len(comparables)
-    #     log.info(
-    #         'Hypervisor "{}" selected using {} preferences.'
-    #             .format(hypervisor, executed)
-    #     )
-    #
-    #     yield hypervisor
+    # Yield sorted hvs
+    for preferred_hv in preferred_hvs:
+        yield preferred_hv.hv()
