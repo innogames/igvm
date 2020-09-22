@@ -18,7 +18,7 @@ log = getLogger(__name__)
 class HypervisorPreference(object):
     """The base class for all HV preferences."""
 
-    def get_preference(self, vm, hv) -> Union[float, bool]:
+    def get_score(self, vm, hv) -> Union[float, bool]:
         """Calculates a preference value to indicate how good a HV fits.
 
         @param vm: The VM object to check against the HV.
@@ -55,7 +55,7 @@ class InsufficientResource(HypervisorPreference):
 
         return '{}({})'.format(type(self).__name__, args)
 
-    def get_preference(self, vm, hv) -> Union[float, bool]:
+    def get_score(self, vm, hv) -> Union[float, bool]:
         # Treat freshly created HVs always passing this check
         if not hv.dataset_obj[self.hv_attribute]:
             return True
@@ -81,10 +81,11 @@ class InsufficientResource(HypervisorPreference):
 class OtherVMs(HypervisorPreference):
     """Count the other VMs on the hypervisor with the same attributes."""
 
-    def __init__(self, attributes=[], values=None) -> None:
+    def __init__(self, attributes: list, values: list = None) -> None:
         assert values is None or len(attributes) == len(values)
-        self.attributes = attributes
-        self.values = values
+
+        self.attributes: list = attributes
+        self.values: list = values
 
     def __repr__(self) -> str:
         args = ''
@@ -95,7 +96,7 @@ class OtherVMs(HypervisorPreference):
 
         return '{}({})'.format(type(self).__name__, args)
 
-    def get_preference(self, vm, hv) -> Union[float, bool]:
+    def get_score(self, vm, hv) -> Union[float, bool]:
         # If there are no VMs at all that makes a perfect match.
         if len(hv.dataset_obj['vms']) == 0:
             return 1.
@@ -155,7 +156,7 @@ class HypervisorAttributeValue(HypervisorPreference):
 
         return '{}({})'.format(type(self).__name__, args)
 
-    def get_preference(self, vm, hv) -> Union[float, bool]:
+    def get_score(self, vm, hv) -> Union[float, bool]:
         value = hv.dataset_obj[self.attribute]
 
         # If there is no value we assume it's a fresh HV.
@@ -180,7 +181,7 @@ class HypervisorAttributeValueLimit(HypervisorPreference):
 
         return '{}({})'.format(type(self).__name__, args)
 
-    def get_preference(self, vm, hv) -> Union[float, bool]:
+    def get_score(self, vm, hv) -> Union[float, bool]:
         value = hv.dataset_obj[self.attribute]
 
         # If there is no value we assume it's a fresh HV.
@@ -213,7 +214,7 @@ class HypervisorCpuUsageLimit(HypervisorPreference):
 
         return '{}({})'.format(type(self).__name__, args)
 
-    def get_preference(self, vm, hv) -> Union[float, bool]:
+    def get_score(self, vm, hv) -> Union[float, bool]:
         # New VM has no hypervisor attribute, yet, so we cannot calculate a
         # score here. We will just allow all HVs to take that VM for now.
         if not vm.hypervisor:
@@ -263,7 +264,7 @@ class HypervisorEnvironmentValue(HypervisorPreference):
 
         return '{}({})'.format(type(self).__name__, args)
 
-    def get_preference(self, vm, hv) -> Union[float, bool]:
+    def get_score(self, vm, hv) -> Union[float, bool]:
         hypervisor_env = hv.dataset_obj[self.hv_env]
         vm_env = vm.dataset_obj['environment']
 
@@ -288,7 +289,7 @@ class OverAllocation(HypervisorPreference):
 
         return '{}({})'.format(type(self).__name__, args)
 
-    def get_preference(self, vm, hv) -> Union[float, bool]:
+    def get_score(self, vm, hv) -> Union[float, bool]:
         # Calculate the current HVs overbooking "level".
         cur_hv_cpus = sum(
             v[self.attribute] for v in vm.hypervisor.dataset_obj['vms']
@@ -316,10 +317,14 @@ class OverAllocation(HypervisorPreference):
 
 
 class PreferenceEvaluator(object):
+    """Evaluates all preferences for a given VM and HV and calculates the total
+    score based on which the most preferred HVs can be picked.
+    """
     def __init__(self, preferences: List[HypervisorPreference]) -> None:
         self.preferences = preferences
 
-    def get_preference(self, vm, hv) -> float:
+    def get_total_score(self, vm, hv) -> float:
+        """Calculates the total score for a given VM and HV pair."""
         n_prefs = len(self.preferences)
         matched_prefs = 0
         sum_prefs = 0.
@@ -327,8 +332,8 @@ class PreferenceEvaluator(object):
         log.debug('Checking {}..'.format(str(hv)))
 
         # Checking HV against all preferences.
-        for p in self.preferences:
-            result = float(p.get_preference(vm, hv))
+        for pref in self.preferences:
+            result = float(pref.get_score(vm, hv))
 
             # We expect normalized values from 0 - 1.
             if result < 0. or result > 1.:
@@ -340,14 +345,17 @@ class PreferenceEvaluator(object):
             # Add up the individual preference scores.
             if result > 0.:
                 log.debug('Preference {} matches with score {}.'.format(
-                    str(p),
+                    str(pref),
                     result,
                 ))
 
                 matched_prefs += 1
                 sum_prefs += result
             else:
-                log.debug('Preference {} does not match.'.format(str(p)))
+                log.debug(
+                    'Hypervisor "{}" is skipped because preference "{}" does '
+                    'not match.'.format(str(hv), str(pref)),
+                )
 
         # Exclude HV if only one criteria has failed.
         if matched_prefs < n_prefs:
@@ -398,13 +406,12 @@ class PreferredHypervisor(object):
         return self._score
 
 
-def sorted_hypervisors(preferences, vm, hypervisors):
+def sort_by_preference(vm, preferences, hypervisors) -> list:
     """Sort the hypervisors by their preference scores.
 
-    The most preferred ones will be yielded first. The caller may then verify
-    and use the Hypervisors. Hypervisors with higher scores will be favored
-    compared to others, though Hypervisors with a score of zero will be
-    excluded altogether.
+    The most preferred ones will be first. The caller may then verify and use
+    the Hypervisors. Hypervisors with higher scores will be favored compared to
+    others, though Hypervisors with a zero score will be excluded altogether.
     """
     log.debug('Sorting hypervisors by preference score..')
 
@@ -413,13 +420,12 @@ def sorted_hypervisors(preferences, vm, hypervisors):
 
     # Collect all HVs that are possible to migrate to.
     for hv in hypervisors:
-        total = evaluator.get_preference(vm, hv)
-        if total > 0.:
-            preferred_hvs.append(PreferredHypervisor(hv, total))
+        score = evaluator.get_total_score(vm, hv)
+        if score > 0.:
+            preferred_hvs.append(PreferredHypervisor(hv, score))
 
     # Sort reversed as we want hvs with higher scores first.
     preferred_hvs = sorted(preferred_hvs, reverse=True)
 
-    # Yield sorted hvs.
-    for preferred_hv in preferred_hvs:
-        yield preferred_hv.hv()
+    # Return sorted HVs.
+    return [preferred_hv.hv() for preferred_hv in preferred_hvs]
