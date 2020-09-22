@@ -344,7 +344,7 @@ class PreferenceEvaluator(object):
 
             # Add up the individual preference scores.
             if result > 0.:
-                log.debug('Preference {} matches with score {}.'.format(
+                log.debug('Preference {} matches with score {:.4f}.'.format(
                     str(pref),
                     result,
                 ))
@@ -372,13 +372,13 @@ class PreferenceEvaluator(object):
         # Calculate the overall preference score of the target HV.
         total = (sum_prefs / (n_prefs - matched_prefs + 1)) / n_prefs
 
-        log.debug('Matching {}/{} prefs with a total score of {}.'.format(
+        log.debug('Matching {}/{} prefs with a total score of {:.4f}.'.format(
             matched_prefs,
             n_prefs,
             total,
         ))
 
-        log.info('Hypervisor "{}" selected with a {} score.'.format(
+        log.info('Hypervisor "{}" selected with a {:.4f} score.'.format(
             str(hv),
             total,
         ))
