@@ -13,9 +13,8 @@ Copyright (c) 2018 InnoGames GmbH
 # are so simple that they could as well just be a function, but kept
 # as classes to have a consistent style.
 import math
-import sys
 from logging import getLogger
-from typing import Union, List, Optional
+from typing import Union, List
 
 log = getLogger(__name__)
 
@@ -51,12 +50,13 @@ class InsufficientResource(HypervisorPreference):
     def get_preference(self, vm, hv) -> Union[float, bool]:
         # Treat freshly created HVs always passing this check
         if not hv.dataset_obj[self.hv_attribute]:
-            return False
+            return 1.
 
-        total_size = hv.dataset_obj[self.hv_attribute]
+        total_size = hv.dataset_obj[self.hv_attribute] * self.multiplier
         vms_size = sum(
-            vm[self.vm_attribute] * self.multiplier
+            vm[self.vm_attribute]
             for vm in hv.dataset_obj['vms']
+            if vm['state'] != 'retired'
         )
         remaining_size = total_size - vms_size - self.reserved
 
@@ -113,6 +113,9 @@ class OtherVMs(HypervisorPreference):
 
         # this is not a hard criteria, but we want to highly discourage
         # similar vms ending up on the same hv, so we apply a harsh factor
+        if result == 0.:
+            return 0.01
+
         return result * 0.01
 
 
