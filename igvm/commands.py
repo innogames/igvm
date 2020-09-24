@@ -299,6 +299,7 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
             user_data = template.render(
                 hostname=vm.dataset_obj['hostname'].rstrip('.ig.local'),
                 fqdn=vm.dataset_obj['hostname'],
+                vm_os=vm.dataset_obj['os'],
                 apt_repos=AWS_CONFIG[0]['apt'],
                 puppet_master=vm.dataset_obj['puppet_master'],
                 puppet_ca=vm.dataset_obj['puppet_ca'],

@@ -260,9 +260,9 @@ AWS_CONFIG = [
                 ],
             },
             {
-                'name': 'basestretch_stable',
-                'filename': 'basestretch_stable.list',
-                'source': 'deb http://update-int.ig.local/ basestretch stable',
+                'name': 'base#VM_OS#_stable',
+                'filename': 'base#VM_OS#_stable.list',
+                'source': 'deb http://update-int.ig.local/ base#VM_OS# stable',
                 'key': [
                     "-----BEGIN PGP PUBLIC KEY BLOCK-----",
                     "Version: GnuPG v1",
