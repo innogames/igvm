@@ -955,6 +955,9 @@ class VM(Host):
         :return: Fitting VM types as list
         """
 
+        if self.dataset_obj['aws_instance_type']:
+            return [self.dataset_obj['aws_instance_type']]
+
         vm_performance_value = self.performance_value()
         region = self.dataset_obj['aws_placement'][:-1]
 
