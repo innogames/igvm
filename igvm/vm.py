@@ -455,7 +455,12 @@ class VM(Host):
             result['status'] = 'new'
         return result
 
-    def build(self, run_puppet=True, debug_puppet=False, postboot=None, cleanup_cert=False):
+    def build(
+            self,
+            run_puppet=True,
+            debug_puppet=False,
+            postboot=None,
+            cleanup_cert=False):
         """Builds a VM."""
         hypervisor = self.hypervisor
         self.check_serveradmin_config()
@@ -729,7 +734,6 @@ class VM(Host):
                 raise VMError('Initial puppetrun failed') from e
 
             self.unblock_autostart()
-
 
     def block_autostart(self):
         fd = BytesIO()

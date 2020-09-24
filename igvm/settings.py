@@ -35,7 +35,7 @@ COMMON_FABRIC_SETTINGS = dict(
 
 # Can't not add a key with dict built above and None value gets interpreted
 # as "None" username, thus separate code.
-if  'IGVM_SSH_USER' in environ:
+if 'IGVM_SSH_USER' in environ:
     COMMON_FABRIC_SETTINGS['user'] = environ.get('IGVM_SSH_USER')
 
 VG_NAME = 'xen-data'
