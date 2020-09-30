@@ -35,7 +35,7 @@ COMMON_FABRIC_SETTINGS = dict(
 
 # Can't not add a key with dict built above and None value gets interpreted
 # as "None" username, thus separate code.
-if  'IGVM_SSH_USER' in environ:
+if 'IGVM_SSH_USER' in environ:
     COMMON_FABRIC_SETTINGS['user'] = environ.get('IGVM_SSH_USER')
 
 VG_NAME = 'xen-data'
@@ -260,9 +260,9 @@ AWS_CONFIG = [
                 ],
             },
             {
-                'name': 'basestretch_stable',
-                'filename': 'basestretch_stable.list',
-                'source': 'deb http://update-int.ig.local/ basestretch stable',
+                'name': 'base#VM_OS#_stable',
+                'filename': 'base#VM_OS#_stable.list',
+                'source': 'deb http://update-int.ig.local/ base#VM_OS# stable',
                 'key': [
                     "-----BEGIN PGP PUBLIC KEY BLOCK-----",
                     "Version: GnuPG v1",
