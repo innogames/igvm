@@ -794,30 +794,33 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
     """
 
     with _get_vm(vm_hostname) as vm:
-        if vm.dataset_obj['datacenter_type'] != 'kvm.dct':
+        if vm.dataset_obj['datacenter_type'] in ['aws.dct', 'kvm.dct']:
+            if vm.dataset_obj['puppet_disabled']:
+                raise ConfigError(
+                    'Rename command only works with Puppet enabled'
+                )
+
+            if vm.dataset_obj['datacenter_type'] == 'kvm.dct':
+                _check_defined(vm)
+
+                if not offline:
+                    raise NotImplementedError(
+                        'Rename command only works with --offline at the moment.'
+                    )
+                if not vm.is_running():
+                    raise NotImplementedError(
+                        'Rename command only works online at the moment.'
+                    )
+
+                vm.rename(new_hostname)
+            elif vm.dataset_obj['datacenter_type'] == 'aws.dct':
+                vm.aws_rename(new_hostname)
+        else:
             raise NotImplementedError(
                 'This operation is not yet supported for {}'.format(
                     vm.dataset_obj['datacenter_type']
                 )
             )
-
-        if vm.dataset_obj['puppet_disabled']:
-            raise ConfigError(
-                'Rename command only works with Puppet enabled'
-            )
-
-        _check_defined(vm)
-
-        if not offline:
-            raise NotImplementedError(
-                'Rename command only works with --offline at the moment.'
-            )
-        if not vm.is_running():
-            raise NotImplementedError(
-                'Rename command only works online at the moment.'
-            )
-
-        vm.rename(new_hostname)
 
 
 @contextmanager

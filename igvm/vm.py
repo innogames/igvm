@@ -165,7 +165,8 @@ class VM(Host):
         self.previous_hostname = self.dataset_obj['hostname']
 
         self.dataset_obj['hostname'] = new_hostname
-        self.check_serveradmin_config()
+        if self.dataset_obj['datacenter_type'] == 'kvm.dct':
+            self.check_serveradmin_config()
 
         self.dataset_obj.commit()
 
@@ -378,7 +379,14 @@ class VM(Host):
             raise VMError(e)
 
     def is_running(self):
-        return self.hypervisor.vm_running(self)
+        if self.dataset_obj['datacenter_type'] == 'kvm.dct':
+            return self.hypervisor.vm_running(self)
+        elif self.dataset_obj['datacenter_type'] == 'aws.dct':
+            instance_status = self.aws_describe_instance_status(
+                self.dataset_obj['aws_instance_id'])
+            if instance_status == AWS_RETURN_CODES['running']:
+                return True
+            return False
 
     def wait_for_running(self, running=True, timeout=60):
         """
@@ -651,6 +659,33 @@ class VM(Host):
             self.hypervisor.umount_vm_storage(self)
 
             self.start(transaction=transaction)
+
+    def aws_rename(self, new_hostname) -> None:
+        """AWS rename
+
+        Rename a VM in AWS.
+
+        :param: new_hostname: New name of the host
+        """
+
+        self.set_hostname(new_hostname)
+
+        ec2 = boto3.resource('ec2')
+
+        response = ec2.create_tags(
+            Resources=[self.dataset_obj['aws_instance_id']],
+            Tags=[
+                {
+                    'Key': 'Name',
+                    'Value': new_hostname,
+                },
+            ],
+            DryRun=False)
+        log.info(response)
+
+        self.run_puppet()
+        self.aws_shutdown()
+        self.aws_start()
 
     def prepare_vm(self):
         """Prepare the rootfs for a VM
