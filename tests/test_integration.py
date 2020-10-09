@@ -11,6 +11,7 @@ from unittest import TestCase
 
 from adminapi.dataset import Query
 from adminapi.filters import Any
+from botocore.exceptions import ClientError
 from fabric.api import env
 from fabric.network import disconnect_all
 from mock import patch
@@ -41,6 +42,7 @@ from igvm.exceptions import (
 from igvm.hypervisor import Hypervisor
 from igvm.puppet import clean_cert
 from igvm.settings import (
+    AWS_RETURN_CODES,
     COMMON_FABRIC_SETTINGS,
     HYPERVISOR_ATTRIBUTES,
     HYPERVISOR_CPU_THRESHOLDS,
@@ -56,6 +58,7 @@ from tests.conftest import (
     cmd,
     get_next_address,
 )
+from time import sleep
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -83,6 +86,11 @@ class IGVMTest(TestCase):
             ['route_network'],
         ).get()['route_network']
 
+        self.datacenter_type = Query(
+            {'hostname': self.route_network},
+            ['datacenter_type'],
+        ).get()['datacenter_type']
+
         self.hvs = [Hypervisor(o) for o in Query({
             'environment': 'testing',
             'servertype': 'hypervisor',
@@ -90,10 +98,11 @@ class IGVMTest(TestCase):
             'vlan_networks': self.route_network,
         }, HYPERVISOR_ATTRIBUTES)]
 
-        assert len(self.hvs) >= 2, 'Not enough testing hypervisors found'
+        if self.datacenter_type == 'kvm.dct':
+            assert len(self.hvs) >= 2, 'Not enough testing hypervisors found'
 
         # Cleanup all leftovers from previous tests or failures.
-        clean_all(self.route_network, VM_HOSTNAME)
+        clean_all(self.route_network, self.datacenter_type, VM_HOSTNAME)
 
         # Create subject VM object
         self.vm_obj = Query().new_object('vm')
@@ -116,6 +125,15 @@ class IGVMTest(TestCase):
             'int:innogames:stable',
         ]
         self.vm_obj['state'] = 'online'
+
+        if self.datacenter_type == 'aws.dct':
+            self.vm_obj['aws_image_id'] = 'ami-0e2b90ca04cae8da5'  # buster
+            self.vm_obj['aws_instance_type'] = 't2.micro'
+            self.vm_obj['aws_key_name'] = 'MyUSE1KP'
+            self.vm_obj['service_groups'] = [
+                'igvm-integration.test.sg',
+            ]
+
         self.vm_obj.commit()
 
         self.uid_name = '{}_{}'.format(
@@ -131,7 +149,7 @@ class IGVMTest(TestCase):
         super().tearDown()
 
         clean_cert(self.vm_obj)
-        clean_all(self.route_network, VM_HOSTNAME)
+        clean_all(self.route_network, self.datacenter_type, VM_HOSTNAME)
 
     def check_vm_present(self, vm_name=VM_HOSTNAME):
         # Operate on fresh object
@@ -156,15 +174,23 @@ class IGVMTest(TestCase):
     def check_vm_absent(self, vm_name=VM_HOSTNAME, hv_name=None):
         # Operate on fresh object
         with _get_vm(vm_name, allow_retired=True) as vm:
-            if not hv_name:
-                hv_name = vm.dataset_obj['hypervisor']
+            if self.datacenter_type == 'kvm.dct':
+                if not hv_name:
+                    hv_name = vm.dataset_obj['hypervisor']
 
-            for hv in self.hvs:
-                if hv.dataset_obj['hostname'] == hv_name:
-                    self.assertEqual(hv.vm_defined(vm), False)
-                    hv.run(
-                        'test ! -b /dev/{}/{}'.format(VG_NAME, self.uid_name)
-                    )
+                for hv in self.hvs:
+                    if hv.dataset_obj['hostname'] == hv_name:
+                        self.assertEqual(hv.vm_defined(vm), False)
+                        hv.run(
+                            'test ! -b /dev/{}/{}'.format(
+                                VG_NAME, self.uid_name)
+                        )
+            elif self.datacenter_type == 'aws.dct':
+                self.assertEqual(
+                    vm.aws_describe_instance_status(
+                        vm.dataset_obj['aws_instance_id']),
+                    AWS_RETURN_CODES['terminated']
+                )
 
 
 class SettingsHardwareModelTest(TestCase):
@@ -221,8 +247,12 @@ class BuildTest(IGVMTest):
         with self.assertRaises(IGVMError):
             vm_delete(VM_HOSTNAME)
 
-        with _get_vm(VM_HOSTNAME) as vm:
-            vm.shutdown()
+        if self.datacenter_type == 'kvm.dct':
+            with _get_vm(VM_HOSTNAME) as vm:
+                vm.shutdown()
+        elif self.datacenter_type == 'aws.dct':
+            vm_stop(VM_HOSTNAME)
+
         vm_delete(VM_HOSTNAME, retire=True)
 
         self.check_vm_absent()
@@ -249,9 +279,28 @@ class BuildTest(IGVMTest):
             vm.run('touch /root/initial_canary')
             vm.run('test -f /root/initial_canary')
 
-        # Now stop it and rebuild it
         vm_stop(VM_HOSTNAME)
-        vm_build(VM_HOSTNAME, rebuild=True)
+
+        if self.datacenter_type == 'kvm.dct':
+            # Now stop it and rebuild it
+            vm_build(VM_HOSTNAME, rebuild=True)
+        elif self.datacenter_type == 'aws.dct':
+            vm_delete(VM_HOSTNAME, retire=True)
+            timeout_terminate = 60
+            instance_status = vm.aws_describe_instance_status(
+                vm.dataset_obj['aws_instance_id'])
+            while (
+                timeout_terminate and
+                AWS_RETURN_CODES['terminated'] != instance_status
+            ):
+                timeout_terminate -= 1
+                sleep(1)
+
+            obj = Query({'hostname': VM_HOSTNAME}, ['state']).get()
+            obj['state'] = 'maintenance'
+            obj.commit()
+            vm_build(VM_HOSTNAME)
+
         self.check_vm_present()
 
         # The VM was rebuild and thus the test file must be gone
@@ -293,23 +342,33 @@ class CommandTest(IGVMTest):
         self.check_vm_present()
 
     def test_disk_set(self):
-        def _get_disk_hv():
-            return (
-                self.vm.hypervisor.vm_sync_from_hypervisor(self.vm)
-                ['disk_size_gib']
-            )
+        if self.datacenter_type == 'kvm.dct':
+            def _get_disk_hv():
+                return (
+                    self.vm.hypervisor.vm_sync_from_hypervisor(self.vm)
+                    ['disk_size_gib']
+                )
 
-        def _get_disk_vm():
-            return parse_size(
-                self.vm.run("df -h / | tail -n+2 | awk '{ print $2 }'")
-                .strip(),
-                'G'
-            )
+            def _get_disk_vm():
+                return parse_size(
+                    self.vm.run("df -h / | tail -n+2 | awk '{ print $2 }'")
+                    .strip(),
+                    'G'
+                )
+        elif self.datacenter_type == 'aws.dct':
+            def _get_disk_vm():
+                partition = self.vm.run('findmnt -nro SOURCE /')
+                disk = self.vm.run('lsblk -nro PKNAME {}'.format(partition))
+                disk_size = self.vm.run(
+                    'lsblk -bdnro size /dev/{}'.format(disk))
+                disk_size_gib = int(disk_size) / 1024 / 1024 / 1024
+                return disk_size_gib
 
         # Initial size same as built
         obj = Query({'hostname': VM_HOSTNAME}, ['disk_size_gib']).get()
         size = obj['disk_size_gib']
-        self.assertEqual(_get_disk_hv(), size)
+        if self.datacenter_type == 'kvm.dct':
+            self.assertEqual(_get_disk_hv(), size)
         self.assertEqual(_get_disk_vm(), size)
 
         size = size + 1
@@ -317,25 +376,33 @@ class CommandTest(IGVMTest):
         obj = Query({'hostname': VM_HOSTNAME}, ['disk_size_gib']).get()
 
         self.assertEqual(obj['disk_size_gib'], size)
-        self.assertEqual(_get_disk_hv(), size)
+        if self.datacenter_type == 'kvm.dct':
+            self.assertEqual(_get_disk_hv(), size)
         self.assertEqual(_get_disk_vm(), size)
 
-        size = 8
-        disk_set(VM_HOSTNAME, '{}GB'.format(size))
-        obj = Query({'hostname': VM_HOSTNAME}, ['disk_size_gib']).get()
-
-        self.assertEqual(obj['disk_size_gib'], size)
-        self.assertEqual(_get_disk_hv(), size)
-        self.assertEqual(_get_disk_vm(), size)
+        if self.datacenter_type == 'kvm.dct':
+            disk_set(VM_HOSTNAME, '{}GB'.format(size))
+            obj = Query({'hostname': VM_HOSTNAME}, ['disk_size_gib']).get()
+            self.assertEqual(obj['disk_size_gib'], size)
+            self.assertEqual(_get_disk_hv(), size)
+            self.assertEqual(_get_disk_vm(), size)
 
         with self.assertRaises(Warning):
             disk_set(VM_HOSTNAME, '{}GB'.format(size))
 
-        with self.assertRaises(NotImplementedError):
-            disk_set(VM_HOSTNAME, '{}GB'.format(size - 1))
+        if self.datacenter_type == 'kvm.dct':
+            with self.assertRaises(NotImplementedError):
+                disk_set(VM_HOSTNAME, '{}GB'.format(size - 1))
+        elif self.datacenter_type == 'aws.dct':
+            with self.assertRaises(ClientError):
+                disk_set(VM_HOSTNAME, '{}GB'.format(size - 1))
 
-        with self.assertRaises(NotImplementedError):
-            disk_set(VM_HOSTNAME, '-1')
+        if self.datacenter_type == 'kvm.dct':
+            with self.assertRaises(NotImplementedError):
+                disk_set(VM_HOSTNAME, '-1')
+        elif self.datacenter_type == 'aws.dct':
+            with self.assertRaises(ClientError):
+                disk_set(VM_HOSTNAME, '-1')
 
     def test_mem_set(self):
         def _get_mem_hv():
@@ -622,7 +689,7 @@ class RenameTest(CommandTest):
 
     def tearDown(self):
         clean_cert(self.vm_obj)
-        clean_all(self.route_network, VM_HOSTNAME)
+        clean_all(self.route_network, self.datacenter_type, VM_HOSTNAME)
 
         # Same as in setUp we need to take care of the renamed hosts.
         vm = self.vm.dataset_obj
@@ -632,7 +699,7 @@ class RenameTest(CommandTest):
             vm['hostname'] = RenameTest._get_renamed_hostname(vm['hostname'])
 
         clean_cert(vm)
-        clean_all(vm['hostname'])
+        clean_all(self.datacenter_type, vm['hostname'])
 
     def test_vm_rename(self):
         """Test vm_rename

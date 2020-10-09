@@ -9,9 +9,11 @@ from shlex import quote
 
 from adminapi.dataset import Query
 from adminapi.exceptions import DatasetError
-from adminapi.filters import Any, Regexp
+from adminapi.filters import Any, Not, Regexp
 from libvirt import VIR_DOMAIN_RUNNING
 
+from igvm.commands import vm_delete, vm_stop
+from igvm.exceptions import VMError
 from igvm.hypervisor import Hypervisor
 from igvm.settings import HYPERVISOR_ATTRIBUTES
 from tests import (
@@ -34,7 +36,7 @@ def cmd(cmd, *args, **kwargs):
     return cmd.format(*escaped_args, **escaped_kwargs)
 
 
-def clean_all(route_network, vm_hostname=None):
+def clean_all(route_network, datacenter_type, vm_hostname=None):
     # Cancelled builds are forcefully killed by Jenkins. They did not have the
     # opportunity to clean up so we forcibly destroy everything found on any HV
     # which would interrupt our work in the current JENKINS_EXECUTOR.
@@ -56,6 +58,9 @@ def clean_all(route_network, vm_hostname=None):
     # Clean HVs one by one.
     for hv in hvs:
         clean_hv(hv, pattern)
+
+    if datacenter_type == 'aws.dct':
+        clean_aws(vm_hostname)
 
     # Remove all connected Serveradmin objects.
     clean_serveradmin({'hostname': Regexp(pattern)})
@@ -115,12 +120,25 @@ def clean_serveradmin(filters):
     Query(filters).delete().commit()
 
 
-def get_next_address(vm_net, index):
-    subnet_levels = ceil(log(PYTEST_XDIST_WORKER_COUNT, 2))
-    project_network = Query({'hostname': vm_net}, ['intern_ip']).get()
-
+def clean_aws(vm_hostname):
     try:
-        subnets = project_network['intern_ip'].subnets(subnet_levels)
+        vm_stop(vm_hostname)
+        vm_delete(vm_hostname)
+    except (VMError, DatasetError):
+        # No object found or no cleanup needed
+        pass
+
+
+def get_next_address(vm_net, index):
+    non_vm_hosts = list(Query({
+        'project_network': vm_net,
+        'servertype': Not('vm'),
+    }, ['intern_ip']))
+    offset = 1 if len(non_vm_hosts) > 0 else 0
+    subnet_levels = ceil(log(PYTEST_XDIST_WORKER_COUNT + offset, 2))
+    project_network = Query({'hostname': vm_net}, ['intern_ip']).get()
+    try:
+        subnets = list(project_network['intern_ip'].subnets(subnet_levels))
     except ValueError:
         raise Exception(
             'Can\'t split {} into enough subnets '
@@ -128,5 +146,11 @@ def get_next_address(vm_net, index):
                 vm_net, PYTEST_XDIST_WORKER_COUNT,
             )
         )
-
-    return list(subnets)[PYTEST_XDIST_WORKER][index]
+    if len(non_vm_hosts) > subnets[0].num_addresses:
+        raise Exception(
+            'Can\'t split {} into enough subnets '
+            'for {} parallel tests'.format(
+                vm_net, PYTEST_XDIST_WORKER_COUNT,
+            )
+        )
+    return list(subnets)[PYTEST_XDIST_WORKER + 1][index]
