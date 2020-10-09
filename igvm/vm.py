@@ -379,7 +379,14 @@ class VM(Host):
             raise VMError(e)
 
     def is_running(self):
-        return self.hypervisor.vm_running(self)
+        if self.dataset_obj['datacenter_type'] == 'kvm.dct':
+            return self.hypervisor.vm_running(self)
+        elif self.dataset_obj['datacenter_type'] == 'aws.dct':
+            instance_status = self.aws_describe_instance_status(
+                self.dataset_obj['aws_instance_id'])
+            if instance_status == AWS_RETURN_CODES['running']:
+                return True
+            return False
 
     def wait_for_running(self, running=True, timeout=60):
         """
