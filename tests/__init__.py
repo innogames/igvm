@@ -24,8 +24,10 @@ if environ.get('PYTEST_XDIST_WORKER_COUNT'):
 else:
     PYTEST_XDIST_WORKER_COUNT = 1
 
-
-VM_NET = 'igvm-net-{}-aw.test.ig.local'.format(JENKINS_EXECUTOR)
+if environ.get('VM_NET'):
+    VM_NET = environ['VM_NET']
+else:
+    VM_NET = 'igvm-net-{}-aw.test.ig.local'.format(JENKINS_EXECUTOR)
 
 VM_HOSTNAME_PATTERN = 'igvm-{}-{}.test.ig.local'
 VM_HOSTNAME = VM_HOSTNAME_PATTERN.format(
