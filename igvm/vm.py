@@ -257,7 +257,7 @@ class VM(Host):
             current_state = (
                 response['StartingInstances'][0]['CurrentState']['Code']
             )
-            log.info(response)
+            log.debug(response)
             if current_state and current_state == AWS_RETURN_CODES['running']:
                 log.info('{} is already running.'.format(
                     self.dataset_obj['hostname']))
@@ -309,7 +309,7 @@ class VM(Host):
             )
             current_state = response['StoppingInstances'][0][
                 'CurrentState']['Code']
-            log.info(response)
+            log.debug(response)
             if current_state and current_state == AWS_RETURN_CODES['stopped']:
                 log.info('{} is already stopped.'.format(
                     self.dataset_obj['hostname']))
@@ -374,19 +374,22 @@ class VM(Host):
         try:
             response = ec2.terminate_instances(
                 InstanceIds=[self.dataset_obj['aws_instance_id']])
-            log.info(response)
+            log.debug(response)
         except ClientError as e:
             raise VMError(e)
 
     def is_running(self):
+        if self.dataset_obj['datacenter_type'] not in ['aws.dct', 'kvm.dct']:
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    self.dataset_obj['datacenter_type'])
+            )
         if self.dataset_obj['datacenter_type'] == 'kvm.dct':
             return self.hypervisor.vm_running(self)
-        elif self.dataset_obj['datacenter_type'] == 'aws.dct':
-            instance_status = self.aws_describe_instance_status(
-                self.dataset_obj['aws_instance_id'])
-            if instance_status == AWS_RETURN_CODES['running']:
-                return True
-            return False
+
+        instance_status = self.aws_describe_instance_status(
+            self.dataset_obj['aws_instance_id'])
+        return instance_status == AWS_RETURN_CODES['running']
 
     def wait_for_running(self, running=True, timeout=60):
         """
@@ -575,7 +578,7 @@ class VM(Host):
                     DryRun=False,
                     MinCount=1,
                     MaxCount=1)
-                log.info(response)
+                log.debug(response)
                 break
             except ClientError as e:
                 raise VMError(e)
@@ -660,7 +663,7 @@ class VM(Host):
 
             self.start(transaction=transaction)
 
-    def aws_rename(self, new_hostname) -> None:
+    def aws_rename(self, new_hostname: str) -> None:
         """AWS rename
 
         Rename a VM in AWS.
@@ -681,7 +684,7 @@ class VM(Host):
                 },
             ],
             DryRun=False)
-        log.info(response)
+        log.debug(response)
 
         self.run_puppet()
         self.aws_shutdown()
@@ -809,6 +812,9 @@ class VM(Host):
         :raises: VMError: Generic exception for VM errors of all kinds
         """
 
+        if size < self.dataset_obj['disk_size_gib']:
+            raise NotImplementedError('Cannot shrink the disk.')
+
         ec2 = boto3.resource('ec2')
 
         response = ec2.Instance(self.dataset_obj['aws_instance_id'])
@@ -817,6 +823,26 @@ class VM(Host):
             break
 
         ec2 = boto3.client('ec2')
+
+        try:
+            volume_state = ec2.describe_volumes_modifications(
+                VolumeIds=[volume_id])['VolumesModifications'][0]
+
+            if volume_state['ModificationState'] == 'optimizing':
+                raise VMError(
+                    'disk resize already in progress '
+                    'for {} (state: {})'.format(
+                        self.dataset_obj['hostname'],
+                        volume_state['ModificationState'])
+                )
+        except ClientError:
+            log.debug(
+                'First disk resize of {} ({}) - '
+                'no modification state available in AWS'.format(
+                    self.dataset_obj['hostname'], volume_id)
+            )
+            pass
+
         ec2.modify_volume(VolumeId=volume_id, Size=int(size))
 
         partition = self.run('findmnt -nro SOURCE /')

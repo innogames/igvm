@@ -9,6 +9,7 @@ from collections import OrderedDict
 from contextlib import contextmanager, ExitStack
 from ipaddress import ip_address
 from os import environ
+from time import sleep
 
 from adminapi.dataset import Query
 from adminapi.filters import Any, StartsWith, Contains
@@ -304,6 +305,18 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
                 puppet_master=vm.dataset_obj['puppet_master'],
                 puppet_ca=vm.dataset_obj['puppet_ca'],
             )
+
+            if rebuild:
+                vm.aws_delete()
+                timeout_terminate = 60
+                instance_status = vm.aws_describe_instance_status(
+                    vm.dataset_obj['aws_instance_id'])
+                while (
+                    timeout_terminate and
+                    AWS_RETURN_CODES['terminated'] != instance_status
+                ):
+                    timeout_terminate -= 1
+                    sleep(1)
 
             vm.aws_build(
                 run_puppet=run_puppet,
@@ -794,33 +807,33 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
     """
 
     with _get_vm(vm_hostname) as vm:
-        if vm.dataset_obj['datacenter_type'] in ['aws.dct', 'kvm.dct']:
-            if vm.dataset_obj['puppet_disabled']:
-                raise ConfigError(
-                    'Rename command only works with Puppet enabled'
-                )
-
-            if vm.dataset_obj['datacenter_type'] == 'kvm.dct':
-                _check_defined(vm)
-
-                if not offline:
-                    raise NotImplementedError(
-                        'Rename command only works with --offline at the moment.'
-                    )
-                if not vm.is_running():
-                    raise NotImplementedError(
-                        'Rename command only works online at the moment.'
-                    )
-
-                vm.rename(new_hostname)
-            elif vm.dataset_obj['datacenter_type'] == 'aws.dct':
-                vm.aws_rename(new_hostname)
-        else:
+        if vm.dataset_obj['datacenter_type'] not in ['aws.dct', 'kvm.dct']:
             raise NotImplementedError(
                 'This operation is not yet supported for {}'.format(
                     vm.dataset_obj['datacenter_type']
                 )
             )
+
+        if vm.dataset_obj['puppet_disabled']:
+            raise ConfigError(
+                'Rename command only works with Puppet enabled'
+            )
+
+        if vm.dataset_obj['datacenter_type'] == 'kvm.dct':
+            _check_defined(vm)
+
+            if not offline:
+                raise NotImplementedError(
+                    'Rename command only works with --offline at the moment.'
+                )
+            if not vm.is_running():
+                raise NotImplementedError(
+                    'Rename command only works online at the moment.'
+                )
+
+            vm.rename(new_hostname)
+        elif vm.dataset_obj['datacenter_type'] == 'aws.dct':
+            vm.aws_rename(new_hostname)
 
 
 @contextmanager

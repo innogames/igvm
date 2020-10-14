@@ -2,20 +2,23 @@
 
 Copyright (c) 2020 InnoGames GmbH
 """
+
 from datetime import datetime, timezone
 from math import ceil, log
 from re import match
+from time import sleep
 from shlex import quote
 
+import boto3
 from adminapi.dataset import Query
 from adminapi.exceptions import DatasetError
 from adminapi.filters import Any, Not, Regexp
+from botocore.exceptions import ClientError
 from libvirt import VIR_DOMAIN_RUNNING
 
-from igvm.commands import vm_delete, vm_stop
-from igvm.exceptions import VMError
+from igvm.exceptions import VMError, IGVMTestError
 from igvm.hypervisor import Hypervisor
-from igvm.settings import HYPERVISOR_ATTRIBUTES
+from igvm.settings import HYPERVISOR_ATTRIBUTES, AWS_RETURN_CODES
 from tests import (
     IGVM_LOCKED_TIMEOUT,
     JENKINS_EXECUTOR,
@@ -56,8 +59,9 @@ def clean_all(route_network, datacenter_type, vm_hostname=None):
         pattern = '^([0-9]+_)?(vm-rename-)?{}$'.format(vm_hostname)
 
     # Clean HVs one by one.
-    for hv in hvs:
-        clean_hv(hv, pattern)
+    if datacenter_type == 'kvm.dct':
+        for hv in hvs:
+            clean_hv(hv, pattern)
 
     if datacenter_type == 'aws.dct':
         clean_aws(vm_hostname)
@@ -121,12 +125,54 @@ def clean_serveradmin(filters):
 
 
 def clean_aws(vm_hostname):
+    def _get_instance_status():
+        response = ec2.describe_instances(
+            Filters=[
+                {
+                    'Name': 'instance-state-code',
+                    'Values': [
+                        str(AWS_RETURN_CODES['pending']),
+                        str(AWS_RETURN_CODES['running']),
+                        str(AWS_RETURN_CODES['shutting-down']),
+                        str(AWS_RETURN_CODES['terminated']),
+                        str(AWS_RETURN_CODES['stopping']),
+                        str(AWS_RETURN_CODES['stopped']),
+                    ]
+                },
+            ],
+            InstanceIds=[obj['aws_instance_id']],
+            DryRun=False)['Reservations'][0]['Instances'][0]['State']['Code']
+
+        return int(response)
+
     try:
-        vm_stop(vm_hostname)
-        vm_delete(vm_hostname)
-    except (VMError, DatasetError):
-        # No object found or no cleanup needed
-        pass
+        obj = Query({'hostname': vm_hostname}, ['aws_instance_id']).get()
+    except DatasetError:  # No object to clean up
+        return
+
+    if not obj['aws_instance_id']:
+        return
+
+    timeout = 120
+    ec2 = boto3.client('ec2')
+    try:
+        ec2.stop_instances(
+            InstanceIds=[obj['aws_instance_id']], DryRun=False
+        )
+    except ClientError as e:
+        pass  # Not running
+    for _ in range(timeout):
+        instance_status = _get_instance_status()
+        if AWS_RETURN_CODES['stopped'] == instance_status:
+            break
+        sleep(1)
+
+    ec2.terminate_instances(InstanceIds=[obj['aws_instance_id']])
+    for _ in range(timeout):
+        instance_status = _get_instance_status()
+        if AWS_RETURN_CODES['terminated'] == instance_status:
+            break
+        sleep(1)
 
 
 def get_next_address(vm_net, index):
@@ -140,17 +186,17 @@ def get_next_address(vm_net, index):
     try:
         subnets = list(project_network['intern_ip'].subnets(subnet_levels))
     except ValueError:
-        raise Exception(
+        raise IGVMTestError(
             'Can\'t split {} into enough subnets '
             'for {} parallel tests'.format(
                 vm_net, PYTEST_XDIST_WORKER_COUNT,
             )
         )
     if len(non_vm_hosts) > subnets[0].num_addresses:
-        raise Exception(
+        raise IGVMTestError(
             'Can\'t split {} into enough subnets '
             'for {} parallel tests'.format(
                 vm_net, PYTEST_XDIST_WORKER_COUNT,
             )
         )
-    return list(subnets)[PYTEST_XDIST_WORKER + 1][index]
+    return subnets[PYTEST_XDIST_WORKER + 1][index]

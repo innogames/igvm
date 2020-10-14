@@ -58,7 +58,6 @@ from tests.conftest import (
     cmd,
     get_next_address,
 )
-from time import sleep
 
 basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
@@ -247,12 +246,7 @@ class BuildTest(IGVMTest):
         with self.assertRaises(IGVMError):
             vm_delete(VM_HOSTNAME)
 
-        if self.datacenter_type == 'kvm.dct':
-            with _get_vm(VM_HOSTNAME) as vm:
-                vm.shutdown()
-        elif self.datacenter_type == 'aws.dct':
-            vm_stop(VM_HOSTNAME)
-
+        vm_stop(VM_HOSTNAME)
         vm_delete(VM_HOSTNAME, retire=True)
 
         self.check_vm_absent()
@@ -279,27 +273,9 @@ class BuildTest(IGVMTest):
             vm.run('touch /root/initial_canary')
             vm.run('test -f /root/initial_canary')
 
+        # Now stop it and rebuild it
         vm_stop(VM_HOSTNAME)
-
-        if self.datacenter_type == 'kvm.dct':
-            # Now stop it and rebuild it
-            vm_build(VM_HOSTNAME, rebuild=True)
-        elif self.datacenter_type == 'aws.dct':
-            vm_delete(VM_HOSTNAME, retire=True)
-            timeout_terminate = 60
-            instance_status = vm.aws_describe_instance_status(
-                vm.dataset_obj['aws_instance_id'])
-            while (
-                timeout_terminate and
-                AWS_RETURN_CODES['terminated'] != instance_status
-            ):
-                timeout_terminate -= 1
-                sleep(1)
-
-            obj = Query({'hostname': VM_HOSTNAME}, ['state']).get()
-            obj['state'] = 'maintenance'
-            obj.commit()
-            vm_build(VM_HOSTNAME)
+        vm_build(VM_HOSTNAME, rebuild=True)
 
         self.check_vm_present()
 
@@ -361,7 +337,7 @@ class CommandTest(IGVMTest):
                 disk = self.vm.run('lsblk -nro PKNAME {}'.format(partition))
                 disk_size = self.vm.run(
                     'lsblk -bdnro size /dev/{}'.format(disk))
-                disk_size_gib = int(disk_size) / 1024 / 1024 / 1024
+                disk_size_gib = int(disk_size) / 1024**3
                 return disk_size_gib
 
         # Initial size same as built
@@ -380,29 +356,28 @@ class CommandTest(IGVMTest):
             self.assertEqual(_get_disk_hv(), size)
         self.assertEqual(_get_disk_vm(), size)
 
+        size = obj['disk_size_gib'] + 1
         if self.datacenter_type == 'kvm.dct':
             disk_set(VM_HOSTNAME, '{}GB'.format(size))
             obj = Query({'hostname': VM_HOSTNAME}, ['disk_size_gib']).get()
             self.assertEqual(obj['disk_size_gib'], size)
             self.assertEqual(_get_disk_hv(), size)
             self.assertEqual(_get_disk_vm(), size)
-
-        with self.assertRaises(Warning):
-            disk_set(VM_HOSTNAME, '{}GB'.format(size))
+        elif self.datacenter_type == 'aws.dct':
+            with self.assertRaises(VMError):
+                disk_set(VM_HOSTNAME, '{}GB'.format(size))
 
         if self.datacenter_type == 'kvm.dct':
-            with self.assertRaises(NotImplementedError):
-                disk_set(VM_HOSTNAME, '{}GB'.format(size - 1))
-        elif self.datacenter_type == 'aws.dct':
-            with self.assertRaises(ClientError):
-                disk_set(VM_HOSTNAME, '{}GB'.format(size - 1))
+            with self.assertRaises(Warning):
+                disk_set(VM_HOSTNAME, '{}GB'.format(size))
 
-        if self.datacenter_type == 'kvm.dct':
-            with self.assertRaises(NotImplementedError):
-                disk_set(VM_HOSTNAME, '-1')
-        elif self.datacenter_type == 'aws.dct':
-            with self.assertRaises(ClientError):
-                disk_set(VM_HOSTNAME, '-1')
+        obj = Query({'hostname': VM_HOSTNAME}, ['disk_size_gib']).get()
+        size = obj['disk_size_gib']
+        with self.assertRaises(NotImplementedError):
+            disk_set(VM_HOSTNAME, '{}GB'.format(size - 1))
+
+        with self.assertRaises(NotImplementedError):
+            disk_set(VM_HOSTNAME, '-1')
 
     def test_mem_set(self):
         def _get_mem_hv():
@@ -699,7 +674,7 @@ class RenameTest(CommandTest):
             vm['hostname'] = RenameTest._get_renamed_hostname(vm['hostname'])
 
         clean_cert(vm)
-        clean_all(self.datacenter_type, vm['hostname'])
+        clean_all(self.route_network, self.datacenter_type, vm['hostname'])
 
     def test_vm_rename(self):
         """Test vm_rename
