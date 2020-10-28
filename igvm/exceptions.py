@@ -56,6 +56,9 @@ class TimeoutError(IGVMError):
     """An operation timed out."""
     pass
 
+class IGVMTestError(IGVMError):
+    """Indicates an error during tests."""
+    pass
 
 class InconsistentAttributeError(IGVMError):
     """An attribute on the VM differs from the excepted value from

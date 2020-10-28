@@ -165,7 +165,8 @@ class VM(Host):
         self.previous_hostname = self.dataset_obj['hostname']
 
         self.dataset_obj['hostname'] = new_hostname
-        self.check_serveradmin_config()
+        if self.dataset_obj['datacenter_type'] == 'kvm.dct':
+            self.check_serveradmin_config()
 
         self.dataset_obj.commit()
 
@@ -256,7 +257,7 @@ class VM(Host):
             current_state = (
                 response['StartingInstances'][0]['CurrentState']['Code']
             )
-            log.info(response)
+            log.debug(response)
             if current_state and current_state == AWS_RETURN_CODES['running']:
                 log.info('{} is already running.'.format(
                     self.dataset_obj['hostname']))
@@ -308,7 +309,7 @@ class VM(Host):
             )
             current_state = response['StoppingInstances'][0][
                 'CurrentState']['Code']
-            log.info(response)
+            log.debug(response)
             if current_state and current_state == AWS_RETURN_CODES['stopped']:
                 log.info('{} is already stopped.'.format(
                     self.dataset_obj['hostname']))
@@ -373,12 +374,22 @@ class VM(Host):
         try:
             response = ec2.terminate_instances(
                 InstanceIds=[self.dataset_obj['aws_instance_id']])
-            log.info(response)
+            log.debug(response)
         except ClientError as e:
             raise VMError(e)
 
     def is_running(self):
-        return self.hypervisor.vm_running(self)
+        if self.dataset_obj['datacenter_type'] not in ['aws.dct', 'kvm.dct']:
+            raise NotImplementedError(
+                'This operation is not yet supported for {}'.format(
+                    self.dataset_obj['datacenter_type'])
+            )
+        if self.dataset_obj['datacenter_type'] == 'kvm.dct':
+            return self.hypervisor.vm_running(self)
+
+        instance_status = self.aws_describe_instance_status(
+            self.dataset_obj['aws_instance_id'])
+        return instance_status == AWS_RETURN_CODES['running']
 
     def wait_for_running(self, running=True, timeout=60):
         """
@@ -567,7 +578,7 @@ class VM(Host):
                     DryRun=False,
                     MinCount=1,
                     MaxCount=1)
-                log.info(response)
+                log.debug(response)
                 break
             except ClientError as e:
                 raise VMError(e)
@@ -651,6 +662,33 @@ class VM(Host):
             self.hypervisor.umount_vm_storage(self)
 
             self.start(transaction=transaction)
+
+    def aws_rename(self, new_hostname: str) -> None:
+        """AWS rename
+
+        Rename a VM in AWS.
+
+        :param: new_hostname: New name of the host
+        """
+
+        self.set_hostname(new_hostname)
+
+        ec2 = boto3.resource('ec2')
+
+        response = ec2.create_tags(
+            Resources=[self.dataset_obj['aws_instance_id']],
+            Tags=[
+                {
+                    'Key': 'Name',
+                    'Value': new_hostname,
+                },
+            ],
+            DryRun=False)
+        log.debug(response)
+
+        self.run_puppet()
+        self.aws_shutdown()
+        self.aws_start()
 
     def prepare_vm(self):
         """Prepare the rootfs for a VM
@@ -774,6 +812,9 @@ class VM(Host):
         :raises: VMError: Generic exception for VM errors of all kinds
         """
 
+        if size < self.dataset_obj['disk_size_gib']:
+            raise NotImplementedError('Cannot shrink the disk.')
+
         ec2 = boto3.resource('ec2')
 
         response = ec2.Instance(self.dataset_obj['aws_instance_id'])
@@ -782,6 +823,26 @@ class VM(Host):
             break
 
         ec2 = boto3.client('ec2')
+
+        try:
+            volume_state = ec2.describe_volumes_modifications(
+                VolumeIds=[volume_id])['VolumesModifications'][0]
+
+            if volume_state['ModificationState'] == 'optimizing':
+                raise VMError(
+                    'disk resize already in progress '
+                    'for {} (state: {})'.format(
+                        self.dataset_obj['hostname'],
+                        volume_state['ModificationState'])
+                )
+        except ClientError:
+            log.debug(
+                'First disk resize of {} ({}) - '
+                'no modification state available in AWS'.format(
+                    self.dataset_obj['hostname'], volume_id)
+            )
+            pass
+
         ec2.modify_volume(VolumeId=volume_id, Size=int(size))
 
         partition = self.run('findmnt -nro SOURCE /')

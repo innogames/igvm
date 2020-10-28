@@ -2,18 +2,23 @@
 
 Copyright (c) 2020 InnoGames GmbH
 """
+
 from datetime import datetime, timezone
 from math import ceil, log
 from re import match
+from time import sleep
 from shlex import quote
 
+import boto3
 from adminapi.dataset import Query
 from adminapi.exceptions import DatasetError
-from adminapi.filters import Any, Regexp
+from adminapi.filters import Any, Not, Regexp
+from botocore.exceptions import ClientError
 from libvirt import VIR_DOMAIN_RUNNING
 
+from igvm.exceptions import VMError, IGVMTestError
 from igvm.hypervisor import Hypervisor
-from igvm.settings import HYPERVISOR_ATTRIBUTES
+from igvm.settings import HYPERVISOR_ATTRIBUTES, AWS_RETURN_CODES
 from tests import (
     IGVM_LOCKED_TIMEOUT,
     JENKINS_EXECUTOR,
@@ -34,7 +39,7 @@ def cmd(cmd, *args, **kwargs):
     return cmd.format(*escaped_args, **escaped_kwargs)
 
 
-def clean_all(route_network, vm_hostname=None):
+def clean_all(route_network, datacenter_type, vm_hostname=None):
     # Cancelled builds are forcefully killed by Jenkins. They did not have the
     # opportunity to clean up so we forcibly destroy everything found on any HV
     # which would interrupt our work in the current JENKINS_EXECUTOR.
@@ -54,8 +59,12 @@ def clean_all(route_network, vm_hostname=None):
         pattern = '^([0-9]+_)?(vm-rename-)?{}$'.format(vm_hostname)
 
     # Clean HVs one by one.
-    for hv in hvs:
-        clean_hv(hv, pattern)
+    if datacenter_type == 'kvm.dct':
+        for hv in hvs:
+            clean_hv(hv, pattern)
+
+    if datacenter_type == 'aws.dct':
+        clean_aws(vm_hostname)
 
     # Remove all connected Serveradmin objects.
     clean_serveradmin({'hostname': Regexp(pattern)})
@@ -115,18 +124,79 @@ def clean_serveradmin(filters):
     Query(filters).delete().commit()
 
 
-def get_next_address(vm_net, index):
-    subnet_levels = ceil(log(PYTEST_XDIST_WORKER_COUNT, 2))
-    project_network = Query({'hostname': vm_net}, ['intern_ip']).get()
+def clean_aws(vm_hostname):
+    def _get_instance_status():
+        response = ec2.describe_instances(
+            Filters=[
+                {
+                    'Name': 'instance-state-code',
+                    'Values': [
+                        str(AWS_RETURN_CODES['pending']),
+                        str(AWS_RETURN_CODES['running']),
+                        str(AWS_RETURN_CODES['shutting-down']),
+                        str(AWS_RETURN_CODES['terminated']),
+                        str(AWS_RETURN_CODES['stopping']),
+                        str(AWS_RETURN_CODES['stopped']),
+                    ]
+                },
+            ],
+            InstanceIds=[obj['aws_instance_id']],
+            DryRun=False)['Reservations'][0]['Instances'][0]['State']['Code']
+
+        return int(response)
 
     try:
-        subnets = project_network['intern_ip'].subnets(subnet_levels)
+        obj = Query({'hostname': vm_hostname}, ['aws_instance_id']).get()
+    except DatasetError:  # No object to clean up
+        return
+
+    if not obj['aws_instance_id']:
+        return
+
+    timeout = 120
+    ec2 = boto3.client('ec2')
+    try:
+        ec2.stop_instances(
+            InstanceIds=[obj['aws_instance_id']], DryRun=False
+        )
+    except ClientError as e:
+        pass  # Not running
+    for _ in range(timeout):
+        instance_status = _get_instance_status()
+        if AWS_RETURN_CODES['stopped'] == instance_status:
+            break
+        sleep(1)
+
+    ec2.terminate_instances(InstanceIds=[obj['aws_instance_id']])
+    for _ in range(timeout):
+        instance_status = _get_instance_status()
+        if AWS_RETURN_CODES['terminated'] == instance_status:
+            break
+        sleep(1)
+
+
+def get_next_address(vm_net, index):
+    non_vm_hosts = list(Query({
+        'project_network': vm_net,
+        'servertype': Not('vm'),
+    }, ['intern_ip']))
+    offset = 1 if len(non_vm_hosts) > 0 else 0
+    subnet_levels = ceil(log(PYTEST_XDIST_WORKER_COUNT + offset, 2))
+    project_network = Query({'hostname': vm_net}, ['intern_ip']).get()
+    try:
+        subnets = list(project_network['intern_ip'].subnets(subnet_levels))
     except ValueError:
-        raise Exception(
+        raise IGVMTestError(
             'Can\'t split {} into enough subnets '
             'for {} parallel tests'.format(
                 vm_net, PYTEST_XDIST_WORKER_COUNT,
             )
         )
-
-    return list(subnets)[PYTEST_XDIST_WORKER][index]
+    if len(non_vm_hosts) > subnets[0].num_addresses:
+        raise IGVMTestError(
+            'Can\'t split {} into enough subnets '
+            'for {} parallel tests'.format(
+                vm_net, PYTEST_XDIST_WORKER_COUNT,
+            )
+        )
+    return subnets[PYTEST_XDIST_WORKER + 1][index]
