@@ -41,7 +41,9 @@ from igvm.settings import (
     VM_OVERHEAD_MEMORY,
     XFS_CONFIG,
 )
+from igvm.transaction import Transaction
 from igvm.utils import retry_wait_backoff
+from typing import Iterator, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -556,8 +558,8 @@ class Hypervisor(Host):
         return 'vda1'
 
     def migrate_vm(
-        self, vm, target_hypervisor, offline, offline_transport, transaction,
-        no_shutdown,
+        self, vm: VM, target_hypervisor: 'Hypervisor', offline: bool,
+        offline_transport: str, transaction: Transaction, no_shutdown: bool,
     ):
         if offline_transport not in ['netcat', 'drbd']:
             raise StorageError(
@@ -803,7 +805,15 @@ class Hypervisor(Host):
         self.run('pkill -f "^/bin/nc.openbsd -l -p {}"'.format(port))
 
     @contextmanager
-    def netcat_to_device(self, device):
+    def netcat_to_device(self, device: str) -> Iterator[Tuple[str, int]]:
+        """
+        Spawns the backgroung netcat process on the uniq port and pipes the
+        payload to dd process to restore the file system on a target
+        hypervisor. Kills the netcat process if exceprion is cought.
+
+        :param str device: The path to the volume device
+        :rtype Iterator[Tuple[str, int]]: (fqdn, port) pair
+        """
         dev_minor = self.run('stat -L -c "%T" {}'.format(device), silent=True)
         dev_minor = int(dev_minor, 16)
         port = 7000 + dev_minor
@@ -821,7 +831,16 @@ class Hypervisor(Host):
             self.kill_netcat(port)
             raise
 
-    def device_to_netcat(self, device, size, listener):
+    def device_to_netcat(
+        self, device: str, size: int, listener: Tuple[str, int]
+    ):
+        """
+        Dumps the device via dd and netcat to a remote listener
+
+        :param str device: The path to the volume device
+        :param int size: The disk size for pv progress and ETA
+        :listener Tuple[str, int] listener: (fqdn, port) pair for nc connection
+        """
         # Using DD lowers load on device with big enough Block Size
         self.run(
             'dd if={0} ibs=1048576 | pv -f -s {1} '
