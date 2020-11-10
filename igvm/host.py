@@ -78,6 +78,7 @@ class Host(object):
         settings = []
         warn_only = kwargs.get('warn_only', False)
         with_sudo = kwargs.get('with_sudo', True)
+        kwargs['pty'] = kwargs.get('pty', True)
         if kwargs.get('silent', False):
             hide = 'everything' if warn_only else 'commands'
             settings.append(fabric.api.hide(hide))

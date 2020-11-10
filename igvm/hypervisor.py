@@ -557,6 +557,28 @@ class Hypervisor(Host):
         the guest OS"""
         return 'vda1'
 
+    def _wait_for_shutdown(
+        self, vm: VM, no_shutdown: bool, transaction: Transaction,
+    ):
+        """
+        If no_shutdown=True, will wait for the manual VM shutdown. Otherwise
+        shoutdown the VM.
+
+        :param VM vm: The migrating VM
+        :param bool no_shutdown: if the VM must be shut down manualy
+        :param Transaction transaction: The transaction to rollback
+        """
+        vm.set_state('maintenance', transaction=transaction)
+        if vm.is_running():
+            if no_shutdown:
+                log.info('Please shut down the VM manually now')
+                vm.wait_for_running(running=False, timeout=86400)
+            else:
+                vm.shutdown(
+                    check_vm_up_on_transaction=False,
+                    transaction=transaction,
+                )
+
     def migrate_vm(
         self, vm: VM, target_hypervisor: 'Hypervisor', offline: bool,
         offline_transport: str, transaction: Transaction, no_shutdown: bool,
@@ -608,30 +630,10 @@ class Hypervisor(Host):
                     # XXX: Do we really need to wait for the both?
                     host_drbd.wait_for_sync()
                     peer_drbd.wait_for_sync()
-                    vm.set_state('maintenance', transaction=transaction)
-
-                    if vm.is_running():
-                        if no_shutdown:
-                            log.info('Please shut down the VM manually now')
-                            vm.wait_for_running(running=False, timeout=86400)
-                        else:
-                            vm.shutdown(
-                                check_vm_up_on_transaction=False,
-                                transaction=transaction,
-                            )
+                    self._wait_for_shutdown(vm, no_shutdown, transaction)
 
             elif offline_transport == 'netcat':
-                vm.set_state('maintenance', transaction=transaction)
-                if vm.is_running():
-                    if no_shutdown:
-                        log.info('Please shut down the VM manually now')
-                        vm.wait_for_running(running=False, timeout=86400)
-                    else:
-                        vm.shutdown(
-                            check_vm_up_on_transaction=False,
-                            transaction=transaction,
-                        )
-
+                self._wait_for_shutdown(vm, no_shutdown, transaction)
                 vm_disk_path = target_hypervisor.get_volume_by_vm(vm).path()
                 with target_hypervisor.netcat_to_device(vm_disk_path) as args:
                     self.device_to_netcat(
@@ -802,7 +804,21 @@ class Hypervisor(Host):
             )
 
     def kill_netcat(self, port):
-        self.run('pkill -f "^/bin/nc.openbsd -l -p {}"'.format(port))
+        self.run(
+            'pkill -f "^/bin/nc.openbsd -l -p {}"'.format(port),
+            warn_only=True,  # It's fine if the process already dead
+        )
+
+    def _netcat_port(self, device: str) -> int:
+        """
+        Get the minor ID for the device, calculates the netcat listen port for
+        it, checks if netcat process already except, and returns the port
+        """
+        dev_minor = self.run('stat -L -c "%T" {}'.format(device), silent=True)
+        dev_minor = int(dev_minor, 16)
+        port = 7000 + dev_minor
+        self.check_netcat(port)
+        return port
 
     @contextmanager
     def netcat_to_device(self, device: str) -> Iterator[Tuple[str, int]]:
@@ -814,16 +830,13 @@ class Hypervisor(Host):
         :param str device: The path to the volume device
         :rtype Iterator[Tuple[str, int]]: (fqdn, port) pair
         """
-        dev_minor = self.run('stat -L -c "%T" {}'.format(device), silent=True)
-        dev_minor = int(dev_minor, 16)
-        port = 7000 + dev_minor
-
-        self.check_netcat(port)
+        port = self._netcat_port(device)
 
         # Using DD lowers load on device with big enough Block Size
         self.run(
             'nohup /bin/nc.openbsd -l -p {0} | dd of={1} obs=1048576 &'
-            .format(port, device)
+            .format(port, device),
+            pty=False,  # Has to be here for background processes
         )
         try:
             yield self.fqdn, port
@@ -845,7 +858,7 @@ class Hypervisor(Host):
         self.run(
             'dd if={0} ibs=1048576 | pv -f -s {1} '
             '| /bin/nc.openbsd -q 1 {2} {3}'
-            .format(device, size, *listener)
+            .format(device, size, listener[0], listener[1])
         )
 
     def estimate_cpu_cores_used(self, vm: VM) -> float:

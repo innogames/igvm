@@ -174,7 +174,7 @@ def parse_args():
         action='store_true',
         help=(
             'Don\'t shutdown VM during offline migration, igvm will wait for'
-            ' operator to shut down VM.'
+            ' operator to shut down VM for 24h.'
         ),
     )
     subparser.add_argument(
