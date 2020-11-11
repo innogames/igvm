@@ -579,6 +579,7 @@ class VM(Host):
                     MinCount=1,
                     MaxCount=1)
                 log.debug(response)
+                self.dataset_obj['aws_instance_type'] = vm_type
                 break
             except ClientError as e:
                 raise VMError(e)
