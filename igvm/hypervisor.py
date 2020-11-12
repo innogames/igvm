@@ -18,7 +18,9 @@ from igvm.exceptions import (
     HypervisorError,
     InconsistentAttributeError,
     InvalidStateError,
+    RemoteCommandError,
     StorageError,
+    XfsMigrationError,
 )
 from igvm.host import Host
 from igvm.kvm import (
@@ -583,7 +585,7 @@ class Hypervisor(Host):
         self, vm: VM, target_hypervisor: 'Hypervisor', offline: bool,
         offline_transport: str, transaction: Transaction, no_shutdown: bool,
     ):
-        if offline_transport not in ['netcat', 'drbd']:
+        if offline_transport not in ['netcat', 'drbd', 'xfs']:
             raise StorageError(
                 'Unknown offline transport method {}!'
                 .format(offline_transport)
@@ -641,6 +643,15 @@ class Hypervisor(Host):
                         vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
                         args,
                     )
+            elif offline_transport == 'xfs':
+                self._wait_for_shutdown(vm, no_shutdown, transaction)
+                with target_hypervisor.xfsrestore(vm, transaction) as listener:
+                    self.xfsdump(vm, listener, transaction)
+
+                target_hypervisor.wait_for_xfsrestore(vm)
+                target_hypervisor.check_xfsrestore_log(vm)
+                target_hypervisor.umount_vm_storage(vm)
+
             target_hypervisor.define_vm(vm, transaction)
         else:
             # For online migrations always use same volume name as VM
@@ -860,6 +871,87 @@ class Hypervisor(Host):
             '| /bin/nc.openbsd -q 1 {2} {3}'
             .format(device, size, listener[0], listener[1])
         )
+
+    def _xfsrestore_log_name(self, vm: VM) -> str:
+        device_name = self.get_volume_by_vm(vm).name()
+        return '/tmp/xfsrestore-{}.log'.format(device_name)
+
+    def check_xfsrestore_log(self, vm: VM):
+        """
+        Search for WARNING in the xfsrestore log file.
+        Raises exception if found
+        """
+        self.run('cat {}'.format(self._xfsrestore_log_name(vm)))
+        try:
+            self.run('grep -q WARNING {} && exit 1 || exit 0'
+                     .format(self._xfsrestore_log_name(vm)))
+        except RemoteCommandError:
+            raise XfsMigrationError('xfs dump/restore caused warnings')
+
+    @contextmanager
+    def xfsrestore(
+        self, vm: VM, transaction: Transaction = None,
+    ) -> Iterator[Tuple[str, int]]:
+        """
+        Formats a vm's storage, mounts it, spawns background netcat process
+        and pipes the load to xfsrestore command to restore xfsdump on the
+        target HV
+
+        :param VM vm: The migrating VM
+        :param Transaction transaction: The transaction to rollback
+        :rtype Iterator[Tuple[str, int]]: (fqdn, port) pair
+        """
+        device = self.get_volume_by_vm(vm).path()
+        port = self._netcat_port(device)
+        mount_dir = self.format_vm_storage(vm, transaction)
+
+        # xfsrestore args:
+        #  -F: Don't prompt the operator.
+        #  -J: inhibits inventory update
+        # xfsrestore needs to output its logs, otherwise it fails
+        self.run(
+            'nohup /bin/nc.openbsd -l -p {0} '
+            '| xfsrestore -F -J - {1} 2>{2} 1>&2 &'
+            .format(port, mount_dir, self._xfsrestore_log_name(vm)),
+            pty=False,  # Has to be here for background processes
+        )
+        try:
+            yield self.fqdn, port
+        except BaseException:
+            self.kill_netcat(port)
+            raise
+
+    def wait_for_xfsrestore(self, vm: VM):
+        """
+        On the HV with slow IO the process must wait until xfsrestore is done
+        """
+        mount_dir = self.vm_mount_path(vm)
+        self.run(
+            'while pgrep -f "^xfsrestore -F -J - {0}"; do sleep 1; done'
+            .format(mount_dir)
+        )
+
+    def xfsdump(self, vm: VM, listener, transaction: Transaction = None):
+        """
+        Mounts the vm's storage, and then dumps the device via xfsdump and
+        netcat to a remote listener
+
+        :param VM vm: The migrating VM
+        :param Transaction transaction: The transaction to rollback
+        """
+        mount_dir = self.mount_vm_storage(vm, transaction)
+
+        # xfsdump args:
+        #  -l: level 0 is an absolute dump
+        #  -F: Don't prompt the operator.
+        #  -J: inhibits inventory update
+        #  -p: progress update interval
+        self.run(
+            'xfsdump -o -l 0 -F -J -p 1 - {0} '
+            '| /bin/nc.openbsd -q 1 {1} {2}'
+            .format(mount_dir, listener[0], listener[1]),
+        )
+        self.umount_vm_storage(vm)
 
     def estimate_cpu_cores_used(self, vm: VM) -> float:
         """Estimate the number of CPU cores used by the VM

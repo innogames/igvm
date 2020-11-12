@@ -165,8 +165,10 @@ def parse_args():
     subparser.add_argument(
         '--offline-transport',
         default='drbd',
+        choices=('drbd', 'netcat', 'xfs'),
         help=(
-            'Specify drbd (default) or netcat transport to migrate disk image'
+            'Specify drbd (default), netcat or xfs transport to migrate '
+            'disk image'
         ),
     )
     subparser.add_argument(
