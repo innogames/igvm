@@ -185,6 +185,13 @@ def parse_args():
         action='store_true',
         help='Build or migrate VM only to a HV with the same environment of VM'
     )
+    subparser.add_argument(
+        '--disk-size',
+        dest='disk_size',
+        type=int,
+        help='Resize disk of migrated VM. '
+        'Works only with --offline --offline-transport=xfs',
+    )
 
     subparser = subparsers.add_parser(
         'change-address',

@@ -610,7 +610,60 @@ class MigrationTest(IGVMTest):
             offline=True,
             offline_transport='xfs',
         )
+        self.check_vm_present()
 
+    def test_offline_migration_xfs_disk_increase(self):
+        # Increase disk size during migration
+        disk_size_gib = self.vm_obj['disk_size_gib']
+        self._xfs_migrate_wrapper(
+            VM_HOSTNAME,
+            offline=True,
+            offline_transport='xfs',
+            disk_size=disk_size_gib + 1,
+        )
+        self.check_vm_present()
+
+    def test_offline_migration_xfs_disk_decrease(self):
+        # Decreasing disk size back during migration
+        disk_size_gib = self.vm_obj['disk_size_gib']
+        disk_set(VM_HOSTNAME, '+1')
+        self.check_vm_present()
+
+        self._xfs_migrate_wrapper(
+            VM_HOSTNAME,
+            offline=True,
+            offline_transport='xfs',
+            disk_size=disk_size_gib,
+        )
+        self.check_vm_present()
+
+    def test_offline_migration_xfs_disk_resize_failure(self):
+        # Attempt to decrease disk size lower than allocated space
+        with self.assertRaises(StorageError):
+            self._xfs_migrate_wrapper(
+                VM_HOSTNAME,
+                offline=True,
+                offline_transport='xfs',
+                disk_size=1,
+            )
+        self.check_vm_present()
+
+        with self.assertRaises(StorageError):
+            self._xfs_migrate_wrapper(
+                VM_HOSTNAME,
+                offline=True,
+                offline_transport='xfs',
+                disk_size=-1,
+            )
+        self.check_vm_present()
+
+        with self.assertRaises(StorageError):
+            self._xfs_migrate_wrapper(
+                VM_HOSTNAME,
+                offline=True,
+                offline_transport='xfs',
+                disk_size=0,
+            )
         self.check_vm_present()
 
     def test_reject_out_of_sync_serveradmin(self):

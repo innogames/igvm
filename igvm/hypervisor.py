@@ -366,7 +366,10 @@ class Hypervisor(Host):
     def vm_set_disk_size_gib(self, vm, new_size_gib):
         """Changes disk size of a VM."""
         if new_size_gib < vm.dataset_obj['disk_size_gib']:
-            raise NotImplementedError('Cannot shrink the disk.')
+            raise NotImplementedError(
+                'Cannot shrink the disk. '
+                'Use `migrate --offline --offline-transport xfs --disk-size X`'
+            )
         volume = self.get_volume_by_vm(vm)
         if self.get_storage_type() == 'logical':
             # There is no resize function in version of libvirt
@@ -559,6 +562,71 @@ class Hypervisor(Host):
         the guest OS"""
         return 'vda1'
 
+    def check_migrate_parameters(
+        self, vm: VM, offline: bool, offline_transport: str,
+        disk_size: int = None,
+    ):
+        if offline_transport not in ['netcat', 'drbd', 'xfs']:
+            raise StorageError(
+                'Unknown offline transport method {}!'
+                .format(offline_transport)
+            )
+
+        if disk_size is None:
+            return
+
+        if disk_size < 1:
+            raise StorageError('disk_size must be at least 1GiB!')
+        if not (offline and offline_transport == 'xfs'):
+            raise StorageError(
+                'disk_size can be applied only with offline transport xfs!'
+            )
+        allocated_space = vm.dataset_obj['disk_size_gib'] - vm.disk_free()
+        if disk_size < allocated_space:
+            raise StorageError(
+                'disk_size is lower than allocated space: {} < {}!'
+                .format(disk_size, allocated_space)
+            )
+
+    def vm_new_disk_size(
+        self, vm: VM, offline: bool, offline_transport: str,
+        disk_size: int = None,
+    ) -> int:
+        self.check_migrate_parameters(
+            vm, offline, offline_transport, disk_size
+        )
+        if disk_size is None:
+            return vm.dataset_obj['disk_size_gib']
+        return disk_size or vm.dataset_obj['disk_size_gib']
+
+    def _vm_apply_new_disk_size(
+        self, vm: VM, offline: bool, offline_transport: str,
+        transaction: Transaction, disk_size: int = 0,
+    ):
+        """
+        If the new VM disk size is set, checks if it's correct and sufficient
+        and commit the new size. Rolls it back on the interrupted migration
+
+        :param VM vm: The migrating VM
+        :param str offline_transport: offline migration transport
+        :param Transaction transaction: The transaction to rollback
+        :param int disk_size: the new disk_size_gib attribute
+        """
+        size = self.vm_new_disk_size(vm, offline,
+                                     offline_transport, disk_size)
+        if size == vm.dataset_obj['disk_size_gib']:
+            return
+
+        old_size = vm.dataset_obj['disk_size_gib']
+        vm.dataset_obj['disk_size_gib'] = size
+        vm.dataset_obj.commit()
+
+        if transaction:
+            def restore_size():
+                vm.dataset_obj['disk_size_gib'] = old_size
+                vm.dataset_obj.commit()
+            transaction.on_rollback('reset_disk_size', restore_size)
+
     def _wait_for_shutdown(
         self, vm: VM, no_shutdown: bool, transaction: Transaction,
     ):
@@ -584,12 +652,11 @@ class Hypervisor(Host):
     def migrate_vm(
         self, vm: VM, target_hypervisor: 'Hypervisor', offline: bool,
         offline_transport: str, transaction: Transaction, no_shutdown: bool,
+        disk_size: int = 0,
     ):
-        if offline_transport not in ['netcat', 'drbd', 'xfs']:
-            raise StorageError(
-                'Unknown offline transport method {}!'
-                .format(offline_transport)
-            )
+        self._vm_apply_new_disk_size(
+            vm, offline, offline_transport, transaction, disk_size
+        )
 
         if offline:
             log.info(
