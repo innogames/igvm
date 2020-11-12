@@ -553,6 +553,14 @@ class VM(Host):
         for vm_type in vm_types:
             try:
                 response = ec2.run_instances(
+                    BlockDeviceMappings=[
+                        {
+                            'DeviceName': 'xvda',
+                            'Ebs': {
+                                'VolumeSize': self.dataset_obj['disk_size_gib'],
+                            },
+                        },
+                    ],
                     ImageId=self.dataset_obj['aws_image_id'],
                     InstanceType=vm_type,
                     KeyName=self.dataset_obj['aws_key_name'],
