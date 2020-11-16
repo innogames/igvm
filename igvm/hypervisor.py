@@ -368,7 +368,10 @@ class Hypervisor(Host):
         if new_size_gib < vm.dataset_obj['disk_size_gib']:
             raise NotImplementedError(
                 'Cannot shrink the disk. '
-                'Use `migrate --offline --offline-transport xfs --disk-size X`'
+                'Use `igvm migrate --offline --offline-transport xfs '
+                '--disk-size {} {}`'.format(
+                    new_size_gib, vm.fqdn,
+                )
             )
         volume = self.get_volume_by_vm(vm)
         if self.get_storage_type() == 'logical':

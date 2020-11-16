@@ -255,6 +255,7 @@ class BuildTest(IGVMTest):
         self.check_vm_absent()
 
     def test_rollback(self):
+        # TODO: consider the usage of self.vm_obj instead of new Query
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
         obj['puppet_environment'] = 'doesnotexist'
         obj.commit()
@@ -698,6 +699,7 @@ class MigrationTest(IGVMTest):
             vm_migrate(VM_HOSTNAME, run_puppet=True)
 
     def test_rollback_netcat(self):
+        # TODO: consider the usage of self.vm_obj instead of new Query
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
         obj['puppet_environment'] = 'doesnotexist'
         obj.commit()
@@ -713,6 +715,7 @@ class MigrationTest(IGVMTest):
         self.check_vm_present()
 
     def test_rollback_drbd(self):
+        # TODO: consider the usage of self.vm_obj instead of new Query
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
         obj['puppet_environment'] = 'doesnotexist'
         obj.commit()
@@ -728,6 +731,7 @@ class MigrationTest(IGVMTest):
         self.check_vm_present()
 
     def test_rollback_xfs(self):
+        # TODO: consider the usage of self.vm_obj instead of new Query
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
         obj['puppet_environment'] = 'doesnotexist'
         obj.commit()
