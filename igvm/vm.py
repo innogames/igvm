@@ -578,7 +578,9 @@ class VM(Host):
                         self.dataset_obj['aws_security_group_ids']),
                     SubnetId=self.dataset_obj['aws_subnet_id'],
                     Placement={
-                        'AvailabilityZone': self.dataset_obj['aws_placement']
+                        'AvailabilityZone': str(
+                            self.dataset_obj['aws_placement']
+                        )
                     },
                     PrivateIpAddress=str(self.dataset_obj['intern_ip']),
                     UserData='' if postboot is None else postboot,
