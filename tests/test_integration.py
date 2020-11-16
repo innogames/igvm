@@ -132,6 +132,7 @@ class IGVMTest(TestCase):
             self.vm_obj['service_groups'] = [
                 'igvm-integration.test.sg',
             ]
+            self.vm_obj['disk_size_gib'] = 8
 
         self.vm_obj.commit()
 

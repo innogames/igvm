@@ -550,9 +550,27 @@ class VM(Host):
         else:
             vm_types = [self.dataset_obj['aws_instance_type']]
 
+        ec2_res = boto3.resource('ec2')
+        root_device = list(
+            ec2_res.images.filter(
+                ImageIds=[self.dataset_obj['aws_image_id']]
+            )
+        )[0].root_device_name
+
         for vm_type in vm_types:
             try:
                 response = ec2.run_instances(
+                    BlockDeviceMappings=[
+                        {
+                            'DeviceName': root_device,
+                            'Ebs': {
+                                'VolumeSize': (
+                                    self.dataset_obj['disk_size_gib']
+                                ),
+                                'VolumeType': 'gp2'
+                            }
+                        }
+                    ],
                     ImageId=self.dataset_obj['aws_image_id'],
                     InstanceType=vm_type,
                     KeyName=self.dataset_obj['aws_key_name'],
@@ -560,7 +578,9 @@ class VM(Host):
                         self.dataset_obj['aws_security_group_ids']),
                     SubnetId=self.dataset_obj['aws_subnet_id'],
                     Placement={
-                        'AvailabilityZone': self.dataset_obj['aws_placement']
+                        'AvailabilityZone': str(
+                            self.dataset_obj['aws_placement']
+                        )
                     },
                     PrivateIpAddress=str(self.dataset_obj['intern_ip']),
                     UserData='' if postboot is None else postboot,
