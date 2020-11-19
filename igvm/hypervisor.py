@@ -18,7 +18,9 @@ from igvm.exceptions import (
     HypervisorError,
     InconsistentAttributeError,
     InvalidStateError,
+    RemoteCommandError,
     StorageError,
+    XfsMigrationError,
 )
 from igvm.host import Host
 from igvm.kvm import (
@@ -41,7 +43,9 @@ from igvm.settings import (
     VM_OVERHEAD_MEMORY,
     XFS_CONFIG,
 )
+from igvm.transaction import Transaction
 from igvm.utils import retry_wait_backoff
+from typing import Iterator, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -362,7 +366,13 @@ class Hypervisor(Host):
     def vm_set_disk_size_gib(self, vm, new_size_gib):
         """Changes disk size of a VM."""
         if new_size_gib < vm.dataset_obj['disk_size_gib']:
-            raise NotImplementedError('Cannot shrink the disk.')
+            raise NotImplementedError(
+                'Cannot shrink the disk. '
+                'Use `igvm migrate --offline --offline-transport xfs '
+                '--disk-size {} {}`'.format(
+                    new_size_gib, vm.fqdn,
+                )
+            )
         volume = self.get_volume_by_vm(vm)
         if self.get_storage_type() == 'logical':
             # There is no resize function in version of libvirt
@@ -555,15 +565,101 @@ class Hypervisor(Host):
         the guest OS"""
         return 'vda1'
 
-    def migrate_vm(
-        self, vm, target_hypervisor, offline, offline_transport, transaction,
-        no_shutdown,
+    def check_migrate_parameters(
+        self, vm: VM, offline: bool, offline_transport: str,
+        disk_size: int = None,
     ):
-        if offline_transport not in ['netcat', 'drbd']:
+        if offline_transport not in ['netcat', 'drbd', 'xfs']:
             raise StorageError(
                 'Unknown offline transport method {}!'
                 .format(offline_transport)
             )
+
+        if disk_size is None:
+            return
+
+        if disk_size < 1:
+            raise StorageError('disk_size must be at least 1GiB!')
+        if not (offline and offline_transport == 'xfs'):
+            raise StorageError(
+                'disk_size can be applied only with offline transport xfs!'
+            )
+        allocated_space = vm.dataset_obj['disk_size_gib'] - vm.disk_free()
+        if disk_size < allocated_space:
+            raise StorageError(
+                'disk_size is lower than allocated space: {} < {}!'
+                .format(disk_size, allocated_space)
+            )
+
+    def vm_new_disk_size(
+        self, vm: VM, offline: bool, offline_transport: str,
+        disk_size: int = None,
+    ) -> int:
+        self.check_migrate_parameters(
+            vm, offline, offline_transport, disk_size
+        )
+        if disk_size is None:
+            return vm.dataset_obj['disk_size_gib']
+        return disk_size or vm.dataset_obj['disk_size_gib']
+
+    def _vm_apply_new_disk_size(
+        self, vm: VM, offline: bool, offline_transport: str,
+        transaction: Transaction, disk_size: int = 0,
+    ):
+        """
+        If the new VM disk size is set, checks if it's correct and sufficient
+        and commit the new size. Rolls it back on the interrupted migration
+
+        :param VM vm: The migrating VM
+        :param str offline_transport: offline migration transport
+        :param Transaction transaction: The transaction to rollback
+        :param int disk_size: the new disk_size_gib attribute
+        """
+        size = self.vm_new_disk_size(vm, offline,
+                                     offline_transport, disk_size)
+        if size == vm.dataset_obj['disk_size_gib']:
+            return
+
+        old_size = vm.dataset_obj['disk_size_gib']
+        vm.dataset_obj['disk_size_gib'] = size
+        vm.dataset_obj.commit()
+
+        if transaction:
+            def restore_size():
+                vm.dataset_obj['disk_size_gib'] = old_size
+                vm.dataset_obj.commit()
+            transaction.on_rollback('reset_disk_size', restore_size)
+
+    def _wait_for_shutdown(
+        self, vm: VM, no_shutdown: bool, transaction: Transaction,
+    ):
+        """
+        If no_shutdown=True, will wait for the manual VM shutdown. Otherwise
+        shoutdown the VM.
+
+        :param VM vm: The migrating VM
+        :param bool no_shutdown: if the VM must be shut down manualy
+        :param Transaction transaction: The transaction to rollback
+        """
+        vm.set_state('maintenance', transaction=transaction)
+        if vm.is_running():
+            if no_shutdown:
+                log.info('Please shut down the VM manually now')
+                vm.wait_for_running(running=False, timeout=86400)
+            else:
+                vm.shutdown(
+                    check_vm_up_on_transaction=False,
+                    transaction=transaction,
+                )
+
+    def migrate_vm(
+        self, vm: VM, target_hypervisor: 'Hypervisor', offline: bool,
+        offline_transport: str, transaction: Transaction, no_shutdown: bool,
+        disk_size: int = 0,
+    ):
+        self._vm_apply_new_disk_size(
+            vm, offline, offline_transport, transaction, disk_size
+        )
 
         if offline:
             log.info(
@@ -606,30 +702,10 @@ class Hypervisor(Host):
                     # XXX: Do we really need to wait for the both?
                     host_drbd.wait_for_sync()
                     peer_drbd.wait_for_sync()
-                    vm.set_state('maintenance', transaction=transaction)
-
-                    if vm.is_running():
-                        if no_shutdown:
-                            log.info('Please shut down the VM manually now')
-                            vm.wait_for_running(running=False, timeout=86400)
-                        else:
-                            vm.shutdown(
-                                check_vm_up_on_transaction=False,
-                                transaction=transaction,
-                            )
+                    self._wait_for_shutdown(vm, no_shutdown, transaction)
 
             elif offline_transport == 'netcat':
-                vm.set_state('maintenance', transaction=transaction)
-                if vm.is_running():
-                    if no_shutdown:
-                        log.info('Please shut down the VM manually now')
-                        vm.wait_for_running(running=False, timeout=86400)
-                    else:
-                        vm.shutdown(
-                            check_vm_up_on_transaction=False,
-                            transaction=transaction,
-                        )
-
+                self._wait_for_shutdown(vm, no_shutdown, transaction)
                 vm_disk_path = target_hypervisor.get_volume_by_vm(vm).path()
                 with target_hypervisor.netcat_to_device(vm_disk_path) as args:
                     self.device_to_netcat(
@@ -637,6 +713,15 @@ class Hypervisor(Host):
                         vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
                         args,
                     )
+            elif offline_transport == 'xfs':
+                self._wait_for_shutdown(vm, no_shutdown, transaction)
+                with target_hypervisor.xfsrestore(vm, transaction) as listener:
+                    self.xfsdump(vm, listener, transaction)
+
+                target_hypervisor.wait_for_xfsrestore(vm)
+                target_hypervisor.check_xfsrestore_log(vm)
+                target_hypervisor.umount_vm_storage(vm)
+
             target_hypervisor.define_vm(vm, transaction)
         else:
             # For online migrations always use same volume name as VM
@@ -800,20 +885,39 @@ class Hypervisor(Host):
             )
 
     def kill_netcat(self, port):
-        self.run('pkill -f "^/bin/nc.openbsd -l -p {}"'.format(port))
+        self.run(
+            'pkill -f "^/bin/nc.openbsd -l -p {}"'.format(port),
+            warn_only=True,  # It's fine if the process already dead
+        )
 
-    @contextmanager
-    def netcat_to_device(self, device):
+    def _netcat_port(self, device: str) -> int:
+        """
+        Get the minor ID for the device, calculates the netcat listen port for
+        it, checks if netcat process already except, and returns the port
+        """
         dev_minor = self.run('stat -L -c "%T" {}'.format(device), silent=True)
         dev_minor = int(dev_minor, 16)
         port = 7000 + dev_minor
-
         self.check_netcat(port)
+        return port
+
+    @contextmanager
+    def netcat_to_device(self, device: str) -> Iterator[Tuple[str, int]]:
+        """
+        Spawns the backgroung netcat process on the uniq port and pipes the
+        payload to dd process to restore the file system on a target
+        hypervisor. Kills the netcat process if exceprion is cought.
+
+        :param str device: The path to the volume device
+        :rtype Iterator[Tuple[str, int]]: (fqdn, port) pair
+        """
+        port = self._netcat_port(device)
 
         # Using DD lowers load on device with big enough Block Size
         self.run(
             'nohup /bin/nc.openbsd -l -p {0} | dd of={1} obs=1048576 &'
-            .format(port, device)
+            .format(port, device),
+            pty=False,  # Has to be here for background processes
         )
         try:
             yield self.fqdn, port
@@ -821,13 +925,103 @@ class Hypervisor(Host):
             self.kill_netcat(port)
             raise
 
-    def device_to_netcat(self, device, size, listener):
+    def device_to_netcat(
+        self, device: str, size: int, listener: Tuple[str, int]
+    ):
+        """
+        Dumps the device via dd and netcat to a remote listener
+
+        :param str device: The path to the volume device
+        :param int size: The disk size for pv progress and ETA
+        :listener Tuple[str, int] listener: (fqdn, port) pair for nc connection
+        """
         # Using DD lowers load on device with big enough Block Size
         self.run(
             'dd if={0} ibs=1048576 | pv -f -s {1} '
             '| /bin/nc.openbsd -q 1 {2} {3}'
-            .format(device, size, *listener)
+            .format(device, size, listener[0], listener[1])
         )
+
+    def _xfsrestore_log_name(self, vm: VM) -> str:
+        device_name = self.get_volume_by_vm(vm).name()
+        return '/tmp/xfsrestore-{}.log'.format(device_name)
+
+    def check_xfsrestore_log(self, vm: VM):
+        """
+        Search for WARNING in the xfsrestore log file.
+        Raises exception if found
+        """
+        self.run('cat {}'.format(self._xfsrestore_log_name(vm)))
+        try:
+            self.run('grep -q WARNING {} && exit 1 || exit 0'
+                     .format(self._xfsrestore_log_name(vm)))
+        except RemoteCommandError:
+            raise XfsMigrationError('xfs dump/restore caused warnings')
+
+    @contextmanager
+    def xfsrestore(
+        self, vm: VM, transaction: Transaction = None,
+    ) -> Iterator[Tuple[str, int]]:
+        """
+        Formats a vm's storage, mounts it, spawns background netcat process
+        and pipes the load to xfsrestore command to restore xfsdump on the
+        target HV
+
+        :param VM vm: The migrating VM
+        :param Transaction transaction: The transaction to rollback
+        :rtype Iterator[Tuple[str, int]]: (fqdn, port) pair
+        """
+        device = self.get_volume_by_vm(vm).path()
+        port = self._netcat_port(device)
+        mount_dir = self.format_vm_storage(vm, transaction)
+
+        # xfsrestore args:
+        #  -F: Don't prompt the operator.
+        #  -J: inhibits inventory update
+        # xfsrestore needs to output its logs, otherwise it fails
+        self.run(
+            'nohup /bin/nc.openbsd -l -p {0} '
+            '| xfsrestore -F -J - {1} 2>{2} 1>&2 &'
+            .format(port, mount_dir, self._xfsrestore_log_name(vm)),
+            pty=False,  # Has to be here for background processes
+        )
+        try:
+            yield self.fqdn, port
+        except BaseException:
+            self.kill_netcat(port)
+            raise
+
+    def wait_for_xfsrestore(self, vm: VM):
+        """
+        On the HV with slow IO the process must wait until xfsrestore is done
+        """
+        mount_dir = self.vm_mount_path(vm)
+        self.run(
+            'while pgrep -f "^xfsrestore -F -J - {0}"; do sleep 1; done'
+            .format(mount_dir)
+        )
+
+    def xfsdump(self, vm: VM, listener, transaction: Transaction = None):
+        """
+        Mounts the vm's storage, and then dumps the device via xfsdump and
+        netcat to a remote listener
+
+        :param VM vm: The migrating VM
+        :param Transaction transaction: The transaction to rollback
+        """
+        mount_dir = self.mount_vm_storage(vm, transaction)
+
+        # xfsdump args:
+        #  -l: level 0 is an absolute dump
+        #  -F: Don't prompt the operator.
+        #  -J: inhibits inventory update
+        #  -p: progress update interval
+        self.run(
+            'xfsdump -o -l 0 -F -J -p 1 - {0} '
+            '| /bin/nc.openbsd -q 1 {1} {2}'
+            .format(mount_dir, listener[0], listener[1]),
+        )
+        self.umount_vm_storage(vm)
 
     def estimate_cpu_cores_used(self, vm: VM) -> float:
         """Estimate the number of CPU cores used by the VM

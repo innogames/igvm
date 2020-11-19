@@ -47,6 +47,11 @@ class MigrationError(IGVMError):
     pass
 
 
+class XfsMigrationError(MigrationError):
+    """xfs migration failure"""
+    pass
+
+
 class MigrationAborted(MigrationError):
     """Indicates an error during migration."""
     pass

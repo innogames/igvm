@@ -368,7 +368,7 @@ def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
                run_puppet=False, debug_puppet=False,
                offline=False, offline_transport='drbd',
                allow_reserved_hv=False, no_shutdown=False,
-               enforce_vm_env=False):
+               enforce_vm_env=False, disk_size=None):
     """Migrate a VM to a new hypervisor."""
 
     if not (bool(vm_hostname) ^ bool(vm_object)):
@@ -391,6 +391,13 @@ def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
                     _vm.dataset_obj['datacenter_type'])
             )
 
+        # We have to check migration settings before searching for a HV,
+        # because the new disk size must be checked and set
+        current_size_gib = _vm.dataset_obj['disk_size_gib']
+        _vm.dataset_obj['disk_size_gib'] = _vm.hypervisor.vm_new_disk_size(
+            _vm, offline, offline_transport, disk_size
+        )
+
         if hypervisor_hostname:
             hypervisor = es.enter_context(_get_hypervisor(
                 hypervisor_hostname, allow_reserved=allow_reserved_hv
@@ -407,6 +414,10 @@ def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
                 offline,
                 enforce_vm_env,
             ))
+
+        # After the HV is chosen, disk_size_gib must be restored
+        # to pass _check_attributes(_vm)
+        _vm.dataset_obj['disk_size_gib'] = current_size_gib
 
         was_running = _vm.is_running()
 
@@ -429,7 +440,7 @@ def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
         with Transaction() as transaction:
             _vm.hypervisor.migrate_vm(
                 _vm, hypervisor, offline, offline_transport, transaction,
-                no_shutdown,
+                no_shutdown, disk_size,
             )
 
             previous_hypervisor = _vm.hypervisor

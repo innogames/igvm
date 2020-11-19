@@ -165,8 +165,10 @@ def parse_args():
     subparser.add_argument(
         '--offline-transport',
         default='drbd',
+        choices=('drbd', 'netcat', 'xfs'),
         help=(
-            'Specify drbd (default) or netcat transport to migrate disk image'
+            'Specify drbd (default), netcat or xfs transport to migrate '
+            'disk image'
         ),
     )
     subparser.add_argument(
@@ -174,7 +176,7 @@ def parse_args():
         action='store_true',
         help=(
             'Don\'t shutdown VM during offline migration, igvm will wait for'
-            ' operator to shut down VM.'
+            ' operator to shut down VM for 24h.'
         ),
     )
     subparser.add_argument(
@@ -182,6 +184,13 @@ def parse_args():
         dest='enforce_vm_env',
         action='store_true',
         help='Build or migrate VM only to a HV with the same environment of VM'
+    )
+    subparser.add_argument(
+        '--disk-size',
+        dest='disk_size',
+        type=int,
+        help='Resize disk of migrated VM. '
+        'Works only with --offline --offline-transport=xfs',
     )
 
     subparser = subparsers.add_parser(

@@ -37,7 +37,9 @@ from igvm.exceptions import (
     IGVMError,
     InconsistentAttributeError,
     InvalidStateError,
+    StorageError,
     VMError,
+    XfsMigrationError,
 )
 from igvm.hypervisor import Hypervisor
 from igvm.puppet import clean_cert
@@ -253,6 +255,7 @@ class BuildTest(IGVMTest):
         self.check_vm_absent()
 
     def test_rollback(self):
+        # TODO: consider the usage of self.vm_obj instead of new Query
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
         obj['puppet_environment'] = 'doesnotexist'
         obj.commit()
@@ -562,6 +565,24 @@ class MigrationTest(IGVMTest):
         with _get_vm(VM_HOSTNAME) as vm:
             self.old_hv_name = vm.hypervisor.dataset_obj['hostname']
 
+    def _xfs_migrate_wrapper(self, *args, **kwargs):
+        """
+        xfs dump/restore cause the corrupted files on restored disk from time
+        to time. This is relatively rare case and I am not able to find the
+        root reason yet. The rollback works quite good, but it fails to
+        migrate. This wrapper do two retries on this particullar error
+        """
+        for _ in range(3):
+            try:
+                vm_migrate(*args, **kwargs)
+                return
+            except XfsMigrationError as e:
+                exc = e
+                if e.args[0] == 'xfs dump/restore caused warnings':
+                    continue
+                raise exc
+        raise BaseException('xfs migration failed in 3 attempts')
+
     def test_online_migration(self):
         vm_migrate(VM_HOSTNAME)
         self.check_vm_present()
@@ -581,6 +602,69 @@ class MigrationTest(IGVMTest):
             offline_transport='drbd',
         )
 
+        self.check_vm_present()
+
+    def test_offline_migration_xfs(self):
+        # Migrate without disk resizing
+        self._xfs_migrate_wrapper(
+            VM_HOSTNAME,
+            offline=True,
+            offline_transport='xfs',
+        )
+        self.check_vm_present()
+
+    def test_offline_migration_xfs_disk_increase(self):
+        # Increase disk size during migration
+        disk_size_gib = self.vm_obj['disk_size_gib']
+        self._xfs_migrate_wrapper(
+            VM_HOSTNAME,
+            offline=True,
+            offline_transport='xfs',
+            disk_size=disk_size_gib + 1,
+        )
+        self.check_vm_present()
+
+    def test_offline_migration_xfs_disk_decrease(self):
+        # Decreasing disk size back during migration
+        disk_size_gib = self.vm_obj['disk_size_gib']
+        disk_set(VM_HOSTNAME, '+1')
+        self.check_vm_present()
+
+        self._xfs_migrate_wrapper(
+            VM_HOSTNAME,
+            offline=True,
+            offline_transport='xfs',
+            disk_size=disk_size_gib,
+        )
+        self.check_vm_present()
+
+    def test_offline_migration_xfs_disk_resize_failure(self):
+        # Attempt to decrease disk size lower than allocated space
+        with self.assertRaises(StorageError):
+            self._xfs_migrate_wrapper(
+                VM_HOSTNAME,
+                offline=True,
+                offline_transport='xfs',
+                disk_size=1,
+            )
+        self.check_vm_present()
+
+        with self.assertRaises(StorageError):
+            self._xfs_migrate_wrapper(
+                VM_HOSTNAME,
+                offline=True,
+                offline_transport='xfs',
+                disk_size=-1,
+            )
+        self.check_vm_present()
+
+        with self.assertRaises(StorageError):
+            self._xfs_migrate_wrapper(
+                VM_HOSTNAME,
+                offline=True,
+                offline_transport='xfs',
+                disk_size=0,
+            )
         self.check_vm_present()
 
     def test_reject_out_of_sync_serveradmin(self):
@@ -615,6 +699,7 @@ class MigrationTest(IGVMTest):
             vm_migrate(VM_HOSTNAME, run_puppet=True)
 
     def test_rollback_netcat(self):
+        # TODO: consider the usage of self.vm_obj instead of new Query
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
         obj['puppet_environment'] = 'doesnotexist'
         obj.commit()
@@ -630,6 +715,7 @@ class MigrationTest(IGVMTest):
         self.check_vm_present()
 
     def test_rollback_drbd(self):
+        # TODO: consider the usage of self.vm_obj instead of new Query
         obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
         obj['puppet_environment'] = 'doesnotexist'
         obj.commit()
@@ -640,6 +726,23 @@ class MigrationTest(IGVMTest):
                 offline=True,
                 run_puppet=True,
                 offline_transport='drbd',
+            )
+
+        self.check_vm_present()
+
+    def test_rollback_xfs(self):
+        # TODO: consider the usage of self.vm_obj instead of new Query
+        obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
+        obj['puppet_environment'] = 'doesnotexist'
+        obj.commit()
+
+        with self.assertRaises(IGVMError):
+            self._xfs_migrate_wrapper(
+                VM_HOSTNAME,
+                offline=True,
+                run_puppet=True,
+                offline_transport='xfs',
+                disk_size=5,
             )
 
         self.check_vm_present()
