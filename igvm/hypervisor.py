@@ -953,7 +953,8 @@ class Hypervisor(Host):
         """
         self.run('cat {}'.format(self._xfsrestore_log_name(vm)))
         try:
-            self.run('grep -q WARNING {} && exit 1 || exit 0'
+            self.run('grep -qE "WARNING|failed: end of recorded data" {} && '
+                     'exit 1 || exit 0'
                      .format(self._xfsrestore_log_name(vm)))
         except RemoteCommandError:
             raise XfsMigrationError('xfs dump/restore caused warnings')
