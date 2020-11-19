@@ -1045,7 +1045,7 @@ class VM(Host):
             return [self.dataset_obj['aws_instance_type']]
 
         vm_performance_value = self.performance_value()
-        region = self.dataset_obj['aws_placement'][:-1]
+        region = str(self.dataset_obj['aws_placement'])[:-1]
 
         ecu_target = {
             'min':
