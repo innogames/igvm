@@ -922,8 +922,8 @@ class VM(Host):
         price_list = json.loads(response['PriceList'][0])
 
         memory = int(
-            price_list['product']['attributes']['memory'].split()[0]
-        ) * 1024
+            float(price_list['product']['attributes']['memory'].split()[0]
+        ) * 1024)
 
         ec2 = boto3.resource('ec2')
 
