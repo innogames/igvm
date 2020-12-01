@@ -1008,12 +1008,15 @@ class VM(Host):
                 etag = None
 
             if file.exists() and etag_file.exists() and etag:
+                with open(AWS_INSTANCES_OVERVIEW_FILE_ETAG, 'r+') as f:
                     prev_etag = f.read()
                 if etag == prev_etag:
+                    with open(AWS_INSTANCES_OVERVIEW_FILE, 'r+') as f:
                         return json.load(f)
 
             resp = urlopen(url, timeout=timeout)
             if etag:
+                with open(AWS_INSTANCES_OVERVIEW_FILE_ETAG, 'w+') as f:
                     f.write(etag)
                     os.chmod(AWS_INSTANCES_OVERVIEW_FILE_ETAG,
                              stat.S_IREAD |
@@ -1022,6 +1025,7 @@ class VM(Host):
                              stat.S_IWGRP |
                              stat.S_IROTH)
                     os.chown(AWS_INSTANCES_OVERVIEW_FILE_ETAG, -1, gid)
+            with open(AWS_INSTANCES_OVERVIEW_FILE, 'w+') as f:
                 content = resp.read().decode('utf-8')
                 f.write(content)
                 os.chmod(AWS_INSTANCES_OVERVIEW_FILE,
