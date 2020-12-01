@@ -5,8 +5,10 @@ Copyright (c) 2018 InnoGames GmbH
 import json
 import logging
 import os
+import stat
 import time
 from base64 import b64decode
+from grp import getgrnam
 from hashlib import sha1, sha256
 from io import BytesIO
 from pathlib import Path
@@ -30,7 +32,7 @@ from igvm.settings import (
     AWS_ECU_FACTOR,
     AWS_RETURN_CODES,
     AWS_INSTANCES_OVERVIEW_FILE,
-    AWS_INSTANCES_OVERVIEW_FILE_etag,
+    AWS_INSTANCES_OVERVIEW_FILE_ETAG,
     AWS_INSTANCES_OVERVIEW_URL,
 )
 from igvm.transaction import Transaction
@@ -993,7 +995,8 @@ class VM(Host):
 
         url = AWS_INSTANCES_OVERVIEW_URL
         file = Path(AWS_INSTANCES_OVERVIEW_FILE)
-        etag_file = Path(AWS_INSTANCES_OVERVIEW_FILE_etag)
+        etag_file = Path(AWS_INSTANCES_OVERVIEW_FILE_ETAG)
+        gid = getgrnam('adm').gr_gid
 
         try:
             head_req = Request(url, method='HEAD')
@@ -1005,19 +1008,29 @@ class VM(Host):
                 etag = None
 
             if file.exists() and etag_file.exists() and etag:
-                with open(AWS_INSTANCES_OVERVIEW_FILE_etag) as f:
                     prev_etag = f.read()
                 if etag == prev_etag:
-                    with open(AWS_INSTANCES_OVERVIEW_FILE) as f:
                         return json.load(f)
 
             resp = urlopen(url, timeout=timeout)
             if etag:
-                with open(AWS_INSTANCES_OVERVIEW_FILE_etag, 'w') as f:
                     f.write(etag)
-            with open(AWS_INSTANCES_OVERVIEW_FILE, 'w') as f:
+                    os.chmod(AWS_INSTANCES_OVERVIEW_FILE_ETAG,
+                             stat.S_IREAD |
+                             stat.S_IWRITE |
+                             stat.S_IRGRP |
+                             stat.S_IWGRP |
+                             stat.S_IROTH)
+                    os.chown(AWS_INSTANCES_OVERVIEW_FILE_ETAG, -1, gid)
                 content = resp.read().decode('utf-8')
                 f.write(content)
+                os.chmod(AWS_INSTANCES_OVERVIEW_FILE,
+                         stat.S_IREAD |
+                         stat.S_IWRITE |
+                         stat.S_IRGRP |
+                         stat.S_IWGRP |
+                         stat.S_IROTH)
+                os.chown(AWS_INSTANCES_OVERVIEW_FILE, -1, gid)
                 return json.loads(content)
         except (HTTPError, JSONDecodeError) as e:
             log.warning('Could not retrieve instances overview')
