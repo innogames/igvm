@@ -209,6 +209,7 @@ AWS_RETURN_CODES = {
     'stopped': 80,
 }
 
+AWS_GRP_NAME = environ.get('AWS_GRP_NAME', default='adm')
 AWS_INSTANCES_OVERVIEW_URL = 'https://www.ec2instances.info/instances.json'
 AWS_INSTANCES_OVERVIEW_FILE = '/tmp/AWS_INSTANCES_OVERVIEW_FILE.json'
 AWS_INSTANCES_OVERVIEW_FILE_ETAG = '/tmp/AWS_INSTANCES_OVERVIEW_FILE.etag'
