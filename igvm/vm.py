@@ -558,6 +558,7 @@ class VM(Host):
                 ImageIds=[self.dataset_obj['aws_image_id']]
             )
         )[0].root_device_name
+        disk_size_gib = self.dataset_obj['disk_size_gib']
 
         for vm_type in vm_types:
             try:
@@ -567,7 +568,7 @@ class VM(Host):
                             'DeviceName': root_device,
                             'Ebs': {
                                 'VolumeSize': (
-                                    self.dataset_obj['disk_size_gib']
+                                    disk_size_gib if disk_size_gib > 8 else 8
                                 ),
                                 'VolumeType': 'gp2'
                             }
