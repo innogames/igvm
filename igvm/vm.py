@@ -35,6 +35,7 @@ from igvm.settings import (
     AWS_INSTANCES_OVERVIEW_FILE_ETAG,
     AWS_INSTANCES_OVERVIEW_URL,
     AWS_GRP_NAME,
+    AWS_PROFILE_NAME,
 )
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
@@ -46,6 +47,7 @@ log = logging.getLogger(__name__)
 class VM(Host):
     """VM interface."""
     servertype = 'vm'
+    __aws_session = None
 
     def __init__(self, dataset_obj, hypervisor=None):
         super(VM, self).__init__(dataset_obj)
@@ -216,6 +218,12 @@ class VM(Host):
             if not check(value):
                 raise ConfigError(err)
 
+    @property
+    def aws_session(self):
+        if not self.__aws_session:
+            self.__aws_session = boto3.Session(profile_name=AWS_PROFILE_NAME)
+        return self.__aws_session
+
     def start(self, force_stop_failed=True, transaction=None):
         self.hypervisor.start_vm(self)
         if not self.wait_for_running(running=True):
@@ -241,7 +249,7 @@ class VM(Host):
         Start a VM in AWS.
         """
 
-        ec2 = boto3.client('ec2')
+        ec2 = self.aws_session.client('ec2')
 
         try:
             ec2.start_instances(
@@ -294,7 +302,8 @@ class VM(Host):
 
         :param: timeout: Timeout value for VM shutdown
         """
-        ec2 = boto3.client('ec2')
+
+        ec2 = self.aws_session.client('ec2')
 
         try:
             ec2.stop_instances(
@@ -345,7 +354,7 @@ class VM(Host):
         :return: return code of instance state as int
         """
 
-        ec2 = boto3.client('ec2')
+        ec2 = self.aws_session.client('ec2')
         response = ec2.describe_instances(
             Filters=[
                 {
@@ -372,7 +381,7 @@ class VM(Host):
         Delete a VM in AWS.
         """
 
-        ec2 = boto3.client('ec2')
+        ec2 = self.aws_session.client('ec2')
 
         try:
             response = ec2.terminate_instances(
@@ -545,7 +554,7 @@ class VM(Host):
         :raises: VMError: Generic exception for VM errors of all kinds
         """
 
-        ec2 = boto3.client('ec2')
+        ec2 = self.aws_session.client('ec2')
 
         vm_types_overview = self.aws_get_instances_overview()
         if vm_types_overview:
@@ -553,7 +562,7 @@ class VM(Host):
         else:
             vm_types = [self.dataset_obj['aws_instance_type']]
 
-        ec2_res = boto3.resource('ec2')
+        ec2_res = self.aws_session.resource('ec2')
         root_device = list(
             ec2_res.images.filter(
                 ImageIds=[self.dataset_obj['aws_image_id']]
@@ -698,7 +707,7 @@ class VM(Host):
 
         self.set_hostname(new_hostname)
 
-        ec2 = boto3.resource('ec2')
+        ec2 = self.aws_session.resource('ec2')
 
         response = ec2.create_tags(
             Resources=[self.dataset_obj['aws_instance_id']],
@@ -840,14 +849,14 @@ class VM(Host):
         if size < self.dataset_obj['disk_size_gib']:
             raise NotImplementedError('Cannot shrink the disk.')
 
-        ec2 = boto3.resource('ec2')
+        ec2 = self.aws_session.resource('ec2')
 
         response = ec2.Instance(self.dataset_obj['aws_instance_id'])
         for vol in response.volumes.all():
             volume_id = vol.id
             break
 
-        ec2 = boto3.client('ec2')
+        ec2 = self.aws_session.client('ec2')
 
         try:
             volume_state = ec2.describe_volumes_modifications(
@@ -910,7 +919,8 @@ class VM(Host):
         :return: Values to sync as a dict of tuples
         """
 
-        pricing = boto3.client('pricing', region_name='us-east-1')
+        pricing = self.aws_session.client(
+            'pricing', region_name='us-east-1')
         response = pricing.get_products(
             ServiceCode='AmazonEC2',
             Filters=[
@@ -929,7 +939,7 @@ class VM(Host):
             float(price_list['product']['attributes']['memory'].split()[0]
         ) * 1024)
 
-        ec2 = boto3.resource('ec2')
+        ec2 = self.aws_session.resource('ec2')
 
         response = ec2.Instance(self.dataset_obj['aws_instance_id'])
         for vol in response.volumes.all():
