@@ -530,7 +530,7 @@ class VM(Host):
                   debug_puppet: bool = False,
                   postboot: Optional[str] = None,
                   timeout_vm_setup: int = 300,
-                  timeout_cloud_init: int = 600) -> None:
+                  timeout_cloud_init: int = 1200) -> None:
         """AWS build
 
         Build a VM in AWS.
