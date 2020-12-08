@@ -640,8 +640,8 @@ class VM(Host):
         for retry in range(timeout_cloud_init):
             cloud_init.update(1)
 
-            # Only try to connect every 10s to avoid paramiko exceptions
-            if retry % 10 != 0:
+            # Only try to connect every 20s to avoid paramiko exceptions
+            if retry % 20 != 0:
                 time.sleep(1)
                 continue
 
