@@ -221,7 +221,11 @@ class VM(Host):
     @property
     def aws_session(self):
         if not self.__aws_session:
-            self.__aws_session = boto3.Session(profile_name=AWS_PROFILE_NAME)
+            region = str(self.dataset_obj['aws_placement'])[:-1]
+            self.__aws_session = boto3.Session(
+                profile_name=AWS_PROFILE_NAME,
+                region_name=region,
+            )
         return self.__aws_session
 
     def start(self, force_stop_failed=True, transaction=None):
