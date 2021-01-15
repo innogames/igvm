@@ -61,18 +61,27 @@ def _check_defined(vm, fail_hard=True):
 
 
 @with_fabric_settings
-def evacuate(hv_hostname, offline=None, dry_run=False):
+def evacuate(
+    hv_hostname,
+    dst_hv_hostname=None,
+    offline=None,
+    allow_reserved_hv=False,
+    dry_run=False,
+):
     """Move all VMs out of a hypervisor
 
     Move all VMs out of a hypervisor and put it to state online reserved.
 
     Offline can be passed without arguments or with a list strings matching
-    function attributes. If just passed all VMs will be migrated offline. If
-    a list of strings is passed only those matching will be migrate offline.
+    function attributes. If set to true all VMs will be migrated offline. If
+    a list of strings is passed only those matching will be migrated offline.
+
+    It is also possible to specify a destination hypervisor and migrating to
+    online reserved hypervisors can also be allowed.
     """
     with _get_hypervisor(hv_hostname, allow_reserved=True) as hv:
         if dry_run:
-            log.info('I would set {} to state online reserved'.format(
+            log.info('I would set {} to state online_reserved'.format(
                 hv_hostname)
             )
         else:
@@ -86,16 +95,25 @@ def evacuate(hv_hostname, offline=None, dry_run=False):
                 and (offline == [] or vm_function in offline)
             )
 
-            if is_offline_migration:
-                if dry_run:
-                    log.info('Would migrate {} offline'.format(vm['hostname']))
-                else:
-                    vm_migrate(vm['hostname'], offline=True)
-            else:
-                if dry_run:
-                    log.info('Would migrate {} online'.format(vm['hostname']))
-                else:
-                    vm_migrate(vm['hostname'])
+            state_str = 'offline' if is_offline_migration else 'online'
+            if dry_run:
+                log.info('Would migrate {} {}'.format(
+                    vm['hostname'],
+                    state_str,
+                ))
+
+                continue
+
+            log.info('Migrating {} {}...'.format(
+                vm['hostname'],
+                state_str,
+            ))
+            vm_migrate(
+                vm['hostname'],
+                hypervisor_hostname=dst_hv_hostname,
+                offline=is_offline_migration,
+                allow_reserved_hv=allow_reserved_hv,
+            )
 
 
 @with_fabric_settings
