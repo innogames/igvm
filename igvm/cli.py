@@ -411,6 +411,12 @@ def parse_args():
         help='Hostname of the hypervisor',
     )
     subparser.add_argument(
+        'dst_hv_hostname',
+        nargs='?',
+        default=None,
+        help='Hostname of destination hypervisor',
+    )
+    subparser.add_argument(
         '--dry-run',
         action='store_true',
         help='Do not migrate but just print what would be done'
@@ -419,6 +425,12 @@ def parse_args():
         '--offline',
         nargs='*',
         help='Migrate VMs matching the given serveradmin function offline',
+    )
+    subparser.add_argument(
+        '--ignore-reserved',
+        dest='allow_reserved_hv',
+        action='store_true',
+        help='Allow migrating to a host which has the state online_reserved',
     )
 
     subparser = subparsers.add_parser(
