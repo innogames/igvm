@@ -280,6 +280,7 @@ class DRBD(object):
             unit='iB',
             unit_scale=True,
             unit_divisor=1024,
+            disable=None,
         ) as pbar:
             while rep != 'Established' and rep is not None:
                 rep, _, oos = self._get_statistics()
