@@ -7,6 +7,10 @@ from contextlib import contextmanager
 from io import BytesIO
 from logging import getLogger
 from time import sleep
+from typing import Tuple, Optional
+
+from tqdm import tqdm
+
 from igvm.exceptions import RemoteCommandError
 
 log = getLogger(__name__)
@@ -267,43 +271,57 @@ class DRBD(object):
             raise
 
     def wait_for_sync(self):
-        # Display a "nice" progress bar
-        show_progress = True
-        retry = 5
-        while show_progress:
-            lines = iter(self.hv.read_file('/proc/drbd').splitlines())
-            for line in lines:
-                line = line.decode()
-                if '{}: cs:'.format(self.get_device_minor()) in line:
-                    if 'ds:UpToDate/UpToDate' in line:
-                        show_progress = False
-                    try:
-                        next(lines)
-                        line = next(lines).decode().lstrip()
-                    except StopIteration:
-                        if retry:
-                            log.info(
-                                'No status yet, trying {} more time'
-                                .format(retry)
-                            )
-                            retry -= 1
-                            break
-                        log.warning(
-                            'Could not find progress bar, '
-                            'migrating without it!'
-                        )
-                        show_progress = False
-                    else:
-                        log.info(line)
-                    break
-            else:
-                # Exit the loop if status for current device can't be found
-                show_progress = False
-            sleep(1)
+        rep, size, _ = self._get_statistics()
+        last_n_synced = 0
 
-        # Progress bar does not determine if disks were synced.
-        # Wait for sync to be reported by DRBD.
+        with tqdm(
+            desc=self.vm_name,
+            total=size,
+            unit='iB',
+            unit_scale=True,
+            unit_divisor=1024,
+            disable=None,
+        ) as pbar:
+            while rep != 'Established' and rep is not None:
+                rep, _, oos = self._get_statistics()
+                n_synced = size - oos
+
+                pbar.update(n_synced - last_n_synced)
+                last_n_synced = n_synced
+                sleep(1)
+
+        # Wait for sync to be reported by DRBD in any case.
         self.hv.run('drbdsetup wait-sync {}'.format(self.get_device_minor()))
+
+    def _get_statistics(self) -> Tuple[
+        Optional[str],
+        Optional[int],
+        Optional[int],
+    ]:
+        """Returns a tuple containing statistics about the DRBD status."""
+        rep = None
+        size = None
+        oos = None
+
+        events = self.hv.run('drbdsetup events2 --now --statistics {}'.format(
+            self.vm_name,
+        ), silent=True).splitlines()
+
+        for event in events:
+            dev = 'exists device name:{}'.format(self.vm_name)
+            if dev in event:
+                size = int(event.split(' ')[6].split(':')[1]) * 1024
+
+                continue
+
+            peer_dev = 'exists peer-device name:{}'.format(self.vm_name)
+            if peer_dev in event:
+                rep = event.split(' ')[6].split(':')[1]
+                oos = int(event.split(' ')[11].split(':')[1]) * 1024
+
+                continue
+
+        return rep, size, oos
 
     def stop(self):
         if self.master_role:
