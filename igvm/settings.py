@@ -184,6 +184,7 @@ VM_ATTRIBUTES = [
     'memory',
     'num_cpu',
     'os',
+    'primary_ip6',
     'project',
     'puppet_ca',
     'puppet_disabled',
