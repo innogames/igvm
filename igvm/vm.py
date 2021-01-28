@@ -600,6 +600,7 @@ class VM(Host):
                         )
                     },
                     PrivateIpAddress=str(self.dataset_obj['intern_ip']),
+                    Ipv6Addresses=[{'Ipv6Address':str(self.dataset_obj['primary_ip6'])}],
                     UserData='' if postboot is None else postboot,
                     TagSpecifications=[
                         {
