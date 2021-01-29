@@ -1,6 +1,6 @@
 """igvm - Command Routines
 
-Copyright (c) 2018 InnoGames GmbH
+Copyright (c) 2021 InnoGames GmbH
 """
 
 import logging

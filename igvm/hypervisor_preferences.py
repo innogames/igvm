@@ -7,17 +7,19 @@ A higher score means that a Hypervisor should be favored, while a low one
 discourages a HV. If False or 0.0 is given, that means a HV does not fulfill
 the requirements at all and is excluded.
 
-Copyright (c) 2020 InnoGames GmbH
+Copyright (c) 2021 InnoGames GmbH
 """
+import abc
 from logging import getLogger
 from typing import Union, List
 
 log = getLogger(__name__)
 
 
-class HypervisorPreference:
+class HypervisorPreference(abc.ABC):
     """The base class for all HV preferences."""
 
+    @abc.abstractmethod
     def get_score(self, vm, hv) -> Union[float, bool]:
         """Calculates a preference value to indicate how good a HV fits.
 
@@ -29,7 +31,6 @@ class HypervisorPreference:
                  a very good candidate for this particular preference.
         @rtype: Union[float, bool]
         """
-        raise NotImplementedError('get_preference is not implemented')
 
 
 class InsufficientResource(HypervisorPreference):
