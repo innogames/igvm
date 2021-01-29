@@ -290,6 +290,11 @@ class OverAllocation(HypervisorPreference):
         return '{}({})'.format(type(self).__name__, args)
 
     def get_score(self, vm, hv) -> Union[float, bool]:
+        # New VM has no hypervisor attribute, yet, so we cannot calculate a
+        # score here. We will just allow all HVs to take that VM for now.
+        if not vm.hypervisor:
+            return True
+
         # Calculate the current HVs overbooking "level".
         cur_hv_cpus = sum(
             v[self.attribute] for v in vm.hypervisor.dataset_obj['vms']
