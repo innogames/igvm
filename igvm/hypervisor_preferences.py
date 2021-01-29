@@ -59,6 +59,8 @@ class InsufficientResource(HypervisorPreference):
     def get_score(self, vm, hv) -> Union[float, bool]:
         # Treat freshly created HVs always passing this check
         if not hv.dataset_obj[self.hv_attribute]:
+            # Because new installed Hypervisors don't have values 
+            # (e.g. for load) - they are fresh meat ...
             return True
 
         # Calculate the remaining "size" of the resource
