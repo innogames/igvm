@@ -15,7 +15,7 @@ from typing import Union, List
 log = getLogger(__name__)
 
 
-class HypervisorPreference(object):
+class HypervisorPreference:
     """The base class for all HV preferences."""
 
     def get_score(self, vm, hv) -> Union[float, bool]:
@@ -75,7 +75,7 @@ class InsufficientResource(HypervisorPreference):
             return False
 
         # Normalize the expected resource consumption
-        return 1 - (vm_size / remaining_size)
+        return float(1 - (vm_size / remaining_size))
 
 
 class OtherVMs(HypervisorPreference):
@@ -110,8 +110,8 @@ class OtherVMs(HypervisorPreference):
 
             # Check for specifically given attribute values.
             if self.values and not all(
-                vm.dataset_obj[a] == v
-                for a, v in zip(self.attributes, self.values)
+                vm.dataset_obj[attr] == val
+                for attr, val in zip(self.attributes, self.values)
             ):
                 continue
 
@@ -166,7 +166,7 @@ class HypervisorAttributeValue(HypervisorPreference):
         # Normalize the value. This is only valid for percentage values like
         # cpu_util_pct and iops_avg. Arbitrary numbers are somewhat difficult
         # to put into context.
-        return 1 - (value / 100)
+        return float(1 - (value / 100))
 
 
 class HypervisorAttributeValueLimit(HypervisorPreference):
@@ -195,7 +195,7 @@ class HypervisorAttributeValueLimit(HypervisorPreference):
         # Normalize the value. This is only valid for percentage values like
         # cpu_util_pct and iops_avg. Arbitrary numbers are somewhat difficult
         # to put into context.
-        return 1 - (value / 100)
+        return float(1 - (value / 100))
 
 
 class HypervisorCpuUsageLimit(HypervisorPreference):
@@ -246,7 +246,7 @@ class HypervisorCpuUsageLimit(HypervisorPreference):
         # Normalize the value. This is only valid for percentage values like
         # cpu_util_pct and iops_avg. Arbitrary numbers are somewhat difficult
         # to put into context.
-        return 1 - (hv_cpu_util_overall / hv_cpu_threshold)
+        return float(1 - (hv_cpu_util_overall / hv_cpu_threshold))
 
 
 class HypervisorEnvironmentValue(HypervisorPreference):
@@ -314,14 +314,16 @@ class OverAllocation(HypervisorPreference):
         if rel_overbooking > 1.:
             return .01
 
-        # Normalize the value. This is no hard criteria, except for non-
-        # overbookable resources like disk. Hence we can allow overbooked cpus.
-        # For cpus the avg load is more important, for anything else non-
-        # overbookable we will leave the corresponding hard-check for later.
-        return 1 - rel_overbooking
+        # Normalize the value. We usually don't overbook any resources because
+        # they are limited (memory, disk). However we do overbook CPUs. This
+        # is a "soft" preference. The hard checks are done at a later point by
+        # communicating directly with libvirt. For this reason we will treat
+        # everything as overbookable here, but still discourage it.
+        # For treating this as "hard" criteria, use InsufficientResource.
+        return float(1 - rel_overbooking)
 
 
-class PreferenceEvaluator(object):
+class PreferenceEvaluator:
     """Evaluates all preferences for a given VM and HV and calculates the total
     score based on which the most preferred HVs can be picked.
     """
@@ -362,7 +364,7 @@ class PreferenceEvaluator(object):
                     'not match.'.format(str(hv), str(pref)),
                 )
 
-        # Exclude HV if only one criteria has failed.
+        # If any of the preferences fails, the HV is immediately excluded.
         if matched_prefs < n_prefs:
             log.debug(
                 'Hypervisor "{}" excluded, only {}/{} prefs match.'.format(
@@ -391,7 +393,7 @@ class PreferenceEvaluator(object):
         return total
 
 
-class PreferredHypervisor(object):
+class PreferredHypervisor:
     """Sortable container holding a HV object along with it's score."""
 
     def __init__(self, hv, score: float) -> None:
