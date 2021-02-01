@@ -348,13 +348,17 @@ class PreferenceEvaluator:
             # We expect normalized values from 0 - 1.
             if result < 0. or result > 1.:
                 raise ValueError(
-                    'Preference must be expressed in a 0.0 - 1.0 range, '
-                    '{} given.'.format(result)
+                    'Preference "{}" for Hypervisor "{}" must be expressed '
+                    'in a 0.0 - 1.0 range, {} given.'.format(
+                        str(pref),
+                        str(hv),
+                        result,
+                    )
                 )
 
             # Add up the individual preference scores.
             if result > 0.:
-                log.debug('Preference {} matches with score {:.4f}.'.format(
+                log.debug('Preference "{}" matches with score {:.4f}.'.format(
                     str(pref),
                     result,
                 ))

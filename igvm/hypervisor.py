@@ -1091,6 +1091,22 @@ class Hypervisor(Host):
             self.cpu_usage_of_recent_migrations(),
         ])
 
+        # TODO: The sum of estimated CPU usage can be negative because
+        #       cpu_usage_of_recent_migrations() can be negative.
+        #       Make this more stable and account for this discrepancy.
+        #       I.e. some if not all of the inputs are wrong!
+        if cpu_usage < 0:
+            log.error(
+                'Estimated CPU usage for Hypervisor "{}" and VM "{}" is '
+                'negative! Beware that this can lead to wrong '
+                'assumptions! Setting to zero!'.format(
+                    str(self),
+                    str(vm),
+                )
+            )
+
+            cpu_usage = max(0, cpu_usage)
+
         return float(cpu_usage)
 
     def cpu_usage_of_recent_migrations(self) -> int:
