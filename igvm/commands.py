@@ -1,6 +1,6 @@
 """igvm - Command Routines
 
-Copyright (c) 2018 InnoGames GmbH
+Copyright (c) 2021 InnoGames GmbH
 """
 
 import logging
@@ -27,7 +27,7 @@ from igvm.exceptions import (
 )
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
-from igvm.hypervisor_preferences import sorted_hypervisors
+from igvm.hypervisor_preferences import sort_by_preference
 from igvm.puppet import clean_cert
 from igvm.settings import (
     AWS_CONFIG,
@@ -960,7 +960,7 @@ def _get_best_hypervisor(
     # Get all (theoretically) possible HVs sorted by HV preferences
     hypervisors = (Hypervisor(o) for o in
                    Query(hv_filter, HYPERVISOR_ATTRIBUTES))
-    hypervisors = sorted_hypervisors(HYPERVISOR_PREFERENCES, vm, hypervisors)
+    hypervisors = sort_by_preference(vm, HYPERVISOR_PREFERENCES, hypervisors)
 
     possible_hvs = OrderedDict()
     for possible_hv in hypervisors:
@@ -1024,6 +1024,7 @@ def _get_best_hypervisor(
 
     # Yield the hypervisor locked for working on it
     try:
+        log.info('Picked {} as destination Hypervisor'.format(str(found_hv)))
         yield found_hv
     finally:
         found_hv.release_lock()

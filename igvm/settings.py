@@ -12,7 +12,6 @@ from libvirt import (
 )
 
 from igvm.hypervisor_preferences import (
-    HashDifference,
     HypervisorAttributeValue,
     HypervisorAttributeValueLimit,
     HypervisorCpuUsageLimit,
@@ -155,6 +154,7 @@ HYPERVISOR_ATTRIBUTES = [
             'num_cpu',
             'project',
             'served_game',
+            'state',
         ],
     },
 ]
@@ -372,8 +372,4 @@ HYPERVISOR_PREFERENCES = [
     HypervisorAttributeValue('iops_avg'),
     # Prefer the hypervisor with less VMs from the same cluster
     OtherVMs(['project', 'environment', 'game_market']),
-    # As the last resort, choose the hypervisor with less VMs
-    OtherVMs(),
-    # Use hash differences to have a stable ordering
-    HashDifference(),
 ]
