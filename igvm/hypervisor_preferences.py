@@ -330,8 +330,13 @@ class PreferenceEvaluator:
     """Evaluates all preferences for a given VM and HV and calculates the total
     score based on which the most preferred HVs can be picked.
     """
-    def __init__(self, preferences: List[HypervisorPreference]) -> None:
+    def __init__(
+        self,
+        preferences: List[HypervisorPreference],
+        soft: bool = False,
+    ) -> None:
         self.preferences = preferences
+        self.soft = soft
 
     def get_total_score(self, vm, hv) -> float:
         """Calculates the total score for a given VM and HV pair."""
@@ -365,14 +370,18 @@ class PreferenceEvaluator:
 
                 matched_prefs += 1
                 sum_prefs += result
-            else:
+            elif not self.soft:
                 log.debug(
                     'Hypervisor "{}" is skipped because preference "{}" does '
                     'not match.'.format(str(hv), str(pref)),
                 )
+            else:
+                log.debug('Preference "{}" does not match.'.format(str(pref)))
 
-        # If any of the preferences fails, the HV is immediately excluded.
-        if matched_prefs < n_prefs:
+        # If run in "strict" mode the HV is immediately excluded if any of the
+        # preferences fails. If run in "soft" mode, they are not excluded but
+        # ranked much lower accordingly.
+        if not self.soft and matched_prefs < n_prefs:
             log.debug(
                 'Hypervisor "{}" excluded, only {}/{} prefs match.'.format(
                     str(hv),
@@ -382,8 +391,30 @@ class PreferenceEvaluator:
             )
 
             return 0.
+        elif matched_prefs < n_prefs:
+            log.warning(
+                'Hypervisor "{}" kept although it would normally be '
+                'skipped because {} preferences do not match.'.format(
+                    str(hv),
+                    n_prefs - matched_prefs,
+                ),
+            )
 
-        # Calculate the overall preference score of the target HV.
+        # Calculate the overall preference score of the target HV. If run in
+        # "soft" mode, the total score will be adjusted to rank it lower.
+        # Examples:
+        #   n_prefs = 10
+        #   matched_prefs = 10
+        #   sum_prefs = 10 (10 matching preferences with score 1.0 each)
+        #   total = (10/(10-10+1))/10 = 1
+        #
+        #   matched_prefs = 9
+        #   sum_prefs = 9 (9 matching preferences with score 1.0 each)
+        #   total = (9/(10-9+1))/10 = 0.45
+        #
+        #   matched_prefs = 1
+        #   sum_prefs = 1 (1 matching preference with score 1.0)
+        #   total = (1/(10-1+1))/10 = 0.01
         total = (sum_prefs / (n_prefs - matched_prefs + 1)) / n_prefs
 
         log.debug('Matching {}/{} prefs with a total score of {:.4f}.'.format(
@@ -420,7 +451,12 @@ class PreferredHypervisor:
         return self._score
 
 
-def sort_by_preference(vm, preferences, hypervisors) -> list:
+def sort_by_preference(
+    vm,
+    preferences,
+    hypervisors,
+    soft: bool = False,
+) -> list:
     """Sort the hypervisors by their preference scores.
 
     The most preferred ones will be first. The caller may then verify and use
@@ -429,7 +465,7 @@ def sort_by_preference(vm, preferences, hypervisors) -> list:
     """
     log.debug('Sorting hypervisors by preference score..')
 
-    evaluator = PreferenceEvaluator(preferences)
+    evaluator = PreferenceEvaluator(preferences, soft=soft)
     preferred_hvs = []
 
     # Collect all HVs that are possible to migrate to.
