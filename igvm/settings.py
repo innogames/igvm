@@ -46,12 +46,12 @@ RESERVED_DISK = {
 }
 
 # Reserved memory for host OS in MiB
-HOST_RESERVED_MEMORY = {
+HOST_RESERVED_MEMORY_MIB = {
     'logical': 2 * 1024,
     'zfs': 8 * 1024,
 }
 
-VM_OVERHEAD_MEMORY = 50
+VM_OVERHEAD_MEMORY_MIB = 50
 
 
 # Default max number of CPUs, unless the hypervisor has fewer cores or num_cpu
