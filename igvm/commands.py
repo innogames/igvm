@@ -10,6 +10,7 @@ from contextlib import contextmanager, ExitStack
 from ipaddress import ip_address
 from os import environ
 from time import sleep
+from typing import List, Optional
 
 from adminapi.dataset import Query
 from adminapi.filters import Any, StartsWith, Contains
@@ -62,11 +63,12 @@ def _check_defined(vm, fail_hard=True):
 
 @with_fabric_settings
 def evacuate(
-    hv_hostname,
-    dst_hv_hostname=None,
-    offline=None,
-    allow_reserved_hv=False,
-    dry_run=False,
+    hv_hostname: str,
+    dst_hv_hostname: Optional[str] = None,
+    offline: Optional[List[str]] = None,
+    allow_reserved_hv: bool = False,
+    dry_run: bool = False,
+    soft_preferences: bool = False,
 ):
     """Move all VMs out of a hypervisor
 
@@ -113,6 +115,7 @@ def evacuate(
                 hypervisor_hostname=dst_hv_hostname,
                 offline=is_offline_migration,
                 allow_reserved_hv=allow_reserved_hv,
+                soft_preferences=soft_preferences,
             )
 
 
@@ -302,8 +305,16 @@ def change_address(
 
 
 @with_fabric_settings
-def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
-             allow_reserved_hv=False, rebuild=False, enforce_vm_env=False):
+def vm_build(
+    vm_hostname: str,
+    run_puppet: bool = True,
+    debug_puppet: bool = False,
+    postboot: Optional[str] = None,
+    allow_reserved_hv: bool = False,
+    rebuild: bool = False,
+    enforce_vm_env: bool = False,
+    soft_preferences: bool = False,
+):
     """Create a VM and start it
 
     Puppet in run once to configure baseline networking.
@@ -354,6 +365,7 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
                     else ['online'],
                     True,
                     enforce_vm_env,
+                    soft_preferences,
                 ))
                 vm.dataset_obj['hypervisor'] = \
                     vm.hypervisor.dataset_obj['hostname']
@@ -382,11 +394,20 @@ def vm_build(vm_hostname, run_puppet=True, debug_puppet=False, postboot=None,
 
 
 @with_fabric_settings  # NOQA: C901
-def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
-               run_puppet=False, debug_puppet=False,
-               offline=False, offline_transport='drbd',
-               allow_reserved_hv=False, no_shutdown=False,
-               enforce_vm_env=False, disk_size=None):
+def vm_migrate(
+    vm_hostname: str = None,
+    vm_object=None,
+    hypervisor_hostname: Optional[str] = None,
+    run_puppet: bool = False,
+    debug_puppet: bool = False,
+    offline: bool = False,
+    offline_transport: str = 'drbd',
+    allow_reserved_hv: bool = False,
+    no_shutdown: bool = False,
+    enforce_vm_env: bool = False,
+    disk_size: Optional[int] = None,
+    soft_preferences: bool = False,
+):
     """Migrate a VM to a new hypervisor."""
 
     if not (bool(vm_hostname) ^ bool(vm_object)):
@@ -431,6 +452,7 @@ def vm_migrate(vm_hostname=None, vm_object=None, hypervisor_hostname=None,
                 else ['online'],
                 offline,
                 enforce_vm_env,
+                soft_preferences,
             ))
 
         # After the HV is chosen, disk_size_gib must be restored
@@ -942,7 +964,12 @@ def _get_hypervisor(hostname, allow_reserved=False):
 
 @contextmanager
 def _get_best_hypervisor(
-        vm, hypervisor_states, offline=False, enforce_vm_env=False):
+    vm,
+    hypervisor_states,
+    offline=False,
+    enforce_vm_env=False,
+    soft_preferences=False,
+):
 
     hv_filter = {
         'servertype': 'hypervisor',
@@ -958,9 +985,16 @@ def _get_best_hypervisor(
             hv_filter['environment'] = vm.dataset_obj['environment']
 
     # Get all (theoretically) possible HVs sorted by HV preferences
-    hypervisors = (Hypervisor(o) for o in
-                   Query(hv_filter, HYPERVISOR_ATTRIBUTES))
-    hypervisors = sort_by_preference(vm, HYPERVISOR_PREFERENCES, hypervisors)
+    hypervisors = (
+        Hypervisor(o) for o in
+        Query(hv_filter, HYPERVISOR_ATTRIBUTES)
+    )
+    hypervisors = sort_by_preference(
+        vm,
+        HYPERVISOR_PREFERENCES,
+        hypervisors,
+        soft_preferences,
+    )
 
     possible_hvs = OrderedDict()
     for possible_hv in hypervisors:
