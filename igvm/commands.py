@@ -643,7 +643,7 @@ def vm_delete(vm_hostname, retire=False):
 
             # Make sure the VM is shut down, abort if it is not.
             if vm.hypervisor and vm.hypervisor.vm_defined(
-                    vm) and vm.is_running():
+                vm) and vm.is_running():
                 raise InvalidStateError('"{}" is still running.'.format(
                     vm.fqdn)
                 )
@@ -964,13 +964,12 @@ def _get_hypervisor(hostname, allow_reserved=False):
 
 @contextmanager
 def _get_best_hypervisor(
-    vm,
-    hypervisor_states,
-    offline=False,
-    enforce_vm_env=False,
-    soft_preferences=False,
+    vm: VM,
+    hypervisor_states: List[str],
+    offline: bool = False,
+    enforce_vm_env: bool = False,
+    soft_preferences: bool = False,
 ):
-
     hv_filter = {
         'servertype': 'hypervisor',
         'vlan_networks': vm.route_network,

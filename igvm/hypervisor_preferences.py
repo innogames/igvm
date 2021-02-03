@@ -453,8 +453,8 @@ class PreferredHypervisor:
 
 def sort_by_preference(
     vm,
-    preferences,
-    hypervisors,
+    preferences: List[HypervisorPreference],
+    hypervisors: list,
     soft: bool = False,
 ) -> list:
     """Sort the hypervisors by their preference scores.
