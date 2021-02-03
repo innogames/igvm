@@ -125,6 +125,16 @@ def parse_args():
         action='store_true',
         help='Rebuild already defined VM or build it if not defined',
     )
+    subparser.add_argument(
+        '--soft-preferences',
+        dest='soft_preferences',
+        action='store_true',
+        help='Overrules all preferences so that Hypervisors are not excluded. '
+             'Use this if igvm fails to find a matching Hypervisor, but you '
+             'are in urgent need to do it anyway. Hint: If igvm fails to find '
+             'a matching Hypervisor something might be really wrong. Run igvm '
+             'with --verbose to check why it fails finding a Hypervisor.',
+    )
 
     subparser = subparsers.add_parser(
         'migrate',
@@ -191,6 +201,16 @@ def parse_args():
         type=int,
         help='Resize disk of migrated VM. '
         'Works only with --offline --offline-transport=xfs',
+    )
+    subparser.add_argument(
+        '--soft-preferences',
+        dest='soft_preferences',
+        action='store_true',
+        help='Overrules all preferences so that Hypervisors are not excluded. '
+             'Use this if igvm fails to find a matching Hypervisor, but you '
+             'are in urgent need to do it anyway. Hint: If igvm fails to find '
+             'a matching Hypervisor something might be really wrong. Run igvm '
+             'with --verbose to check why it fails finding a Hypervisor.',
     )
 
     subparser = subparsers.add_parser(
@@ -431,6 +451,16 @@ def parse_args():
         dest='allow_reserved_hv',
         action='store_true',
         help='Allow migrating to a host which has the state online_reserved',
+    )
+    subparser.add_argument(
+        '--soft-preferences',
+        dest='soft_preferences',
+        action='store_true',
+        help='Overrules all preferences so that Hypervisors are not excluded. '
+             'Use this if igvm fails to find a matching Hypervisor, but you '
+             'are in urgent need to do it anyway. Hint: If igvm fails to find '
+             'a matching Hypervisor something might be really wrong. Run igvm '
+             'with --verbose to check why it fails finding a Hypervisor.',
     )
 
     subparser = subparsers.add_parser(
