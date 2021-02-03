@@ -117,7 +117,6 @@ IMAGE_PATH = '/tmp'
 HYPERVISOR_ATTRIBUTES = [
     'cpu_perffactor',
     'cpu_util_pct',
-    'cpu_util_vm_pct',
     'environment',
     'hardware_model',
     'hostname',
@@ -337,10 +336,6 @@ HYPERVISOR_PREFERENCES = [
     # Compares the environment of the VM with the environment of the
     # hypervisor. It makes hypervisors of different envs less likely chosen.
     HypervisorEnvironmentValue('environment'),
-    # Checks the maximum vCPU usage (95 percentile) of the given hypervisor
-    # for the given time_range and dismisses it as target when it is over
-    # the value of threshold.
-    HypervisorAttributeValueLimit('cpu_util_vm_pct', 45),
     # Calculates the performance_value of the given VM, which is comparable
     # across hypervisor hardware models. It uses this value to predict the
     # CPU usage of the VM on the destination hypervisor and dismisses all

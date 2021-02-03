@@ -227,7 +227,7 @@ class HypervisorCpuUsageLimit(HypervisorPreference):
 
         # Bail out if hardware_model is not in HYPERVISOR_CPU_THRESHOLDS list.
         if hv_model not in self.hv_cpu_thresholds:
-            log.warning(
+            log.error(
                 'Missing setting for "{}" in HYPERVISOR_CPU_THRESHOLDS'.format(
                     hv_model,
                 ),
