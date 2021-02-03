@@ -32,7 +32,7 @@ from igvm.kvm import (
 )
 from igvm.libvirt import get_virtconn
 from igvm.settings import (
-    HOST_RESERVED_MEMORY,
+    HOST_RESERVED_MEMORY_MIB,
     IGVM_IMAGE_MD5_URL,
     IGVM_IMAGE_URL,
     IMAGE_PATH,
@@ -40,7 +40,7 @@ from igvm.settings import (
     MIGRATE_CONFIG,
     RESERVED_DISK,
     VG_NAME,
-    VM_OVERHEAD_MEMORY,
+    VM_OVERHEAD_MEMORY_MIB,
     XFS_CONFIG,
 )
 from igvm.transaction import Transaction
@@ -83,7 +83,7 @@ class Hypervisor(Host):
         ).attrib['type']
 
         if (
-            self._storage_type not in HOST_RESERVED_MEMORY
+            self._storage_type not in HOST_RESERVED_MEMORY_MIB
             or self._storage_type not in RESERVED_DISK
         ):
             raise HypervisorError(
@@ -737,21 +737,23 @@ class Hypervisor(Host):
         # Start with what OS sees as total memory (not installed memory)
         total_mib = self.conn().getMemoryStats(-1)['total'] // 1024
         # Always keep some extra memory free for Hypervisor
-        total_mib -= HOST_RESERVED_MEMORY[self.get_storage_type()]
+        total_mib -= HOST_RESERVED_MEMORY_MIB[self.get_storage_type()]
         return total_mib
 
-    def free_vm_memory(self):
+    def free_vm_memory(self) -> int:
         """Get memory in MiB available (unallocated) on the hypervisor"""
         total_mib = self.total_vm_memory()
 
         # Calculate memory used by other VMs.
         # We can not trust conn().getFreeMemory(), sum up memory used by
         # each VM instead
-        used_kib = 0
+        used_mib = 0
         for dom in self.conn().listAllDomains():
-            used_kib += dom.info()[2]
-        free_mib = total_mib - (used_kib / 1024 - VM_OVERHEAD_MEMORY)
-        return free_mib
+            # Since every VM has its own overhead in QEMU, we must account for
+            # it accordingly, and not once overall for the whole HV.
+            used_mib += dom.info()[2] // 1024 + VM_OVERHEAD_MEMORY_MIB
+
+        return total_mib - used_mib
 
     def start_vm(self, vm):
         log.info('Starting "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
