@@ -1095,6 +1095,8 @@ class VM(Host):
         for t in overview:
             if region not in t['pricing']:
                 continue
+            if not t['ipv6_support']:
+                continue
             if t['memory'] < (self.dataset_obj['memory'] / 1024):
                 continue
             if 'ECU' not in t or not isinstance(t['ECU'], (int, float)):
