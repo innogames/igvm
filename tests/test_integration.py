@@ -11,7 +11,6 @@ from unittest import TestCase
 
 from adminapi.dataset import Query
 from adminapi.filters import Any
-from botocore.exceptions import ClientError
 from fabric.api import env
 from fabric.network import disconnect_all
 from mock import patch
@@ -130,7 +129,7 @@ class IGVMTest(TestCase):
         if self.datacenter_type == 'aws.dct':
             self.vm_obj['aws_image_id'] = 'ami-0e2b90ca04cae8da5'  # buster
             self.vm_obj['aws_instance_type'] = 't2.micro'
-            self.vm_obj['aws_key_name'] = 'MyUSE1KP'
+            self.vm_obj['aws_key_name'] = 'eu-central-1-key'
             self.vm_obj['service_groups'] = [
                 'igvm-integration.test.sg',
             ]

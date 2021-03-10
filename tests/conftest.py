@@ -8,6 +8,7 @@ from math import ceil, log
 from re import match
 from time import sleep
 from shlex import quote
+from typing import Optional
 
 import boto3
 from adminapi.dataset import Query
@@ -16,7 +17,7 @@ from adminapi.filters import Any, Not, Regexp
 from botocore.exceptions import ClientError
 from libvirt import VIR_DOMAIN_RUNNING
 
-from igvm.exceptions import VMError, IGVMTestError
+from igvm.exceptions import IGVMTestError
 from igvm.hypervisor import Hypervisor
 from igvm.settings import HYPERVISOR_ATTRIBUTES, AWS_RETURN_CODES
 from tests import (
@@ -125,9 +126,16 @@ def clean_serveradmin(filters):
 
 
 def clean_aws(vm_hostname):
-    def _get_instance_status():
-        response = ec2.describe_instances(
+    def _get_instance_status(
+            ec2_client,
+            instance_id: Optional[str] = None,
+            name_filter: Optional[str] = None) -> Optional[str]:
+        response = ec2_client.describe_instances(
             Filters=[
+                {
+                    'Name': 'tag:Name',
+                    'Values': ['*' if not name_filter else f'?{name_filter}*']
+                },
                 {
                     'Name': 'instance-state-code',
                     'Values': [
@@ -140,39 +148,64 @@ def clean_aws(vm_hostname):
                     ]
                 },
             ],
-            InstanceIds=[obj['aws_instance_id']],
-            DryRun=False)['Reservations'][0]['Instances'][0]['State']['Code']
+            InstanceIds=[instance_id] if instance_id else [],
+            DryRun=False)
 
-        return int(response)
+        if not response['Reservations']:
+            return
+
+        instance_status = response['Reservations'][0]['Instances'][0]
+        return instance_status
+
+    def _wait_for_state_reached(ec2_client, instance_id: str, state: str,
+                                timeout: int) -> None:
+        for _ in range(timeout):
+            instance_status = _get_instance_status(
+                ec2_client, instance_id=instance_id)
+            status_code = int(instance_status['State']['Code'])
+            if AWS_RETURN_CODES[state] == status_code:
+                break
+            sleep(1)
+
+    ec2 = boto3.client('ec2')
+    timeout = 120
 
     try:
         obj = Query({'hostname': vm_hostname}, ['aws_instance_id']).get()
-    except DatasetError:  # No object to clean up
+    except DatasetError:
+        instance_status = _get_instance_status(
+            ec2_client=ec2, name_filter=vm_hostname)
+        if not instance_status:
+            return
+
+        instance_id = instance_status['InstanceId']
+        if len(instance_id) == 0:
+            return
+
+        ec2.terminate_instances(InstanceIds=[instance_id])
+        _wait_for_state_reached(ec2_client=ec2, instance_id=instance_id,
+                                state='terminated', timeout=timeout)
         return
 
     if not obj['aws_instance_id']:
         return
 
-    timeout = 120
-    ec2 = boto3.client('ec2')
     try:
         ec2.stop_instances(
             InstanceIds=[obj['aws_instance_id']], DryRun=False
         )
-    except ClientError as e:
-        pass  # Not running
-    for _ in range(timeout):
-        instance_status = _get_instance_status()
-        if AWS_RETURN_CODES['stopped'] == instance_status:
-            break
-        sleep(1)
+        _wait_for_state_reached(ec2_client=ec2,
+                                instance_id=obj['aws_instance_id'],
+                                state='stopped', timeout=timeout)
 
-    ec2.terminate_instances(InstanceIds=[obj['aws_instance_id']])
-    for _ in range(timeout):
-        instance_status = _get_instance_status()
-        if AWS_RETURN_CODES['terminated'] == instance_status:
-            break
-        sleep(1)
+        ec2.terminate_instances(InstanceIds=[obj['aws_instance_id']])
+        _wait_for_state_reached(ec2_client=ec2,
+                                instance_id=obj['aws_instance_id'],
+                                state='terminated', timeout=timeout)
+    except ClientError as e:
+        if not any(error in str(e) for error in
+                   ['InvalidInstanceID', 'IncorrectInstanceState']):
+            raise
 
 
 def get_next_address(vm_net, index):
