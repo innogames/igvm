@@ -13,7 +13,6 @@ from libvirt import (
 
 from igvm.hypervisor_preferences import (
     HypervisorAttributeValue,
-    HypervisorAttributeValueLimit,
     HypervisorCpuUsageLimit,
     HypervisorEnvironmentValue,
     InsufficientResource,
