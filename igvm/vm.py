@@ -7,6 +7,7 @@ import logging
 import os
 import stat
 import time
+import tqdm
 from base64 import b64decode
 from grp import getgrnam
 from hashlib import sha1, sha256
@@ -17,14 +18,13 @@ from typing import Optional, List, Union
 from uuid import uuid4
 
 import boto3
-import tqdm
 from botocore.exceptions import ClientError, CapacityNotAvailableError
 from fabric.api import cd, get, hide, put, run, settings
 from fabric.contrib.files import upload_template
 from fabric.exceptions import NetworkError
 from json.decoder import JSONDecodeError
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 from igvm.exceptions import ConfigError, RemoteCommandError, VMError
 from igvm.host import Host
