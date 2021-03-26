@@ -113,6 +113,11 @@ except KeyError:
 
 IMAGE_PATH = '/tmp'
 
+NETWORK_ATTRIBUTES = [
+    'hostname',
+    'service_groups',
+]
+
 HYPERVISOR_ATTRIBUTES = [
     'cpu_perffactor',
     'cpu_util_pct',
@@ -130,7 +135,7 @@ HYPERVISOR_ATTRIBUTES = [
     'libvirt_pool_used_gib',
     'num_cpu',
     'os',
-    'route_network',
+    {'route_network': NETWORK_ATTRIBUTES},
     'state',
     {
         'vlan_networks': [
@@ -163,8 +168,8 @@ VM_ATTRIBUTES = [
     'aws_instance_type',
     'aws_key_name',
     'aws_placement',
-    'aws_security_group_ids',
     'aws_subnet_id',
+    'aws_vpc_id',
     'datacenter',
     'datacenter_type',
     'disk_size_gib',
@@ -184,11 +189,13 @@ VM_ATTRIBUTES = [
     'os',
     'primary_ip6',
     'project',
+    {'project_network': NETWORK_ATTRIBUTES},
     'puppet_ca',
     'puppet_disabled',
     'puppet_master',
-    'route_network',
+    {'route_network': NETWORK_ATTRIBUTES},
     'served_game',
+    'service_groups',
     'sshfp',
     'state',
     {'hypervisor': HYPERVISOR_ATTRIBUTES},
