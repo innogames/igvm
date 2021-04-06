@@ -33,7 +33,7 @@ class Host(object):
 
     def __init__(self, dataset_obj):
         self.dataset_obj = dataset_obj
-        self.route_network = dataset_obj['route_network']
+        self.route_network = dataset_obj['route_network']['hostname']
         self.fqdn = self.dataset_obj['hostname']    # TODO: Remove
 
     def __str__(self):

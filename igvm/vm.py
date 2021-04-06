@@ -2,11 +2,14 @@
 
 Copyright (c) 2018 InnoGames GmbH
 """
+import typing
+
 import json
 import logging
 import os
 import stat
 import time
+import tqdm
 from base64 import b64decode
 from grp import getgrnam
 from hashlib import sha1, sha256
@@ -17,14 +20,13 @@ from typing import Optional, List, Union
 from uuid import uuid4
 
 import boto3
-import tqdm
 from botocore.exceptions import ClientError, CapacityNotAvailableError
 from fabric.api import cd, get, hide, put, run, settings
 from fabric.contrib.files import upload_template
 from fabric.exceptions import NetworkError
 from json.decoder import JSONDecodeError
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 from igvm.exceptions import ConfigError, RemoteCommandError, VMError
 from igvm.host import Host
@@ -41,6 +43,16 @@ from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
 from igvm.puppet import clean_cert
 
+if typing.TYPE_CHECKING:
+    from mypy_boto3_ec2 import EC2Client
+    from mypy_boto3_ec2.service_resource import SecurityGroup, Vpc, EC2ServiceResource
+else:
+    EC2Client = object
+    EC2ServiceResource = object
+    SecurityGroup = object
+    Vpc = object
+
+
 log = logging.getLogger(__name__)
 
 
@@ -48,6 +60,9 @@ class VM(Host):
     """VM interface."""
     servertype = 'vm'
     __aws_session = None
+    __ec2c = None
+    __ec2r = None
+    __vpc = None
 
     def __init__(self, dataset_obj, hypervisor=None):
         super(VM, self).__init__(dataset_obj)
@@ -219,7 +234,7 @@ class VM(Host):
                 raise ConfigError(err)
 
     @property
-    def aws_session(self):
+    def aws_session(self) -> boto3.Session:
         if not self.__aws_session:
             region = str(self.dataset_obj['aws_placement'])[:-1]
             self.__aws_session = boto3.Session(
@@ -227,6 +242,62 @@ class VM(Host):
                 region_name=region,
             )
         return self.__aws_session
+
+    @property
+    def ec2c(self) -> EC2Client:
+        if not self.__ec2c:
+            self.__ec2c = self.aws_session.client('ec2')
+        return self.__ec2c
+
+    @property
+    def ec2r(self) -> EC2ServiceResource:
+        if not self.__ec2r:
+            self.__ec2r = self.aws_session.resource('ec2')
+        return self.__ec2r
+
+    @property
+    def aws_vpc(self) -> Vpc:
+        if self.__vpc:
+            return self.__vpc
+
+        for vpc in self.ec2r.vpcs.filter(Filters=[{
+            'Name': 'vpc-id',
+            'Values': [self.dataset_obj['aws_vpc_id']],
+        }]):
+            self.__vpc = vpc
+
+        if self.__vpc is None:
+            raise VMError("Can't find VPC for this VM!")
+
+        return self.__vpc
+
+    @property
+    def all_sgs(self) -> typing.List[str]:
+        own_sgs = [str(x) for x in self.dataset_obj['service_groups']]
+        pn_sgs = [str(x) for x in self.dataset_obj['project_network']['service_groups']]
+        rn_sgs = [str(x) for x in self.dataset_obj['route_network']['service_groups']]
+        # Make it unique
+        return list(set(own_sgs + pn_sgs + rn_sgs))
+
+    @property
+    def aws_sgs(self) -> typing.List[SecurityGroup]:
+        ret: typing.List[SecurityGroup] = []
+        for sg in self.ec2r.security_groups.filter(
+             Filters=[
+                {
+                    'Name': 'group-name',
+                    'Values': self.all_sgs,
+                },
+                {
+                    'Name': 'vpc-id',
+                    'Values': [self.aws_vpc.id],
+                },
+            ],
+        ):
+            ret.append(sg)
+        if set(self.all_sgs) != set([x.group_name for x in ret]):
+            raise VMError("Some SGs needed for this VM don't exist in AWS!")
+        return ret
 
     def start(self, force_stop_failed=True, transaction=None):
         self.hypervisor.start_vm(self)
@@ -253,10 +324,8 @@ class VM(Host):
         Start a VM in AWS.
         """
 
-        ec2 = self.aws_session.client('ec2')
-
         try:
-            ec2.start_instances(
+            self.ec2c.start_instances(
                 InstanceIds=[self.dataset_obj['aws_instance_id']],
                 DryRun=True
             )
@@ -265,7 +334,7 @@ class VM(Host):
                 raise
 
         try:
-            response = ec2.start_instances(
+            response = self.ec2c.start_instances(
                 InstanceIds=[self.dataset_obj['aws_instance_id']],
                 DryRun=False
             )
@@ -307,10 +376,8 @@ class VM(Host):
         :param: timeout: Timeout value for VM shutdown
         """
 
-        ec2 = self.aws_session.client('ec2')
-
         try:
-            ec2.stop_instances(
+            self.ec2c.stop_instances(
                 InstanceIds=[self.dataset_obj['aws_instance_id']],
                 DryRun=True
             )
@@ -319,7 +386,7 @@ class VM(Host):
                 raise
 
         try:
-            response = ec2.stop_instances(
+            response = self.ec2c.stop_instances(
                 InstanceIds=[self.dataset_obj['aws_instance_id']],
                 DryRun=False
             )
@@ -358,8 +425,7 @@ class VM(Host):
         :return: return code of instance state as int
         """
 
-        ec2 = self.aws_session.client('ec2')
-        response = ec2.describe_instances(
+        response = self.ec2c.describe_instances(
             Filters=[
                 {
                     'Name': 'instance-state-code',
@@ -385,10 +451,8 @@ class VM(Host):
         Delete a VM in AWS.
         """
 
-        ec2 = self.aws_session.client('ec2')
-
         try:
-            response = ec2.terminate_instances(
+            response = self.ec2c.terminate_instances(
                 InstanceIds=[self.dataset_obj['aws_instance_id']])
             log.debug(response)
         except ClientError as e:
@@ -558,17 +622,14 @@ class VM(Host):
         :raises: VMError: Generic exception for VM errors of all kinds
         """
 
-        ec2 = self.aws_session.client('ec2')
-
         vm_types_overview = self.aws_get_instances_overview()
         if vm_types_overview:
             vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
         else:
             vm_types = [self.dataset_obj['aws_instance_type']]
 
-        ec2_res = self.aws_session.resource('ec2')
         root_device = list(
-            ec2_res.images.filter(
+            self.ec2r.images.filter(
                 ImageIds=[self.dataset_obj['aws_image_id']]
             )
         )[0].root_device_name
@@ -576,7 +637,7 @@ class VM(Host):
 
         for vm_type in vm_types:
             try:
-                response = ec2.run_instances(
+                response = self.ec2c.run_instances(
                     BlockDeviceMappings=[
                         {
                             'DeviceName': root_device,
@@ -591,8 +652,9 @@ class VM(Host):
                     ImageId=self.dataset_obj['aws_image_id'],
                     InstanceType=vm_type,
                     KeyName=self.dataset_obj['aws_key_name'],
-                    SecurityGroupIds=list(
-                        self.dataset_obj['aws_security_group_ids']),
+                    SecurityGroupIds=[
+                        aws_sg.group_id for aws_sg in self.aws_sgs
+                    ],
                     SubnetId=self.dataset_obj['aws_subnet_id'],
                     Placement={
                         'AvailabilityZone': str(
@@ -712,9 +774,7 @@ class VM(Host):
 
         self.set_hostname(new_hostname)
 
-        ec2 = self.aws_session.resource('ec2')
-
-        response = ec2.create_tags(
+        response = self.ec2c.create_tags(
             Resources=[self.dataset_obj['aws_instance_id']],
             Tags=[
                 {
@@ -854,17 +914,13 @@ class VM(Host):
         if size < self.dataset_obj['disk_size_gib']:
             raise NotImplementedError('Cannot shrink the disk.')
 
-        ec2 = self.aws_session.resource('ec2')
-
-        response = ec2.Instance(self.dataset_obj['aws_instance_id'])
+        response = self.ec2r.Instance(self.dataset_obj['aws_instance_id'])
         for vol in response.volumes.all():
             volume_id = vol.id
             break
 
-        ec2 = self.aws_session.client('ec2')
-
         try:
-            volume_state = ec2.describe_volumes_modifications(
+            volume_state = self.ec2c.describe_volumes_modifications(
                 VolumeIds=[volume_id])['VolumesModifications'][0]
 
             if volume_state['ModificationState'] == 'optimizing':
@@ -882,7 +938,7 @@ class VM(Host):
             )
             pass
 
-        ec2.modify_volume(VolumeId=volume_id, Size=int(size))
+        self.ec2c.modify_volume(VolumeId=volume_id, Size=int(size))
 
         partition = self.run('findmnt -nro SOURCE /')
         disk = self.run('lsblk -nro PKNAME {}'.format(partition))
@@ -944,9 +1000,7 @@ class VM(Host):
             float(price_list['product']['attributes']['memory'].split()[0]
         ) * 1024)
 
-        ec2 = self.aws_session.resource('ec2')
-
-        response = ec2.Instance(self.dataset_obj['aws_instance_id'])
+        response = self.ec2r.Instance(self.dataset_obj['aws_instance_id'])
         for vol in response.volumes.all():
             volume_size = vol.size
             break
