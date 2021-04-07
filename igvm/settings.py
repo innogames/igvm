@@ -52,11 +52,9 @@ HOST_RESERVED_MEMORY_MIB = {
 
 VM_OVERHEAD_MEMORY_MIB = 50
 
-
 # Default max number of CPUs, unless the hypervisor has fewer cores or num_cpu
 # is larger than this value.
 KVM_DEFAULT_MAX_CPUS = 24
-
 
 # Mapping to determine the libvirt CPU model based on serveradmin hw_model
 KVM_HWMODEL_TO_CPUMODEL = {
@@ -217,96 +215,79 @@ AWS_INSTANCES_OVERVIEW_FILE_ETAG = '/tmp/AWS_INSTANCES_OVERVIEW_FILE.etag'
 AWS_ECU_FACTOR = 7
 AWS_PROFILE_NAME = environ.get('AWS_PROFILE_NAME', default='default')
 
-AWS_CONFIG = [
-    {
-        'apt': [
-            {
-                'name': 'innogames_stable',
-                'filename': 'innogames_stable.list',
-                'source': 'deb http://update-int.ig.local/ innogames stable',
-                'key': [
-                    "-----BEGIN PGP PUBLIC KEY BLOCK-----",
-                    "Version: GnuPG v1.4.10 (GNU/Linux)",
-                    "",
-                    "mQINBE1JNIYBEADWZJRGs4vzkffGhbCQcrBcMnnq/ogY4ebzv2P",
-                    "cT1KbyXjmulJG6KqTf6cmecU77UVIJluxfhZEoPBUdIFWRSbB/u",
-                    "e2G+pj2hwu4uSy2MOPtQaXnrrHJyA2EP0s//h+jJwh5KJ/ExNEX",
-                    "XpQqDKwik7xvn13Bg5mkP9rj3MIdN/muw4YDoyEHkEVy6VWHy8K",
-                    "ZOZqNv3ONlx/tv8mp5GCsyz8my+Ly61fauPFESVphQs/PsyXDzc",
-                    "c7BdA2Xprs6nc08tr2pm14Zhzuv1aDb3RbmIOC+KfSlBfdhgMNO",
-                    "DtnkoHugdXXunwQFOQKhKUoqrD06v3yluhooKVGzlOOB1wu6RPg",
-                    "SFrd2qR//c8ksM3kJfVBk+oovOU70/SYbv/JgLlQqdQW1yXUTsZ",
-                    "+MCBQvnP/Lbg48FxpuWiv2/XToiamR/DvpYY4kE6GFnBCFigVFN",
-                    "tw+2LnK6iwBdb6zEqsRkc91czEtfdho61zbNajfNy293F3uRbmN",
-                    "NmClMLZTuxGx3abQiccQxCjFy4MVsrvqUSi3Q+OcGNpZ6Cnd4TS",
-                    "ulT2Uj9FpvJ77/eKg0YCGDffqfQjwGaThb8fU5TWSsmRWxDVTOn",
-                    "3xvMHOBWvoGR479+KngaohU5t+mBct3NfTYcXYOxA8EHZfXxvjJ",
-                    "Vu+4v1gYIyOPdOLNltKFd+yq3Z6UxAuw1mwARAQABtDxNYXR0aG",
-                    "lhcyBLbGVpbiAoVXBkYXRlLU1pcnJvcikgPG1hdHRoaWFzLmtsZ",
-                    "WluQGlubm9nYW1lcy5kZT6JAjgEEwECACIFAk1JNIYCGwMGCwkI",
-                    "BwMCBhUIAgkKCwQWAgMBAh4BAheAAAoJEKoruC7fdZMUGk8P+wX",
-                    "0ZzJ4wqOWc/n3n3ZSxy9MbUa/Ry84woNr9dEtdhyEwpnlFxJYmW",
-                    "SqXBwHZNWZ3ENwWfZisPawtfNbujwxI83dAziiDtmllQg0kKWOF",
-                    "I7Qh7BhJNnq5sWA/CjtOcFsJGCBL5QMKX+u9xSSMvk7nUKaQ6Vz",
-                    "EqzlR67DJigZc5LiCqR7LgXzDoACKAD6LZiv7Ft4ApSpnemvYEQ",
-                    "tUbuptGqAcBF4TPeZw2DDKdaev6HOmWA0BvxO7/lGwxvsQ/x+c3",
-                    "FBBWhz81Vmv8kEpgQxj6pookPcvHX7jOCBWb3MfOkz6+2nw8b6N",
-                    "FRNu+/huMiHtFtGz0e7F5tdsMZpfbQVbBYERa8XKABcTLpK0wAT",
-                    "0n9RHQOQaeBfZ/OPYrZbKPsDXo/094J6Z9UffZMGPaEgt9+hR5Z",
-                    "62//TEyEUHNoFukDBBJcy8c+GnPpmTQ17XzhxKI0pPJ2H5aDNeh",
-                    "5b3D6y0WXgpiOKiNxr0wX1t0pyDO1Y7JE/51qq7ETol0ezws7vV",
-                    "LrxFi0C7s2mjNWivS5J3PcvF+TK+a1CwYG0XDf3aV2OnxhDWz9Y",
-                    "VtyY8NLEmLzsbmCigzXy+1h23TBXaVlKXaw9k8dxnKM9UStc3hM",
-                    "IN50aqK0Tucbz2yj9+QQf9YHfzWOfqP9m0nm2CCmx1w+GZE9MLA",
-                    "hszNrlTW7UN+hEyA1Z=mJCR",
-                    "-----END PGP PUBLIC KEY BLOCK-----"
-                ],
-            },
-            {
-                'name': 'base#VM_OS#_stable',
-                'filename': 'base#VM_OS#_stable.list',
-                'source': 'deb http://update-int.ig.local/ base#VM_OS# stable',
-                'key': [
-                    "-----BEGIN PGP PUBLIC KEY BLOCK-----",
-                    "Version: GnuPG v1",
-                    "",
-                    "mQINBFjsyv0BEADlyvUwquhi/PzwaYIG2JMNHEMnUc3jKaHd3SA",
-                    "W6kRk6uzao9B18fBMRnuGFtfrmRxa7CvqTTcn3hXl8h7kZQICBH",
-                    "XJrNXB2KDs4gnNDXbjXBuLJyW5jVe8Ghn7GEJbzUAu+iNPBKi1U",
-                    "YkUoMSk+sAbXqOaUJQDJSaOU4A7C9wL1mAxsWNhucpCBtt9HTTn",
-                    "VWiZiLAtvop7LJEgXEpQbht/jW7mdMX5yAbWfYUJMdXFMCADz5r",
-                    "6mbtuun5BaDae31dgA//IPI+Im8PxJBgdyyETfhoSbThiFDk4K1",
-                    "UgXXlAwYxR7TVxPjvWN8HDlbBl4TvM29ppz8bZJARQx3h1SYIAr",
-                    "YJ2Xc9lQwsbK0KzL/w1NmZsiPztbpM0Fs0Q7+oQScxuIolpu4c7",
-                    "7siEged2R6dnXR/er+zN5/GgTdaIEcQnTRI9F8bZKrhIy/TSLgR",
-                    "nxZYFyNE30yQtJD2WR9fuh6zT72LY0rvqQcHw7Ze3qW2ZgORswd",
-                    "GWmasHMJ/LkXv75MiV4KMBwweYp6OW9ewisdrZEijQS0NEcZ+YF",
-                    "C288dLJeWLpPkzdczTO/v/bLDQ/Uk8aOcldtJfB4BjBW9v7JjvL",
-                    "cKtCMBsW5P4o3IjVJt+08FfGs7cyaHJifH6RCM2GBDUaNAoPPZm",
-                    "ioiKZcw6twMhdrjzVHiPFmolEXzItLmFHNwARAQABtDphZG1pbi",
-                    "AoSW5ub2dhbWVzIGRlYmlhbiByZXBvc2l0b3J5IGtleSkgPGl0Q",
-                    "Glubm9nYW1lcy5jb20+iQI3BBMBCgAhBQJY7Mr9AhsDBQsJCAcD",
-                    "BRUKCQgLBRYCAwEAAh4BAheAAAoJEKy7fO0+1wCYz5oP/iBSLv3",
-                    "h+DRCAMeV68EquhyOvGUIZuZ910wL7wW9lqoUmKCdrSoOvXxpE7",
-                    "z1TFegRfUtbnXYJYmELwp0SD5F/60ScCoW7bbTQdK4FHms0CYjU",
-                    "cJnRjRrQVyE0fiChql6CYif2tWWOR7L+COBeIKrSaqXDPw2X5A0",
-                    "mJ+QFRcVhNbz02FIfr1mIECVshN34x5RMnmJtd6ZNhcbldS26Fh",
-                    "xC5SrzFkAPExCFBVLiAsfEK51ED4QOfnRRYOlbBvDwL3XQBZtFV",
-                    "tznwI1DLg/JNVVXFM8sDei+eL3O5yoOVEuTBRvNH7ONlFRcBdFC",
-                    "dfSi1VvKVY2JEQX4R4BHyZvD/B2pcBeTM5puav5QuwKXppwHg4d",
-                    "Bbs1BrRsHWGMdqTJWGkwwVUdt3af6WSWD6BA+rv2I3DM7BMt6t/",
-                    "FK1BMapHGY2fj3gK8pWyi13R8tryr4ZdIa/RnwxWt8ySWclgDVS",
-                    "PxTcNE1Zn2fYDB/YkvTyF52dn3+6UW6mnjL45Hictqo9A6aOxre",
-                    "5dlwEyHXhurs/7UP0Ell20UEN1VsKDPE2V8pq+JFXQ+F2sLMEar",
-                    "4L5teopk78L7t0FibqmKcFRVgvseBbjm0xHfdTk4mXCDwbaBtX+",
-                    "E9qhd5e4brEYNx9I9I2fvXGw5sX6Qdty9HnEQOKGMshEAfl2iCz",
-                    "J56n4CAkPnU50v=KPbA",
-                    "-----END PGP PUBLIC KEY BLOCK-----"
-                ]
-            }
-        ]
-    }
-]
+AWS_CONFIG = [{
+    'apt': [{
+        'name': 'innogames_stable',
+        'filename': 'innogames_stable.list',
+        'source': 'deb http://update-int.ig.local/ innogames stable',
+        'key': [
+            '-----BEGIN PGP PUBLIC KEY BLOCK-----',
+            '',
+            'mQINBF/BMWsBEADaN7jZ05f8nRckQhbECn3MnEosMObAYYc9m3ktGvg5fGPIwRFw',
+            'StyT/EjLiTmVjjYdb4ZeMOrIoXNaw3kTv3Q3LM29MkfcNGBOxBO7EjKkNjnp6CQk',
+            '3aUG6sh2N1hrvHBQ4ybbHjsiOeuiYD6CYtOk1m9nKHLD41mMjUhiRkD1hw7nvM/I',
+            'Lq5K/l45OAAClWotOCd2DA5yg63XYcH8iDYbOtVMiLgTPtUxkfXVdT5QEs/22pP8',
+            'gm3RlL/JI+uceuBfDLPNPpALHMRQZnWO+NDmR/o5ilIF5oY2kc6zqYigAO4eapne',
+            'Ri6sdqAe5QCxM8vZb5hDBfPxlObaym5erClfpjWqeyWQmmlISEoQTZQwkuOSFp6l',
+            'SywinwzLQ9iHPMafhnrkIE6yY+H49u17w5KdHosDbHjEzm5IEWoufrDIaS4hm2Vh',
+            'pnA2G12UiprlCGfpLLg5R5gOjmDquJENo1KZK1bGtUFt+ZjoN6Nf1Mp/6vosF/fh',
+            'k/Gu4Xoo4YUCNedd5zr4bI81f8FL830uH2bowSYItBQbRhBDaVNNcZd6ZF2lbadk',
+            '8fzSNWOZtdCbt+sD9jA7vepOZWq+pwcVVLNi4RWmcZg0dmIzzxcepKxczEMUN8dT',
+            'AoOXLvrJuvfwxPLgN5NriU4jqwDVseIQOZP1jgy4s8hv9AbIv4ogdJjkQwARAQAB',
+            'tEtJbm5vR2FtZXMgQXB0bHkgKElubm9HYW1lcyBBcHRseSBSZXBvc2l0b3J5IFNp',
+            'Z25pbmcgS2V5KSA8aXRAaW5ub2dhbWVzLmNvbT6JAk4EEwEKADgWIQQNhO6rw0VH',
+            '0PrfG+qyPKCtrIn4zwUCX8ExawIbAwULCQgHAgYVCgkICwIEFgIDAQIeAQIXgAAK',
+            'CRCyPKCtrIn4z+glD/9fXKLWSMLTaGvj2TaKRE6TRzkuAn68JmX8dEt17+LCI3HN',
+            'UPtF6LFBG9hQeOV+u3lMPr98MjQrIVxJm54zWlzGsev9VauRhoQcmB6L68K7WK4r',
+            'HETQdoLMQl5tpocZKsDER2eiGgaJiUYt17EJeUr2/sqKPnAvHzLqtOpKUS1bdGtw',
+            '7o3oVnu7Ufn4aSx00WAjeooAWByXlAafo835+ue/H1QrDUaoc1WEUWZz2iwsVrWG',
+            'jmcaXwWmylauxSqO2x4QK7uLZ9jHvj99Zykclq+zF9FRAyvH95Z3zWcQRQoOzcH7',
+            'ffiPe9ewx3J9VSO7SrkXz3Hq2ZDvKaJeY26br1a0P0XGh5oQ2eRKOh+gmbfKVqNK',
+            'LGT00VlkGCDbFwFCJm4Zsu2qfJdknsfOR4qL/snUc7IRnsu264vBRvH+zlsNP3CL',
+            'pcqaKEbJ6coS5Cf/sv+LpEZAtt6P/DIf24x6PmUNFErCbOhW7vEUFFn+0FDGPQ68',
+            'k8XxG6hyar5HbBJrQWO6GSJqF/7PqCiP4hdaEGn03bK9t9FuGLagx4qYiBDw64LY',
+            'LXnqKmrTts4bCk0KE/qngJR3QrozvdyA0G3BZgMM7Y4h9LiL30qLXvtnv3YARpIl',
+            '3CMAd5U773hZbyCb6cIcDG6EVVGVlHDqvY6f+r/eqPxqDzoS3DpY2/5ijikN4w==',
+            '=m6al',
+            '-----END PGP PUBLIC KEY BLOCK-----',
+        ],
+    }, {
+        'name': 'base#VM_OS#_stable',
+        'filename': 'base#VM_OS#_stable.list',
+        'source': 'deb http://update-int.ig.local/ base#VM_OS# stable',
+        'key': [
+            '-----BEGIN PGP PUBLIC KEY BLOCK-----',
+            '',
+            'mQINBF/BMWsBEADaN7jZ05f8nRckQhbECn3MnEosMObAYYc9m3ktGvg5fGPIwRFw',
+            'StyT/EjLiTmVjjYdb4ZeMOrIoXNaw3kTv3Q3LM29MkfcNGBOxBO7EjKkNjnp6CQk',
+            '3aUG6sh2N1hrvHBQ4ybbHjsiOeuiYD6CYtOk1m9nKHLD41mMjUhiRkD1hw7nvM/I',
+            'Lq5K/l45OAAClWotOCd2DA5yg63XYcH8iDYbOtVMiLgTPtUxkfXVdT5QEs/22pP8',
+            'gm3RlL/JI+uceuBfDLPNPpALHMRQZnWO+NDmR/o5ilIF5oY2kc6zqYigAO4eapne',
+            'Ri6sdqAe5QCxM8vZb5hDBfPxlObaym5erClfpjWqeyWQmmlISEoQTZQwkuOSFp6l',
+            'SywinwzLQ9iHPMafhnrkIE6yY+H49u17w5KdHosDbHjEzm5IEWoufrDIaS4hm2Vh',
+            'pnA2G12UiprlCGfpLLg5R5gOjmDquJENo1KZK1bGtUFt+ZjoN6Nf1Mp/6vosF/fh',
+            'k/Gu4Xoo4YUCNedd5zr4bI81f8FL830uH2bowSYItBQbRhBDaVNNcZd6ZF2lbadk',
+            '8fzSNWOZtdCbt+sD9jA7vepOZWq+pwcVVLNi4RWmcZg0dmIzzxcepKxczEMUN8dT',
+            'AoOXLvrJuvfwxPLgN5NriU4jqwDVseIQOZP1jgy4s8hv9AbIv4ogdJjkQwARAQAB',
+            'tEtJbm5vR2FtZXMgQXB0bHkgKElubm9HYW1lcyBBcHRseSBSZXBvc2l0b3J5IFNp',
+            'Z25pbmcgS2V5KSA8aXRAaW5ub2dhbWVzLmNvbT6JAk4EEwEKADgWIQQNhO6rw0VH',
+            '0PrfG+qyPKCtrIn4zwUCX8ExawIbAwULCQgHAgYVCgkICwIEFgIDAQIeAQIXgAAK',
+            'CRCyPKCtrIn4z+glD/9fXKLWSMLTaGvj2TaKRE6TRzkuAn68JmX8dEt17+LCI3HN',
+            'UPtF6LFBG9hQeOV+u3lMPr98MjQrIVxJm54zWlzGsev9VauRhoQcmB6L68K7WK4r',
+            'HETQdoLMQl5tpocZKsDER2eiGgaJiUYt17EJeUr2/sqKPnAvHzLqtOpKUS1bdGtw',
+            '7o3oVnu7Ufn4aSx00WAjeooAWByXlAafo835+ue/H1QrDUaoc1WEUWZz2iwsVrWG',
+            'jmcaXwWmylauxSqO2x4QK7uLZ9jHvj99Zykclq+zF9FRAyvH95Z3zWcQRQoOzcH7',
+            'ffiPe9ewx3J9VSO7SrkXz3Hq2ZDvKaJeY26br1a0P0XGh5oQ2eRKOh+gmbfKVqNK',
+            'LGT00VlkGCDbFwFCJm4Zsu2qfJdknsfOR4qL/snUc7IRnsu264vBRvH+zlsNP3CL',
+            'pcqaKEbJ6coS5Cf/sv+LpEZAtt6P/DIf24x6PmUNFErCbOhW7vEUFFn+0FDGPQ68',
+            'k8XxG6hyar5HbBJrQWO6GSJqF/7PqCiP4hdaEGn03bK9t9FuGLagx4qYiBDw64LY',
+            'LXnqKmrTts4bCk0KE/qngJR3QrozvdyA0G3BZgMM7Y4h9LiL30qLXvtnv3YARpIl',
+            '3CMAd5U773hZbyCb6cIcDG6EVVGVlHDqvY6f+r/eqPxqDzoS3DpY2/5ijikN4w==',
+            '=m6al',
+            '-----END PGP PUBLIC KEY BLOCK-----',
+        ],
+    }],
+}]
 
 # The loadtested CPU usage thresholds per hypervisor hardware model,
 # before we are experiencing reasonable steal time.
