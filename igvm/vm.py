@@ -28,7 +28,7 @@ from json.decoder import JSONDecodeError
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from igvm.exceptions import ConfigError, RemoteCommandError, VMError
+from igvm.exceptions import ConfigError, HypervisorError, RemoteCommandError, VMError
 from igvm.host import Host
 from igvm.settings import (
     AWS_ECU_FACTOR,
@@ -63,6 +63,7 @@ class VM(Host):
     __ec2c = None
     __ec2r = None
     __vpc = None
+    __consolidated_sg = None
 
     def __init__(self, dataset_obj, hypervisor=None):
         super(VM, self).__init__(dataset_obj)
@@ -280,13 +281,23 @@ class VM(Host):
         return list(set(own_sgs + pn_sgs + rn_sgs))
 
     @property
-    def aws_sgs(self) -> typing.List[SecurityGroup]:
-        ret: typing.List[SecurityGroup] = []
+    def consolidated_sg(self) -> SecurityGroup:
+        if self.__consolidated_sg:
+            return self.__consolidated_sg
+
+        # Sort member SGs as they must be identical on every run.
+        csg_member_names = typing.cast(typing.Tuple[str], tuple(sorted(self.all_sgs)))
+
+        csg_name = (
+            'consolidated-' +
+            sha256((','.join(csg_member_names)).encode()).hexdigest()
+        )
+
         for sg in self.ec2r.security_groups.filter(
              Filters=[
                 {
                     'Name': 'group-name',
-                    'Values': self.all_sgs,
+                    'Values': [csg_name],
                 },
                 {
                     'Name': 'vpc-id',
@@ -294,10 +305,16 @@ class VM(Host):
                 },
             ],
         ):
-            ret.append(sg)
-        if set(self.all_sgs) != set([x.group_name for x in ret]):
-            raise VMError("Some SGs needed for this VM don't exist in AWS!")
-        return ret
+            # There should be only one, hopefully.
+            self.__consolidated_sg = sg
+            break
+        else:
+            raise HypervisorError(
+                f'Consolidated SG "{csg_name}" has not been '
+                'synchronized to AWS yet!'
+            )
+
+        return self.__consolidated_sg
 
     def start(self, force_stop_failed=True, transaction=None):
         self.hypervisor.start_vm(self)
@@ -652,9 +669,7 @@ class VM(Host):
                     ImageId=self.dataset_obj['aws_image_id'],
                     InstanceType=vm_type,
                     KeyName=self.dataset_obj['aws_key_name'],
-                    SecurityGroupIds=[
-                        aws_sg.group_id for aws_sg in self.aws_sgs
-                    ],
+                    SecurityGroupIds=[self.consolidated_sg.id],
                     SubnetId=self.dataset_obj['aws_subnet_id'],
                     Placement={
                         'AvailabilityZone': str(
@@ -677,7 +692,8 @@ class VM(Host):
                     ],
                     DryRun=False,
                     MinCount=1,
-                    MaxCount=1)
+                    MaxCount=1,
+                )
                 log.debug(response)
                 self.dataset_obj['aws_instance_type'] = vm_type
                 break
