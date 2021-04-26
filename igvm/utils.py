@@ -5,12 +5,15 @@ Copyright (c) 2018 InnoGames GmbH
 
 from __future__ import division
 
+import fcntl
 import logging
+import os
 import socket
 import time
+import typing
+
 from concurrent import futures
 from os import path
-
 from paramiko import SSHConfig
 
 from igvm.exceptions import TimeoutError
@@ -219,3 +222,22 @@ def parallel(
             results.append(result)
 
     return results
+
+
+def lock_file(path: str) -> typing.Optional[int]:
+    mode = os.O_RDWR | os.O_CREAT | os.O_TRUNC
+    fd = os.open(path, mode)
+
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    except (IOError, OSError):
+        os.close(fd)
+    else:
+        return fd
+
+    return None
+
+
+def unlock_file(path:str, fd: int):
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    os.close(fd)

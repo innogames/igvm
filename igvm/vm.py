@@ -42,6 +42,7 @@ from igvm.settings import (
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
 from igvm.puppet import clean_cert
+from igvm.aws_utils import sync_consolidated_sg
 
 if typing.TYPE_CHECKING:
     from mypy_boto3_ec2 import EC2Client
@@ -63,6 +64,7 @@ class VM(Host):
     __ec2c = None
     __ec2r = None
     __vpc = None
+    __consolidated_sg = None
 
     def __init__(self, dataset_obj, hypervisor=None):
         super(VM, self).__init__(dataset_obj)
@@ -280,24 +282,14 @@ class VM(Host):
         return list(set(own_sgs + pn_sgs + rn_sgs))
 
     @property
-    def aws_sgs(self) -> typing.List[SecurityGroup]:
-        ret: typing.List[SecurityGroup] = []
-        for sg in self.ec2r.security_groups.filter(
-             Filters=[
-                {
-                    'Name': 'group-name',
-                    'Values': self.all_sgs,
-                },
-                {
-                    'Name': 'vpc-id',
-                    'Values': [self.aws_vpc.id],
-                },
-            ],
-        ):
-            ret.append(sg)
-        if set(self.all_sgs) != set([x.group_name for x in ret]):
-            raise VMError("Some SGs needed for this VM don't exist in AWS!")
-        return ret
+    def consolidated_sg(self) -> str:
+        if self.__consolidated_sg:
+            return self.__consolidated_sg
+
+        self.__consolidated_sg = sync_consolidated_sg(
+            self.ec2r, self.aws_vpc, self.all_sgs
+        )
+        return self.__consolidated_sg
 
     def start(self, force_stop_failed=True, transaction=None):
         self.hypervisor.start_vm(self)
@@ -652,9 +644,7 @@ class VM(Host):
                     ImageId=self.dataset_obj['aws_image_id'],
                     InstanceType=vm_type,
                     KeyName=self.dataset_obj['aws_key_name'],
-                    SecurityGroupIds=[
-                        aws_sg.group_id for aws_sg in self.aws_sgs
-                    ],
+                    SecurityGroupIds=[self.consolidated_sg.group_id],
                     SubnetId=self.dataset_obj['aws_subnet_id'],
                     Placement={
                         'AvailabilityZone': str(
@@ -677,7 +667,8 @@ class VM(Host):
                     ],
                     DryRun=False,
                     MinCount=1,
-                    MaxCount=1)
+                    MaxCount=1,
+                )
                 log.debug(response)
                 self.dataset_obj['aws_instance_type'] = vm_type
                 break
