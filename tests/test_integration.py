@@ -130,12 +130,6 @@ class IGVMTest(TestCase):
             self.vm_obj['aws_image_id'] = 'ami-0e2b90ca04cae8da5'  # buster
             self.vm_obj['aws_instance_type'] = 't2.micro'
             self.vm_obj['aws_key_name'] = 'eu-central-1-key'
-            self.vm_obj['service_groups'] = [
-                'ig-aws-base-internet.sg', # TODO: remove once we have our own image
-                'ig-aws-base-networking.ndco.sg',
-                'igvm-integration.test.sg',
-                'puppet-aws.admin.sg',
-            ]
             self.vm_obj['disk_size_gib'] = 8
 
         self.vm_obj.commit()
