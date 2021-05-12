@@ -3,15 +3,14 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 
+from adminapi import api
 from contextlib import contextmanager
+from igvm.exceptions import RemoteCommandError
 from io import BytesIO
 from logging import getLogger
 from time import sleep
-from typing import Tuple, Optional
-
 from tqdm import tqdm
-
-from igvm.exceptions import RemoteCommandError
+from typing import Tuple, Optional
 
 log = getLogger(__name__)
 

@@ -9,6 +9,7 @@ from os import environ
 from tempfile import NamedTemporaryFile
 from unittest import TestCase
 
+from adminapi import api
 from adminapi.dataset import Query
 from adminapi.filters import Any
 from fabric.api import env
@@ -133,6 +134,12 @@ class IGVMTest(TestCase):
             self.vm_obj['disk_size_gib'] = 8
 
         self.vm_obj.commit()
+
+        # It would be enough to create SGs in AWS once but with parallel runs
+        # we can't really test if sync has already been performed.
+        if self.datacenter_type == 'aws.dct':
+            fw_api = api.get('firewall')
+            fw_api.update_config([self.route_network])
 
         self.uid_name = '{}_{}'.format(
             self.vm_obj['object_id'],
