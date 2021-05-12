@@ -10,7 +10,7 @@ from tempfile import NamedTemporaryFile
 from unittest import TestCase
 
 from adminapi import api
-from adminapi.dataset import Query
+from adminapi.dataset import DatasetObject, Query
 from adminapi.filters import Any
 from fabric.api import env
 from fabric.network import disconnect_all
@@ -50,7 +50,7 @@ from igvm.settings import (
     HYPERVISOR_CPU_THRESHOLDS,
     KVM_HWMODEL_TO_CPUMODEL,
     VG_NAME,
-    VM_ATTRIBUTES
+    VM_ATTRIBUTES,
 )
 from igvm.utils import parse_size
 from igvm.vm import VM
@@ -106,7 +106,7 @@ class IGVMTest(TestCase):
         clean_all(self.route_network, self.datacenter_type, VM_HOSTNAME)
 
         # Create subject VM object
-        self.vm_obj = Query().new_object('vm')
+        self.vm_obj: DatasetObject = Query().new_object('vm')
         self.vm_obj['backup_disabled'] = True
         self.vm_obj['disk_size_gib'] = 3
         self.vm_obj['environment'] = 'testing'
@@ -141,6 +141,11 @@ class IGVMTest(TestCase):
             fw_api = api.get('firewall')
             fw_api.update_config([self.route_network])
 
+        # Request the object again to get our object_id
+        self.vm_obj = Query(
+            {'hostname': VM_HOSTNAME},
+            ['object_id', 'hostname', 'disk_size_gib', 'puppet_ca'],
+        ).get()
         self.uid_name = '{}_{}'.format(
             self.vm_obj['object_id'],
             self.vm_obj['hostname'],
@@ -556,9 +561,9 @@ class CommandTest(IGVMTest):
         vm_stop(VM_HOSTNAME)
         hv.undefine_vm(vm, keep_storage=True)
 
-        self.check_vm_absent()
+        self.assertFalse(hv.vm_defined(vm))
         vm_define(VM_HOSTNAME)
-        self.check_vm_present()
+        self.assertTrue(hv.vm_defined(vm))
 
 
 class MigrationTest(IGVMTest):
