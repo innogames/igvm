@@ -147,19 +147,6 @@ class Hypervisor(Host):
                 return vlan_network
         return None
 
-    def vm_max_memory(self, vm):
-        """Calculates the max amount of memory in MiB the VM may receive."""
-        mem = vm.dataset_obj['memory']
-        if mem > 12 * 1024:
-            max_mem = mem + 10 * 1024
-        else:
-            max_mem = 16 * 1024
-
-        # Never go higher than the hypervisor
-        max_mem = min(self.total_vm_memory(), max_mem)
-
-        return max_mem
-
     def check_vm(self, vm, offline):
         """Check whether a VM can run on this hypervisor"""
         # Cheap checks should always be executed first to save time
