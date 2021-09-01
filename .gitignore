@@ -12,3 +12,5 @@ venv/
 .ropeproject/
 results.xml
 .python-version
+default.nix
+.envrc
