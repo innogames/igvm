@@ -125,6 +125,9 @@ class IGVMTest(TestCase):
             'int:basebuster:stable',
             'int:innogames:stable',
         ]
+        self.vm_obj['service_groups'] = [
+            'igvm-integration.test.sg',
+        ]
         self.vm_obj['state'] = 'online'
 
         if self.datacenter_type == 'aws.dct':
