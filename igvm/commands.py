@@ -327,7 +327,7 @@ def vm_build(
             jenv = Environment(loader=PackageLoader('igvm', 'templates'))
             template = jenv.get_template('aws_user_data.cfg')
             user_data = template.render(
-                hostname=vm.dataset_obj['hostname'].replace('.ig.local', ''),
+                hostname=vm.dataset_obj['hostname'],
                 fqdn=vm.dataset_obj['hostname'],
                 vm_os=vm.dataset_obj['os'],
                 apt_repos=AWS_CONFIG[0]['apt'],
