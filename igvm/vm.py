@@ -37,7 +37,6 @@ from igvm.settings import (
     AWS_INSTANCES_OVERVIEW_FILE_ETAG,
     AWS_INSTANCES_OVERVIEW_URL,
     AWS_GRP_NAME,
-    AWS_PROFILE_NAME,
 )
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
@@ -237,11 +236,9 @@ class VM(Host):
     @property
     def aws_session(self) -> boto3.Session:
         if not self.__aws_session:
-            region = str(self.dataset_obj['aws_placement'])[:-1]
             self.__aws_session = boto3.Session(
-                profile_name=AWS_PROFILE_NAME,
-                region_name=region,
-            )
+                region_name=str(self.dataset_obj['aws_placement'])[:-1])
+
         return self.__aws_session
 
     @property
