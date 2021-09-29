@@ -147,7 +147,13 @@ class IGVMTest(TestCase):
         # Request the object again to get our object_id
         self.vm_obj = Query(
             {'hostname': VM_HOSTNAME},
-            ['object_id', 'hostname', 'disk_size_gib', 'puppet_ca'],
+            [
+                'disk_size_gib',
+                'hostname',
+                'object_id',
+                'puppet_ca',
+                'puppet_environment',
+            ],
         ).get()
         self.uid_name = '{}_{}'.format(
             self.vm_obj['object_id'],
@@ -266,10 +272,8 @@ class BuildTest(IGVMTest):
         self.check_vm_absent()
 
     def test_rollback(self):
-        # TODO: consider the usage of self.vm_obj instead of new Query
-        obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
-        obj['puppet_environment'] = 'doesnotexist'
-        obj.commit()
+        self.vm_obj['puppet_environment'] = 'doesnotexist'
+        self.vm_obj.commit()
 
         with self.assertRaises(VMError):
             vm_build(VM_HOSTNAME)
@@ -710,10 +714,8 @@ class MigrationTest(IGVMTest):
             vm_migrate(VM_HOSTNAME, run_puppet=True)
 
     def test_rollback_netcat(self):
-        # TODO: consider the usage of self.vm_obj instead of new Query
-        obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
-        obj['puppet_environment'] = 'doesnotexist'
-        obj.commit()
+        self.vm_obj['puppet_environment'] = 'doesnotexist'
+        self.vm_obj.commit()
 
         with self.assertRaises(IGVMError):
             vm_migrate(
@@ -726,10 +728,8 @@ class MigrationTest(IGVMTest):
         self.check_vm_present()
 
     def test_rollback_drbd(self):
-        # TODO: consider the usage of self.vm_obj instead of new Query
-        obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
-        obj['puppet_environment'] = 'doesnotexist'
-        obj.commit()
+        self.vm_obj['puppet_environment'] = 'doesnotexist'
+        self.vm_obj.commit()
 
         with self.assertRaises(IGVMError):
             vm_migrate(
@@ -742,10 +742,8 @@ class MigrationTest(IGVMTest):
         self.check_vm_present()
 
     def test_rollback_xfs(self):
-        # TODO: consider the usage of self.vm_obj instead of new Query
-        obj = Query({'hostname': VM_HOSTNAME}, ['puppet_environment']).get()
-        obj['puppet_environment'] = 'doesnotexist'
-        obj.commit()
+        self.vm_obj['puppet_environment'] = 'doesnotexist'
+        self.vm_obj.commit()
 
         with self.assertRaises(IGVMError):
             self._xfs_migrate_wrapper(
