@@ -199,7 +199,7 @@ def parse_args():
         '--disk-size',
         dest='disk_size',
         type=int,
-        help='Resize disk of migrated VM. '
+        help='Resize disk of migrated VM. Expects new size in GiB. '
         'Works only with --offline --offline-transport=xfs',
     )
     subparser.add_argument(
