@@ -84,7 +84,7 @@ class DomainProperties(object):
         self.num_nodes = hypervisor.num_numa_nodes()
         self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.dataset_obj['num_cpu'])
         self.max_cpus = min(self.max_cpus, hypervisor.dataset_obj['num_cpu'])
-        self.max_mem = hypervisor.vm_max_memory(vm)
+        self.max_mem = hypervisor.total_vm_memory()
         self.numa_mode = self.NUMA_SPREAD
         self.mem_hotplug = (self.qemu_version >= (2, 3))
         self.mem_balloon = False
