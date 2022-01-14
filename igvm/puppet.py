@@ -22,7 +22,7 @@ def get_puppet_ca(vm):
         ['servertype'],
     ).get()['servertype']
 
-    if puppet_ca_type not in ['vm', 'public_domain']:
+    if puppet_ca_type not in ['vm', 'public_domain', 'loadbalancer']:
         raise ConfigError(
             'Servertype {} not supported for puppet_ca'.format(
                 puppet_ca_type,
@@ -32,10 +32,12 @@ def get_puppet_ca(vm):
     if puppet_ca_type == 'vm':
         return vm['puppet_ca']
 
-    ca_query = Query(
-        {'domain': vm['puppet_ca']},
-        [{'lb_nodes': ['hostname', 'state']}],
-    )
+    if puppet_ca_type == 'public_domain':
+        _filter = {'domain': vm['puppet_ca']}
+    else:
+        _filter = {'hostname': vm['puppet_ca']}
+
+    ca_query = Query(_filter, [{'lb_nodes': ['hostname', 'state']}])
     ca_hosts = [
         lb_node['hostname']
         for res in ca_query
@@ -109,6 +111,27 @@ def clean_cert(vm, user=None, retries=60):
                     ),
                 )
         else:
+            # Check whether there is a valid certificate to be cleaned at all.
+            res = sudo(
+                '/opt/puppetlabs/bin/puppetserver ca list '
+                '--certname {}'.format(vm['hostname']),
+                shell=False,
+                quiet=True,
+            )
+
+            # Exit code 1 means there is no valid certificate. In such a case
+            # we can skip the revoking entirely and prevent the CA from
+            # scanning the whole CRL (which can be lengthy).
+            if res.return_code == 1:
+                logger.info(
+                    'Skip revoking of {} because there is no valid '
+                    'certificate known to the CA'.format(
+                        vm['hostname'],
+                    )
+                )
+
+                return
+
             sudo(
                 '/opt/puppetlabs/bin/puppetserver ca clean '
                 '--certname {}'.format(vm['hostname']),
