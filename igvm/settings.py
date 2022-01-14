@@ -68,6 +68,7 @@ XFS_CONFIG = {
     'jessie': [''],
     'stretch': [''],
     'buster': ['-m reflink=1'],
+    'bullseye': ['-m reflink=1'],
 }
 
 P2P_MIGRATION = {
@@ -96,6 +97,12 @@ MIGRATE_CONFIG = {
     # ('buster', 'stretch') impossible because of AppArmor on Buster
     # "direct migration is not supported by the source host"
     ('buster', 'buster'): P2P_MIGRATION,
+    # Bullseye migrations. Only the straightforward ones that are likely
+    # to work for now. They are yet to be verified. Bullseye to buster must
+    # be figured out later.
+    # TODO: rememberme
+    ('bullseye', 'bullseye'): P2P_MIGRATION,
+    ('buster', 'bullseye'): P2P_MIGRATION,
 }
 
 # Arbitrarily chosen MAC address prefix with U/L bit set
