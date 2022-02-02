@@ -65,9 +65,9 @@ KVM_HWMODEL_TO_CPUMODEL = {
 }
 
 XFS_CONFIG = {
-    'jessie': [''],
     'stretch': [''],
     'buster': ['-m reflink=1'],
+    'bullseye': ['-m reflink=1'],
 }
 
 P2P_MIGRATION = {
@@ -78,24 +78,18 @@ P2P_MIGRATION = {
 # There are various combinations of source and target HVs which come
 # with their own bugs and must be addressed separately.
 MIGRATE_CONFIG = {
-    # Using p2p migrations on Jessie causes qemu process to allocate
-    # as much memory as disk size on source HV.
-    ('jessie', 'jessie'): {
-        'uri': 'qemu+ssh://{destination}/system',
-        'flags': 0,
-    },
-    # ('jessie', 'stretch') is unsupported because VM after migration looses
-    # access to disk. After kernel reboots (not by panic, maybe by watchdog?)
-    # it works fine again.
-    #
-    # Jessie can still correctly *receive* p2p migration.
-    ('stretch', 'jessie'): P2P_MIGRATION,
     # Live migration works only via p2p on Stretch. See Debian bug #796122.
     ('stretch', 'stretch'): P2P_MIGRATION,
     ('stretch', 'buster'): P2P_MIGRATION,
     # ('buster', 'stretch') impossible because of AppArmor on Buster
     # "direct migration is not supported by the source host"
     ('buster', 'buster'): P2P_MIGRATION,
+    # Bullseye migrations. Only the straightforward ones that are likely
+    # to work for now. They are yet to be verified. Bullseye to buster must
+    # be figured out later.
+    # TODO: rememberme
+    ('bullseye', 'bullseye'): P2P_MIGRATION,
+    ('buster', 'bullseye'): P2P_MIGRATION,
 }
 
 # Arbitrarily chosen MAC address prefix with U/L bit set

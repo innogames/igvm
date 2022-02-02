@@ -69,7 +69,7 @@ environ['IGVM_MODE'] = 'testing'
 
 
 def teardown_module():
-    disconnect_all()  # Will hang on Jessie + Python3
+    disconnect_all()
 
 
 class IGVMTest(TestCase):
