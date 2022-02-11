@@ -135,6 +135,15 @@ def parse_args():
              'a matching Hypervisor something might be really wrong. Run igvm '
              'with --verbose to check why it fails finding a Hypervisor.',
     )
+    subparser.add_argument(
+        '--barebones',
+        dest='barebones',
+        action='store_true',
+        help='Build a barebones VM. Essentially, you will end up with a domain'
+             ' definition and the storage volume created. Base image '
+             'extraction and puppetruns will be skipped completely. Useful '
+             'for installing VMs that do not have a base image.',
+    )
 
     subparser = subparsers.add_parser(
         'migrate',

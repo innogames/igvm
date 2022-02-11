@@ -565,7 +565,9 @@ class VM(Host):
             run_puppet=True,
             debug_puppet=False,
             postboot=None,
-            cleanup_cert=False):
+            cleanup_cert=False,
+            barebones=False,
+    ):
         """Builds a VM."""
         hypervisor = self.hypervisor
         self.check_serveradmin_config()
@@ -587,19 +589,27 @@ class VM(Host):
 
             # Perform operations on the hypervisor
             self.hypervisor.create_vm_storage(self, transaction)
-            mount_path = self.hypervisor.format_vm_storage(self, transaction)
 
-            self.hypervisor.download_and_extract_image(image, mount_path)
+            # The following operations are only performed in case we
+            # don't want to build a barebones VM
+            if not barebones:
+                mount_path = self.hypervisor.format_vm_storage(
+                    self, transaction
+                )
+                self.hypervisor.download_and_extract_image(image, mount_path)
 
-            self.prepare_vm()
+                self.prepare_vm()
 
-            if run_puppet:
-                self.run_puppet(clear_cert=cleanup_cert, debug=debug_puppet)
+                if run_puppet:
+                    self.run_puppet(
+                        clear_cert=cleanup_cert, debug=debug_puppet
+                    )
 
-            if postboot is not None:
-                self.copy_postboot_script(postboot)
+                if postboot is not None:
+                    self.copy_postboot_script(postboot)
 
-            self.hypervisor.umount_vm_storage(self)
+                self.hypervisor.umount_vm_storage(self)
+
             hypervisor.define_vm(self, transaction)
 
             # We are updating the information on the Serveradmin, before
@@ -607,10 +617,11 @@ class VM(Host):
             # even if it fails to start.
             self.dataset_obj.commit()
 
-            self.start()
+            if not barebones:
+                self.start()
 
         # Perform operations on Virtual Machine
-        if postboot is not None:
+        if postboot is not None and not barebones:
             self.run('/buildvm-postboot')
             self.run('rm /buildvm-postboot')
 
