@@ -22,4 +22,4 @@ tqdm = "*"
 [packages.adminapi]
 git = "https://github.com/innogames/serveradmin.git"
 editable = true
-ref = "master"
+ref = "main"
