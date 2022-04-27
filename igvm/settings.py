@@ -27,7 +27,7 @@ COMMON_FABRIC_SETTINGS = dict(
     forward_agent=True,
     shell='/bin/sh -c',
     timeout=5,
-    connection_attempts=1,
+    connection_attempts=3,
     remote_interrupt=True,
 )
 
