@@ -162,8 +162,7 @@ class Host(object):
 
     def get_block_size(self, device):
         device = self.run((
-            'lsblk --asci -s {} | '
-            'awk \'/[sv]d[a-z] / {{gsub(".*-", "", $1); print $1}}\''
+            'lsblk -n -s -o TYPE,KNAME {} | awk \'/disk/ {{print $2}}\''
         ).format(device))
         sys_path = '/sys/class/block/{}/queue/'.format(device)
         bs = int(self.read_file(sys_path + 'max_sectors_kb'))

@@ -61,7 +61,7 @@ KVM_HWMODEL_TO_CPUMODEL = {
     'Nehalem': ['Dell_R510', 'Dell_M610', 'Dell_M710'],
     'SandyBridge': ['Dell_R320', 'Dell_M620', 'Dell_R620'],
     'Haswell-noTSX': ['Dell_R430', 'Dell_M630', 'Dell_M640', 'Dell_R640'],
-    'EPYC': ['Dell_R6515'],
+    'EPYC': ['Dell_R6515', 'Dell_R7515'],
 }
 
 XFS_CONFIG = {
@@ -356,6 +356,7 @@ HYPERVISOR_CPU_THRESHOLDS = {
     'Dell_R620': 25,  # only two hosts in retired state
     'Dell_R640': 75,
     'Dell_R6515': 50,
+    'Dell_R7515': 50,
 }
 
 # The list is ordered from more important to less important.  The next
