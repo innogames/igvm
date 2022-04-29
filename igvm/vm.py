@@ -855,7 +855,7 @@ class VM(Host):
                     key_id, fp_id, fp_type(pub_key).hexdigest()
                 ))
 
-    def run_puppet(self, clear_cert=False, debug=False):
+    def run_puppet(self, clear_cert=False, debug=False, tries=2):
         """Runs Puppet in chroot on the hypervisor."""
 
         if clear_cert:
@@ -878,10 +878,20 @@ class VM(Host):
                 )
             )
 
-            try:
-                self.run(puppet_command)
-            except RemoteCommandError as e:
-                raise VMError('Initial puppetrun failed') from e
+            # The Puppetserver fails sometimes with HTTP 500 or isn't reachable
+            while tries > 0:
+                tries -= 1
+                try:
+                    self.run(puppet_command)
+                except RemoteCommandError as e:
+                    if tries == 0:
+                        raise VMError('Initial puppetrun failed') from e
+
+                    logging.warning(
+                        f'Initial puppetrun failed {tries} retries left.')
+                else:
+                    # puppetrun was successful
+                    break
 
             self.unblock_autostart()
 
