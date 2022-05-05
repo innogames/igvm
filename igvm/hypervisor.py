@@ -971,7 +971,7 @@ class Hypervisor(Host):
         # xfsrestore needs to output its logs, otherwise it fails
         self.run(
             'nohup /bin/nc.openbsd -l -p {0} '
-            '| xfsrestore -F -J - {1} 2>{2} 1>&2 &'
+            '| ionice -c3 xfsrestore -F -J - {1} 2>{2} 1>&2 &'
             .format(port, mount_dir, self._xfsrestore_log_name(vm)),
             pty=False,  # Has to be here for background processes
         )
@@ -1007,7 +1007,7 @@ class Hypervisor(Host):
         #  -J: inhibits inventory update
         #  -p: progress update interval
         self.run(
-            'xfsdump -o -l 0 -F -J -p 1 - {0} '
+            'ionice -c3 xfsdump -o -l 0 -F -J -p 1 - {0} '
             '| /bin/nc.openbsd -q 1 {1} {2}'
             .format(mount_dir, listener[0], listener[1]),
         )
