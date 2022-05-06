@@ -1,6 +1,6 @@
 """igvm - Main Module
 
-Copyright (c) 2018 InnoGames GmbH
+Copyright (c) 2022 InnoGames GmbH
 """
 
-VERSION = (2, 1)
+VERSION = (2, 2, 0)
