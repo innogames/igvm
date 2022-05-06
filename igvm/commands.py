@@ -314,6 +314,7 @@ def vm_build(
     rebuild: bool = False,
     enforce_vm_env: bool = False,
     soft_preferences: bool = False,
+    barebones: bool = False,
 ):
     """Create a VM and start it
 
@@ -383,6 +384,7 @@ def vm_build(
                 debug_puppet=debug_puppet,
                 postboot=postboot,
                 cleanup_cert=rebuild,
+                barebones=barebones,
             )
         else:
             raise NotImplementedError(
