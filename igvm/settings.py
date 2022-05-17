@@ -8,6 +8,7 @@ from sys import stdout
 
 from libvirt import (
     VIR_MIGRATE_PEER2PEER,
+    VIR_MIGRATE_TLS,
     VIR_MIGRATE_TUNNELLED,
 )
 
@@ -75,6 +76,11 @@ P2P_MIGRATION = {
     'flags': VIR_MIGRATE_PEER2PEER | VIR_MIGRATE_TUNNELLED,
 }
 
+P2P_TLS_MIGRATION = {
+    'uri': 'qemu+tls://{destination}/system',
+    'flags': VIR_MIGRATE_PEER2PEER | VIR_MIGRATE_TLS,
+}
+
 # There are various combinations of source and target HVs which come
 # with their own bugs and must be addressed separately.
 MIGRATE_CONFIG = {
@@ -84,12 +90,10 @@ MIGRATE_CONFIG = {
     # ('buster', 'stretch') impossible because of AppArmor on Buster
     # "direct migration is not supported by the source host"
     ('buster', 'buster'): P2P_MIGRATION,
-    # Bullseye migrations. Only the straightforward ones that are likely
-    # to work for now. They are yet to be verified. Bullseye to buster must
-    # be figured out later.
-    # TODO: rememberme
-    ('bullseye', 'bullseye'): P2P_MIGRATION,
-    ('buster', 'bullseye'): P2P_MIGRATION,
+    # Online migrations are only working between Bullseye and Bullseye.
+    # The other cases for migrations (Buster to Bullseye and vice-versa) are
+    # not working, due to what looks like libvirt incompatibility.
+    ('bullseye', 'bullseye'): P2P_TLS_MIGRATION,
 }
 
 # Arbitrarily chosen MAC address prefix with U/L bit set
