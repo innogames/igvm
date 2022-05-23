@@ -7,6 +7,7 @@ import typing
 import json
 import logging
 import os
+import re
 import stat
 import time
 import tqdm
@@ -1191,6 +1192,11 @@ class VM(Host):
                 continue
             if ecu_target['min'] > t['ECU'] or ecu_target['max'] < t['ECU']:
                 continue
+            # We are currently unable to reboot machines of the 4th generation.
+            # We have a support case open for this issue.
+            if re.search("[4][.]", t['instance_type']):
+                continue
+
 
             vm_types[t['instance_type']] = t
 
