@@ -599,6 +599,18 @@ class VM(Host):
                 )
                 self.hypervisor.download_and_extract_image(image, mount_path)
 
+            # This needs to happen at this point, so that the memory
+            # usage of this VM is already taken into consideration if
+            # a hypervisor is selected during a later igvm build run.
+            hypervisor.define_vm(self, transaction)
+
+            # Unlocking here is safe, because we keep the state in the
+            # hypervisor object and a second release will trigger no
+            # update on serveradmin.
+            self.hypervisor.release_lock()
+
+            if not barebones:
+
                 self.prepare_vm()
 
                 if run_puppet:
@@ -610,8 +622,6 @@ class VM(Host):
                     self.copy_postboot_script(postboot)
 
                 self.hypervisor.umount_vm_storage(self)
-
-            hypervisor.define_vm(self, transaction)
 
             # We are updating the information on the Serveradmin, before
             # starting the VM, because the VM would still be on the hypervisor
