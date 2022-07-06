@@ -383,7 +383,7 @@ class VM(Host):
                 force_stop_failed=check_vm_up_on_transaction,
             )
 
-    def aws_shutdown(self, timeout: int = 120) -> None:
+    def aws_shutdown(self, timeout: int = 240) -> None:
         """AWS shutdown
 
         Shutdown a VM in AWS.
@@ -425,8 +425,8 @@ class VM(Host):
                 break
 
             log.info(
-                'Waiting for VM "{}" to shutdown'
-                .format(self.dataset_obj['hostname'])
+                'Waiting for VM "{}" to shutdown. Remaining: {} secs'
+                .format(self.dataset_obj['hostname'], timeout - retry)
             )
             time.sleep(1)
 
