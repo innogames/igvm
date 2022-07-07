@@ -17,7 +17,7 @@ from hashlib import sha1, sha256
 from io import BytesIO
 from pathlib import Path
 from re import compile as re_compile
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Tuple
 from uuid import uuid4
 
 import boto3
@@ -473,6 +473,74 @@ class VM(Host):
         except ClientError as e:
             raise VMError(e)
 
+    def aws_run_instance(
+            self, vm_type: str, root_device: list,
+            disk_size_gib: int, postboot: bool
+    ) -> Tuple[json, bool]:
+        """AWS run instance
+
+        Creates a VM in AWS
+        """
+
+        response = None
+        success = False
+        try:
+            response = self.ec2c.run_instances(
+                BlockDeviceMappings=[
+                    {
+                        'DeviceName': root_device,
+                        'Ebs': {
+                            'VolumeSize': (
+                                disk_size_gib if disk_size_gib > 8 else 8
+                            ),
+                            'VolumeType': 'gp2'
+                        }
+                    }
+                ],
+                ImageId=self.dataset_obj['aws_image_id'],
+                InstanceType=vm_type,
+                KeyName=self.dataset_obj['aws_key_name'],
+                SecurityGroupIds=[self.consolidated_sg.id],
+                SubnetId=self.dataset_obj['aws_subnet_id'],
+                Placement={
+                    'AvailabilityZone': str(
+                        self.dataset_obj['aws_placement']
+                    )
+                },
+                PrivateIpAddress=str(self.dataset_obj['intern_ip']),
+                Ipv6Addresses=[{
+                    'Ipv6Address': str(self.dataset_obj['primary_ip6'])
+                }],
+                UserData='' if postboot is None else postboot,
+                TagSpecifications=[
+                    {
+                        'ResourceType': 'instance',
+                        'Tags': [
+                            {
+                                'Key': 'Name',
+                                'Value': self.dataset_obj['hostname'],
+                            },
+                        ]
+                    },
+                ],
+                DryRun=False,
+                MinCount=1,
+                MaxCount=1,
+            )
+            log.debug(response)
+            self.dataset_obj['aws_instance_type'] = vm_type
+            success = True
+
+            return response, success
+
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'Unsupported':
+                return response, success
+            else:
+                raise VMError(e)
+        except CapacityNotAvailableError as e:
+            return response, success
+
     def is_running(self):
         if self.dataset_obj['datacenter_type'] not in ['aws.dct', 'kvm.dct']:
             raise NotImplementedError(
@@ -661,6 +729,14 @@ class VM(Host):
         vm_types_overview = self.aws_get_instances_overview()
         if vm_types_overview:
             vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
+
+            # It may happen that our own calculation of the optimal instance
+            # type is not sufficient and therefore we do not find a suitable
+            # instance type in the region. Therefore we have this failback
+            # mechanism, which will add a hardcoded instance type, which should
+            # be available in most cases.
+            if AWS_FALLBACK_INSTANCE_TYPE not in vm_types:
+                vm_types.append(AWS_FALLBACK_INSTANCE_TYPE)
         else:
             vm_types = [AWS_FALLBACK_INSTANCE_TYPE]
 
@@ -672,54 +748,10 @@ class VM(Host):
         disk_size_gib = self.dataset_obj['disk_size_gib']
 
         for vm_type in vm_types:
-            try:
-                response = self.ec2c.run_instances(
-                    BlockDeviceMappings=[
-                        {
-                            'DeviceName': root_device,
-                            'Ebs': {
-                                'VolumeSize': (
-                                    disk_size_gib if disk_size_gib > 8 else 8
-                                ),
-                                'VolumeType': 'gp2'
-                            }
-                        }
-                    ],
-                    ImageId=self.dataset_obj['aws_image_id'],
-                    InstanceType=vm_type,
-                    KeyName=self.dataset_obj['aws_key_name'],
-                    SecurityGroupIds=[self.consolidated_sg.id],
-                    SubnetId=self.dataset_obj['aws_subnet_id'],
-                    Placement={
-                        'AvailabilityZone': str(
-                            self.dataset_obj['aws_placement']
-                        )
-                    },
-                    PrivateIpAddress=str(self.dataset_obj['intern_ip']),
-                    Ipv6Addresses=[{'Ipv6Address':str(self.dataset_obj['primary_ip6'])}],
-                    UserData='' if postboot is None else postboot,
-                    TagSpecifications=[
-                        {
-                            'ResourceType': 'instance',
-                            'Tags': [
-                                {
-                                    'Key': 'Name',
-                                    'Value': self.dataset_obj['hostname'],
-                                },
-                            ]
-                        },
-                    ],
-                    DryRun=False,
-                    MinCount=1,
-                    MaxCount=1,
-                )
-                log.debug(response)
-                self.dataset_obj['aws_instance_type'] = vm_type
+            response, success = self.aws_run_instance(
+                vm_type, root_device, disk_size_gib, postboot)
+            if success:
                 break
-            except ClientError as e:
-                raise VMError(e)
-            except CapacityNotAvailableError as e:
-                continue
 
         if run_puppet:
             self.run_puppet(clear_cert=True, debug=debug_puppet)
