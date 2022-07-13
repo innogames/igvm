@@ -973,7 +973,6 @@ class Hypervisor(Host):
             'nohup /bin/nc.openbsd -l -p {0} '
             '| ionice -c3 xfsrestore -F -J - {1} 2>{2} 1>&2 &'
             .format(port, mount_dir, self._xfsrestore_log_name(vm)),
-            pty=False,  # Has to be here for background processes
         )
         try:
             yield self.fqdn, port
