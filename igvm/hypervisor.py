@@ -10,7 +10,7 @@ from time import sleep, time
 from xml.etree import ElementTree
 
 from igvm.vm import VM
-from libvirt import VIR_DOMAIN_SHUTOFF
+from libvirt import VIR_DOMAIN_SHUTOFF, virStorageVol
 
 from igvm.drbd import DRBD
 from igvm.exceptions import (
@@ -615,6 +615,7 @@ class Hypervisor(Host):
             def restore_size():
                 vm.dataset_obj['disk_size_gib'] = old_size
                 vm.dataset_obj.commit()
+
             transaction.on_rollback('reset_disk_size', restore_size)
 
     def _wait_for_shutdown(
@@ -693,10 +694,10 @@ class Hypervisor(Host):
 
             elif offline_transport == 'netcat':
                 self._wait_for_shutdown(vm, no_shutdown, transaction)
-                vm_disk_path = target_hypervisor.get_volume_by_vm(vm).path()
-                with target_hypervisor.netcat_to_device(vm_disk_path) as args:
+                target_vol = target_hypervisor.get_volume_by_vm(vm)
+                with target_hypervisor.netcat_to_device(target_vol) as args:
                     self.device_to_netcat(
-                        self.get_volume_by_vm(vm).path(),
+                        self.get_volume_by_vm(vm),
                         vm.dataset_obj['disk_size_gib'] * 1024 ** 3,
                         args,
                     )
@@ -891,21 +892,25 @@ class Hypervisor(Host):
         return port
 
     @contextmanager
-    def netcat_to_device(self, device: str) -> Iterator[Tuple[str, int]]:
+    def netcat_to_device(self, vol: virStorageVol) -> Iterator[Tuple[str, int]]:
         """
-        Spawns the backgroung netcat process on the uniq port and pipes the
+        Spawns the background netcat process on the uniq port and pipes the
         payload to dd process to restore the file system on a target
-        hypervisor. Kills the netcat process if exceprion is cought.
+        hypervisor. Kills the netcat process if exception is caught.
 
-        :param str device: The path to the volume device
+        :param virStorageVol vol: The libvirt volume
         :rtype Iterator[Tuple[str, int]]: (fqdn, port) pair
         """
-        port = self._netcat_port(device)
+        port = self._netcat_port(vol.path())
 
         # Using DD lowers load on device with big enough Block Size
         self.run(
-            'nohup /bin/nc.openbsd -l -p {0} | dd of={1} obs=1048576 &'
-            .format(port, device),
+            'nohup /bin/nc.openbsd -l -p {port} 2>>{log_file} '
+            '| dd of={vol_path} obs=1048576 2>>{log_file} &'.format(
+                port=port,
+                log_file=self._log_filename('netcat', vol.name()),
+                vol_path=vol.path(),
+            ),
             pty=False,  # Has to be here for background processes
         )
         try:
@@ -915,38 +920,50 @@ class Hypervisor(Host):
             raise
 
     def device_to_netcat(
-        self, device: str, size: int, listener: Tuple[str, int]
+        self, vol: virStorageVol, size: int, listener: Tuple[str, int],
     ):
         """
         Dumps the device via dd and netcat to a remote listener
 
-        :param str device: The path to the volume device
+        :param virStorageVol vol: The libvirt volume
         :param int size: The disk size for pv progress and ETA
-        :listener Tuple[str, int] listener: (fqdn, port) pair for nc connection
+        :param Tuple[str, int] listener: (fqdn, port) pair for nc connection
         """
         # Using DD lowers load on device with big enough Block Size
         self.run(
-            'dd if={0} ibs=1048576 | pv -f -s {1} '
-            '| /bin/nc.openbsd -q 1 {2} {3}'
-            .format(device, size, listener[0], listener[1])
+            'dd if={vol_path} ibs=1048576 | pv -f -s {size} '
+            '| /bin/nc.openbsd -q 1 {target_host} {target_port}'.format(
+                vol_path=vol.path(),
+                size=size,
+                target_host=listener[0],
+                target_port=listener[1],
+            ),
         )
 
-    def _xfsrestore_log_name(self, vm: VM) -> str:
-        device_name = self.get_volume_by_vm(vm).name()
-        return '/tmp/xfsrestore-{}.log'.format(device_name)
+    @staticmethod
+    def _log_filename(transfer: str, device_name: str) -> str:
+        return '/tmp/{}-{}.log'.format(transfer, device_name)
 
     def check_xfsrestore_log(self, vm: VM):
         """
         Search for WARNING in the xfsrestore log file.
         Raises exception if found
         """
-        self.run('cat {}'.format(self._xfsrestore_log_name(vm)))
+        log_file = self._log_filename(
+            'xfsrestore',
+            self.get_volume_by_vm(vm).name(),
+        )
+        self.run('cat {}'.format(log_file))
+
         try:
-            self.run('grep -qE "WARNING|failed: end of recorded data" {} && '
-                     'exit 1 || exit 0'
-                     .format(self._xfsrestore_log_name(vm)))
-        except RemoteCommandError:
-            raise XfsMigrationError('xfs dump/restore caused warnings')
+            self.run(
+                'grep -qE "WARNING|failed: end of recorded data" {} '
+                '&& exit 1 || exit 0'.format(
+                    log_file,
+                ),
+            )
+        except RemoteCommandError as e:
+            raise XfsMigrationError('xfs dump/restore caused warnings') from e
 
     @contextmanager
     def xfsrestore(
@@ -961,8 +978,8 @@ class Hypervisor(Host):
         :param Transaction transaction: The transaction to rollback
         :rtype Iterator[Tuple[str, int]]: (fqdn, port) pair
         """
-        device = self.get_volume_by_vm(vm).path()
-        port = self._netcat_port(device)
+        vol = self.get_volume_by_vm(vm)
+        port = self._netcat_port(vol.path())
         mount_dir = self.format_vm_storage(vm, transaction)
 
         # xfsrestore args:
@@ -970,9 +987,13 @@ class Hypervisor(Host):
         #  -J: inhibits inventory update
         # xfsrestore needs to output its logs, otherwise it fails
         self.run(
-            'nohup /bin/nc.openbsd -l -p {0} 2>>{2} '
-            '| ionice -c3 xfsrestore -F -J - {1} 2>>{2} 1>&2 &'
-            .format(port, mount_dir, self._xfsrestore_log_name(vm)),
+            'nohup /bin/nc.openbsd -l -p {port} 2>>{log_file} '
+            '| ionice -c3 xfsrestore -F -J - {mount_dir} 2>>{log_file} 1>&2 &'
+            .format(
+                port=port,
+                mount_dir=mount_dir,
+                log_file=self._log_filename('xfsrestore', vol.name()),
+            ),
             pty=False,  # Has to be here for background processes
         )
         try:
@@ -1007,9 +1028,13 @@ class Hypervisor(Host):
         #  -J: inhibits inventory update
         #  -p: progress update interval
         self.run(
-            'ionice -c3 xfsdump -o -l 0 -F -J -p 1 - {0} '
-            '| /bin/nc.openbsd -q 1 {1} {2}'
-            .format(mount_dir, listener[0], listener[1]),
+            'ionice -c3 xfsdump -o -l 0 -F -J -p 1 - {mount_dir} '
+            '| /bin/nc.openbsd -q 1 {target_host} {target_port}'
+            .format(
+                mount_dir=mount_dir,
+                target_host=listener[0],
+                target_port=listener[1],
+            ),
         )
         self.umount_vm_storage(vm)
 
