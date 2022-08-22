@@ -12,8 +12,9 @@ from os import environ
 from time import sleep
 from typing import List, Optional
 
+from adminapi import parse
 from adminapi.dataset import Query
-from adminapi.filters import Any, StartsWith, Contains
+from adminapi.filters import Any, BaseFilter, StartsWith, Contains
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
 from jinja2 import Environment, PackageLoader
@@ -64,7 +65,7 @@ def _check_defined(vm, fail_hard=True):
 @with_fabric_settings
 def evacuate(
     hv_hostname: str,
-    dst_hv_hostname: Optional[str] = None,
+    target_hv_query: Optional[str] = None,
     offline: Optional[List[str]] = None,
     allow_reserved_hv: bool = False,
     dry_run: bool = False,
@@ -112,7 +113,7 @@ def evacuate(
             ))
             vm_migrate(
                 vm['hostname'],
-                hypervisor_hostname=dst_hv_hostname,
+                target_hv_query=target_hv_query,
                 offline=is_offline_migration,
                 allow_reserved_hv=allow_reserved_hv,
                 soft_preferences=soft_preferences,
@@ -290,7 +291,9 @@ def change_address(
             if migrate:
                 vm_migrate(
                     vm_object=vm,
-                    run_puppet=True, offline=True, no_shutdown=True,
+                    run_puppet=True,
+                    offline=True,
+                    no_shutdown=True,
                     allow_reserved_hv=allow_reserved_hv,
                     offline_transport=offline_transport,
                 )
@@ -315,6 +318,7 @@ def vm_build(
     enforce_vm_env: bool = False,
     soft_preferences: bool = False,
     barebones: bool = False,
+    target_hv_query: Optional[str] = None,
 ):
     """Create a VM and start it
 
@@ -360,6 +364,7 @@ def vm_build(
             if vm.hypervisor:
                 es.enter_context(_lock_hv(vm.hypervisor))
             else:
+                hv_filter = parse.parse_query(target_hv_query or '')
                 vm.hypervisor = es.enter_context(_get_best_hypervisor(
                     vm,
                     ['online', 'online_reserved'] if allow_reserved_hv
@@ -367,6 +372,7 @@ def vm_build(
                     True,
                     enforce_vm_env,
                     soft_preferences,
+                    hv_filter,
                 ))
                 vm.dataset_obj['hypervisor'] = \
                     vm.hypervisor.dataset_obj['hostname']
@@ -399,7 +405,7 @@ def vm_build(
 def vm_migrate(
     vm_hostname: str = None,
     vm_object=None,
-    hypervisor_hostname: Optional[str] = None,
+    target_hv_query: Optional[str] = None,
     run_puppet: bool = False,
     debug_puppet: bool = False,
     offline: bool = False,
@@ -439,14 +445,20 @@ def vm_migrate(
             _vm, offline, offline_transport, disk_size
         )
 
-        if hypervisor_hostname:
+        hv_filter = parse.parse_query(target_hv_query or '')
+        if (
+            len(hv_filter.keys()) == 1
+            and 'hostname' in hv_filter
+            # BaseFilter is used for scalar types like string, so it is most
+            # likely that a specific hypervisor was requested. Any other filter
+            # could resolve to multiple HVs.
+            and (not isinstance(hv_filter['hostname'], BaseFilter)
+                 or type(hv_filter['hostname']) == BaseFilter)
+        ):
             hypervisor = es.enter_context(_get_hypervisor(
-                hypervisor_hostname, allow_reserved=allow_reserved_hv
+                hv_filter['hostname'],
+                allow_reserved=allow_reserved_hv,
             ))
-            if _vm.hypervisor.fqdn == hypervisor.fqdn:
-                raise IGVMError(
-                    'Source and destination Hypervisor is the same!'
-                )
         else:
             hypervisor = es.enter_context(_get_best_hypervisor(
                 _vm,
@@ -455,12 +467,17 @@ def vm_migrate(
                 offline,
                 enforce_vm_env,
                 soft_preferences,
+                hv_filter,
             ))
+
+        if _vm.hypervisor.fqdn == hypervisor.fqdn:
+            raise IGVMError(
+                'Source and destination Hypervisor is the same!'
+            )
 
         # After the HV is chosen, disk_size_gib must be restored
         # to pass _check_attributes(_vm)
         _vm.dataset_obj['disk_size_gib'] = current_size_gib
-
         was_running = _vm.is_running()
 
         # There is no point of online migration, if the VM is already shutdown.
@@ -476,7 +493,6 @@ def vm_migrate(
 
         # Require VM to be in sync with serveradmin
         _check_attributes(_vm)
-
         _vm.check_serveradmin_config()
 
         with Transaction() as transaction:
@@ -484,7 +500,6 @@ def vm_migrate(
                 _vm, hypervisor, offline, offline_transport, transaction,
                 no_shutdown, disk_size,
             )
-
             previous_hypervisor = _vm.hypervisor
             _vm.hypervisor = hypervisor
 
@@ -500,6 +515,7 @@ def vm_migrate(
 
             if offline and was_running:
                 _vm.start(transaction=transaction)
+
             _vm.reset_state()
 
             # Add migration log entries to hypervisor and previous_hypervisor
@@ -644,8 +660,11 @@ def vm_delete(vm_hostname, retire=False):
             _check_defined(vm)
 
             # Make sure the VM is shut down, abort if it is not.
-            if vm.hypervisor and vm.hypervisor.vm_defined(
-                    vm) and vm.is_running():
+            if (
+                vm.hypervisor
+                and vm.hypervisor.vm_defined(vm)
+                and vm.is_running()
+            ):
                 raise InvalidStateError('"{}" is still running.'.format(
                     vm.fqdn)
                 )
@@ -971,8 +990,8 @@ def _get_best_hypervisor(
     offline=False,
     enforce_vm_env=False,
     soft_preferences=False,
+    additional_filter=None,
 ):
-
     hv_filter = {
         'servertype': 'hypervisor',
         'vlan_networks': vm.route_network,
@@ -985,6 +1004,19 @@ def _get_best_hypervisor(
     else:
         if enforce_vm_env:
             hv_filter['environment'] = vm.dataset_obj['environment']
+
+    # Merge additional filter, if any
+    additional_filter = additional_filter or {}
+    for k, v in additional_filter.items():
+        if k in hv_filter and v != hv_filter[k]:
+            raise InvalidStateError(
+                f'Requested {k}={str(v)}, '
+                f'but "{k}" is already set to "{str(hv_filter[k])}"',
+            )
+        elif k in hv_filter:
+            continue
+
+        hv_filter[k] = v
 
     # Get all (theoretically) possible HVs sorted by HV preferences
     hypervisors = (

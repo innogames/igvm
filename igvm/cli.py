@@ -98,6 +98,12 @@ def parse_args():
         help='Hostname of the guest system',
     )
     subparser.add_argument(
+        'target_hv_query',
+        nargs='?',
+        default=None,
+        help='Hostname or query of destination hypervisor/s (to pick from)',
+    )
+    subparser.add_argument(
         '--postboot',
         metavar='postboot_script',
         help='Run postboot_script on the guest after first boot',
@@ -155,10 +161,10 @@ def parse_args():
         help='Hostname of the guest system',
     )
     subparser.add_argument(
-        'hypervisor_hostname',
+        'target_hv_query',
         nargs='?',
         default=None,
-        help='Hostname of destination hypervisor',
+        help='Hostname or query of destination hypervisor/s (to pick from)',
     )
     subparser.add_argument(
         '--run-puppet',
@@ -440,10 +446,10 @@ def parse_args():
         help='Hostname of the hypervisor',
     )
     subparser.add_argument(
-        'dst_hv_hostname',
+        'target_hv_query',
         nargs='?',
         default=None,
-        help='Hostname of destination hypervisor',
+        help='Hostname or query of destination hypervisor/s (to pick from)',
     )
     subparser.add_argument(
         '--dry-run',
