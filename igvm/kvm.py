@@ -69,10 +69,6 @@ class DomainProperties(object):
     """Helper class to hold properties of a libvirt VM.
     Several build attributes (NUMA placement, huge pages, ...) can be extracted
     from the running configuration to determine how to perform operations."""
-    NUMA_SPREAD = 'spread'
-    NUMA_AUTO = 'auto'
-    NUMA_UNBOUND = 'unbound'
-    NUMA_UNKNOWN = 'unknown'
 
     def __init__(self, hypervisor, vm):
         self._hypervisor = hypervisor
@@ -85,7 +81,6 @@ class DomainProperties(object):
         self.max_cpus = max(KVM_DEFAULT_MAX_CPUS, vm.dataset_obj['num_cpu'])
         self.max_cpus = min(self.max_cpus, hypervisor.dataset_obj['num_cpu'])
         self.max_mem = hypervisor.total_vm_memory()
-        self.numa_mode = self.NUMA_SPREAD
         self.mem_hotplug = (self.qemu_version >= (2, 3))
         self.mem_balloon = False
         if len(vm.dataset_obj['mac']) == 0:
@@ -146,17 +141,6 @@ class DomainProperties(object):
         )
         self.mac_address = tree.find('devices/interface/mac').attrib['address']
 
-        if self.num_nodes > 1:
-            self.numa_mode = self.NUMA_SPREAD
-        elif re.search(r'placement=.?auto', xml):
-            self.numa_mode = self.NUMA_AUTO
-        # Domain is unbound if it is allowed to run on all available cores.
-        elif all(all(p for p in pcpus) for pcpus in domain.vcpuPinInfo()):
-            self.numa_mode = self.NUMA_UNBOUND
-        else:
-            log.warning(
-                'Cannot determine NUMA of "{}" for KVM.'.format(vm.fqdn))
-            self.numa_node = self.NUMA_UNKNOWN
         return self
 
     def __repr__(self):
@@ -190,12 +174,6 @@ def set_vcpus(hypervisor, vm, domain, num_cpu):
 
 def _live_repin_cpus(domain, props, max_phys_cpus):
     """Adjusts NUMA pinning of all VCPUs."""
-    if props.numa_mode != props.NUMA_SPREAD:
-        log.warning(
-            'Skipping CPU re-pin, VM is in NUMA mode "{}"'.format(
-                props.numa_mode))
-        return
-
     num_nodes = props.num_nodes
     for vcpu, mask in enumerate(domain.vcpuPinInfo()):
         mask = list(mask)
@@ -303,6 +281,13 @@ def migrate_live(source, destination, vm, domain):
     except KeyboardInterrupt:
         domain.abortJob()
         log.info('Awaiting migration to abort')
+        # Repin the VM to match the local hypervisor, otherwise it will keep
+        # the pinning of the destination hypervisor.
+        _live_repin_cpus(
+            domain,
+            props,
+            source.dataset_obj['num_cpu'],
+        )
         future.result()
         # Nothing to log, the function above raised an exception
     else:
@@ -489,70 +474,66 @@ def _place_numa(hypervisor, vm, tree, props):
     _del_if_exists(tree, 'cpu/topology')
     _del_if_exists(tree, 'cpu/numa')
 
-    if props.numa_mode == DomainProperties.NUMA_SPREAD:
-        # Virtual node -> virtual cpu
-        vcpu_sets = [
-            ','.join(str(j) for j in range(i, num_vcpus, num_nodes))
-            for i in range(0, num_nodes)
-        ]
+    # Virtual node -> virtual cpu
+    vcpu_sets = [
+        ','.join(str(j) for j in range(i, num_vcpus, num_nodes))
+        for i in range(0, num_nodes)
+    ]
 
-        # Static vcpu pinning
-        tree.find('vcpu').attrib['placement'] = 'static'
+    # Static vcpu pinning
+    tree.find('vcpu').attrib['placement'] = 'static'
 
-        # <cpu>
-        # Expose N NUMA nodes (= sockets+ to the guest, each with a
-        # proportionate amount of VCPUs.
-        cpu = _find_or_create(tree, 'cpu')
-        topology = ElementTree.SubElement(cpu, 'topology')
-        topology.attrib = {
-            'sockets': str(num_nodes),
-            'cores': str(num_vcpus // num_nodes),
-            'threads': str(1),
+    # <cpu>
+    # Expose N NUMA nodes (= sockets+ to the guest, each with a
+    # proportionate amount of VCPUs.
+    cpu = _find_or_create(tree, 'cpu')
+    topology = ElementTree.SubElement(cpu, 'topology')
+    topology.attrib = {
+        'sockets': str(num_nodes),
+        'cores': str(num_vcpus // num_nodes),
+        'threads': str(1),
+    }
+    # </cpu>
+
+    # <cputune>
+    # Bind VCPUs of each guest node to the corresponding host CPUs on the
+    # same node.
+    cputune = _find_or_create(tree, 'cputune')
+    for i in range(0, num_vcpus):
+        vcpupin = ElementTree.SubElement(cputune, 'vcpupin')
+        vcpupin.attrib = {
+            'vcpu': str(i),
+            'cpuset': pcpu_sets[i % num_nodes],
         }
-        # </cpu>
+    # </cputune>
 
-        # <cputune>
-        # Bind VCPUs of each guest node to the corresponding host CPUs on the
-        # same node.
-        cputune = _find_or_create(tree, 'cputune')
-        for i in range(0, num_vcpus):
-            vcpupin = ElementTree.SubElement(cputune, 'vcpupin')
-            vcpupin.attrib = {
-                'vcpu': str(i),
-                'cpuset': pcpu_sets[i % num_nodes],
+    # <numa><cell>
+    # Expose equal slices of RAM to each guest node.
+    numa = ElementTree.SubElement(cpu, 'numa')
+    for i, cpuset in enumerate(vcpu_sets):
+        cell = ElementTree.SubElement(numa, 'cell')
+        cell.attrib = {
+            'id': str(i),
+            'cpus': cpuset,
+            'memory': str(vm.dataset_obj['memory'] // num_nodes),
+            'unit': 'MiB',
+        }
+    # </cell></numa>
+    # </cpu>
+
+    # Hugepages appear to be incompatible with NUMA policies.
+    if not props.hugepages:
+        # <numatune>
+        # Map VCPUs to guest NUMA nodes.
+        numatune = _find_or_create(tree, 'numatune')
+        memory = _find_or_create(numatune, 'memory')
+        memory.attrib['mode'] = 'strict'
+        memory.attrib['nodeset'] = nodeset
+        for i in range(0, num_nodes):
+            memnode = ElementTree.SubElement(numatune, 'memnode')
+            memnode.attrib = {
+                'cellid': str(i),
+                'nodeset': str(i),
+                'mode': 'preferred',
             }
-        # </cputune>
-
-        # <numa><cell>
-        # Expose equal slices of RAM to each guest node.
-        numa = ElementTree.SubElement(cpu, 'numa')
-        for i, cpuset in enumerate(vcpu_sets):
-            cell = ElementTree.SubElement(numa, 'cell')
-            cell.attrib = {
-                'id': str(i),
-                'cpus': cpuset,
-                'memory': str(vm.dataset_obj['memory'] // num_nodes),
-                'unit': 'MiB',
-            }
-        # </cell></numa>
-        # </cpu>
-
-        # Hugepages appear to be incompatible with NUMA policies.
-        if not props.hugepages:
-            # <numatune>
-            # Map VCPUs to guest NUMA nodes.
-            numatune = _find_or_create(tree, 'numatune')
-            memory = _find_or_create(numatune, 'memory')
-            memory.attrib['mode'] = 'strict'
-            memory.attrib['nodeset'] = nodeset
-            for i in range(0, num_nodes):
-                memnode = ElementTree.SubElement(numatune, 'memnode')
-                memnode.attrib = {
-                    'cellid': str(i),
-                    'nodeset': str(i),
-                    'mode': 'preferred',
-                }
-            # </numatune>
-    else:
-        raise NotImplementedError(
-            'NUMA mode not supported: {0}'.format(props.numa_mode))
+        # </numatune>
