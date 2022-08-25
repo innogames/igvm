@@ -281,6 +281,13 @@ def migrate_live(source, destination, vm, domain):
     except KeyboardInterrupt:
         domain.abortJob()
         log.info('Awaiting migration to abort')
+        # Repin the VM to match the local hypervisor, otherwise it will keep
+        # the pinning of the destination hypervisor.
+        _live_repin_cpus(
+            domain,
+            props,
+            source.dataset_obj['num_cpu'],
+        )
         future.result()
         # Nothing to log, the function above raised an exception
     else:
