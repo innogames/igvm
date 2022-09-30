@@ -193,6 +193,14 @@ class HypervisorAttributeValueLimit(HypervisorPreference):
 
         # When the actual value is above the limit, we strike out that HV.
         if value > self.limit:
+            log.warning(
+                'Hypervisor "{}" skipped because {} attribute is higher '
+                'than expected ({} > {}).'.format(
+                    str(hv),
+                    self.limit,
+                    value
+                ),
+            )
             return False
 
         # Normalize the value. This is only valid for percentage values like
