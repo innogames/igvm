@@ -206,10 +206,9 @@ AWS_RETURN_CODES = {
     'stopped': 80,
 }
 
-AWS_GRP_NAME = environ.get('AWS_GRP_NAME', default='adm')
 AWS_INSTANCES_OVERVIEW_URL = 'https://www.ec2instances.info/instances.json'
-AWS_INSTANCES_OVERVIEW_FILE = '/tmp/AWS_INSTANCES_OVERVIEW_FILE.json'
-AWS_INSTANCES_OVERVIEW_FILE_ETAG = '/tmp/AWS_INSTANCES_OVERVIEW_FILE.etag'
+AWS_INSTANCES_OVERVIEW_FILE = 'AWS_INSTANCES_OVERVIEW_FILE.json'
+AWS_INSTANCES_OVERVIEW_FILE_ETAG = 'AWS_INSTANCES_OVERVIEW_FILE.etag'
 AWS_ECU_FACTOR = 7
 # To prevent conflict with other AWS-using projects
 environ['AWS_SHARED_CREDENTIALS_FILE'] = "~/.aws/credentials"

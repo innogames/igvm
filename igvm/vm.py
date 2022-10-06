@@ -37,7 +37,6 @@ from igvm.settings import (
     AWS_INSTANCES_OVERVIEW_FILE,
     AWS_INSTANCES_OVERVIEW_FILE_ETAG,
     AWS_INSTANCES_OVERVIEW_URL,
-    AWS_GRP_NAME,
 )
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
@@ -1110,9 +1109,8 @@ class VM(Host):
         """
 
         url = AWS_INSTANCES_OVERVIEW_URL
-        file = Path(AWS_INSTANCES_OVERVIEW_FILE)
-        etag_file = Path(AWS_INSTANCES_OVERVIEW_FILE_ETAG)
-        gid = getgrnam(AWS_GRP_NAME).gr_gid
+        file = Path.home() / AWS_INSTANCES_OVERVIEW_FILE
+        etag_file = Path.home() / AWS_INSTANCES_OVERVIEW_FILE_ETAG
 
         try:
             head_req = Request(url, method='HEAD')
@@ -1122,35 +1120,21 @@ class VM(Host):
             else:
                 log.warning('Could not retrieve ETag from {}'.format(url))
                 etag = None
-
             if file.exists() and etag_file.exists() and etag:
-                with open(AWS_INSTANCES_OVERVIEW_FILE_ETAG, 'r+') as f:
+                with open(etag_file, 'r+') as f:
                     prev_etag = f.read()
                 if etag == prev_etag:
-                    with open(AWS_INSTANCES_OVERVIEW_FILE, 'r+') as f:
+                    with open(file, 'r+') as f:
                         return json.load(f)
 
             resp = urlopen(url, timeout=timeout)
             if etag:
-                with open(AWS_INSTANCES_OVERVIEW_FILE_ETAG, 'w+') as f:
+                with open(etag_file, 'w+') as f:
                     f.write(etag)
-                    os.chmod(AWS_INSTANCES_OVERVIEW_FILE_ETAG,
-                             stat.S_IREAD |
-                             stat.S_IWRITE |
-                             stat.S_IRGRP |
-                             stat.S_IWGRP |
-                             stat.S_IROTH)
-                    os.chown(AWS_INSTANCES_OVERVIEW_FILE_ETAG, -1, gid)
-            with open(AWS_INSTANCES_OVERVIEW_FILE, 'w+') as f:
+            with open(file, 'w+') as f:
                 content = resp.read().decode('utf-8')
                 f.write(content)
-                os.chmod(AWS_INSTANCES_OVERVIEW_FILE,
-                         stat.S_IREAD |
-                         stat.S_IWRITE |
-                         stat.S_IRGRP |
-                         stat.S_IWGRP |
-                         stat.S_IROTH)
-                os.chown(AWS_INSTANCES_OVERVIEW_FILE, -1, gid)
+
                 return json.loads(content)
         except (HTTPError, JSONDecodeError) as e:
             log.warning('Could not retrieve instances overview')
