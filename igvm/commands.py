@@ -440,7 +440,7 @@ def vm_migrate(
 
         # We have to check migration settings before searching for a HV,
         # because the new disk size must be checked and set
-        current_size_gib = _vm.dataset_obj['disk_size_gib']
+        original_size_gib = _vm.dataset_obj['disk_size_gib']
         _vm.dataset_obj['disk_size_gib'] = _vm.hypervisor.vm_new_disk_size(
             _vm, offline, offline_transport, disk_size
         )
@@ -475,9 +475,6 @@ def vm_migrate(
                 'Source and destination Hypervisor is the same!'
             )
 
-        # After the HV is chosen, disk_size_gib must be restored
-        # to pass _check_attributes(_vm)
-        _vm.dataset_obj['disk_size_gib'] = current_size_gib
         was_running = _vm.is_running()
 
         # There is no point of online migration, if the VM is already shutdown.
@@ -490,6 +487,10 @@ def vm_migrate(
         # Validate destination hypervisor can run the VM (needs to happen after
         # setting new IP!)
         hypervisor.check_vm(_vm, offline)
+
+        # After the HV is chosen, disk_size_gib must be restored
+        # to pass _check_attributes(_vm)
+        _vm.dataset_obj['disk_size_gib'] = original_size_gib
 
         # Require VM to be in sync with serveradmin
         _check_attributes(_vm)
