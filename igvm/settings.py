@@ -13,7 +13,7 @@ from libvirt import (
 )
 
 from igvm.hypervisor_preferences import (
-    HypervisorAttributeValue,
+    HypervisorAttributeValueLimit,
     HypervisorCpuUsageLimit,
     HypervisorEnvironmentValue,
     InsufficientResource,
@@ -407,9 +407,9 @@ HYPERVISOR_PREFERENCES = [
     # Less over-allocated (CPU) hypervisors first
     OverAllocation('num_cpu'),
     # Find less loaded Hypervisor
-    HypervisorAttributeValue('cpu_util_pct'),
+    HypervisorAttributeValueLimit('cpu_util_pct', 100),
     # Find Hypervisor with less I/O utilization
-    HypervisorAttributeValue('iops_avg'),
+    HypervisorAttributeValueLimit('iops_avg', 100),
     # Prefer the hypervisor with less VMs from the same cluster
     OtherVMs(['project', 'environment', 'game_market']),
 ]
