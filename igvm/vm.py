@@ -1174,9 +1174,10 @@ class VM(Host):
         }
 
         vm_types = dict()
-
         for t in overview:
             if region not in t['pricing']:
+                continue
+            if 'linux' not in t['pricing'][region]:
                 continue
             if not t['ipv6_support']:
                 continue
