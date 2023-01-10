@@ -333,9 +333,7 @@ class Hypervisor(Host):
             # wait until MemTotal changes.
             retry_wait_backoff(
                 lambda: vm.meminfo()['MemTotal'] != old_total,
-                'New memory is not visible to virtual machine. Note that we '
-                'can not online decrease the domains memory. The libvirt '
-                'and serveradmin changes will therefore not be rolled back.',
+                'New memory is not yet visible to virtual machine.',
                 max_wait=40
             )
 
