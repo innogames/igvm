@@ -33,6 +33,7 @@ from igvm.exceptions import ConfigError, HypervisorError, RemoteCommandError, VM
 from igvm.host import Host
 from igvm.settings import (
     AWS_ECU_FACTOR,
+    AWS_FALLBACK_INSTANCE_TYPE,
     AWS_RETURN_CODES,
     AWS_INSTANCES_OVERVIEW_FILE,
     AWS_INSTANCES_OVERVIEW_FILE_ETAG,
@@ -661,7 +662,7 @@ class VM(Host):
         if vm_types_overview:
             vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
         else:
-            vm_types = [self.dataset_obj['aws_instance_type']]
+            vm_types = [AWS_FALLBACK_INSTANCE_TYPE]
 
         root_device = list(
             self.ec2r.images.filter(
@@ -1139,9 +1140,10 @@ class VM(Host):
         except (HTTPError, JSONDecodeError) as e:
             log.warning('Could not retrieve instances overview')
             log.warning(e)
-            log.info('Proceeding with instance_type: {}'.format(
-                self.dataset_obj['aws_instance_type'])
+            log.info('Proceeding with instance_type: '
+                     f'{AWS_FALLBACK_INSTANCE_TYPE}'
             )
+
             return None
 
     def aws_get_fitting_vm_types(self, overview: List) -> List:
