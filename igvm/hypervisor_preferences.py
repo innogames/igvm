@@ -194,12 +194,9 @@ class HypervisorAttributeValueLimit(HypervisorPreference):
         # When the actual value is above the limit, we strike out that HV.
         if value > self.limit:
             log.warning(
-                'Hypervisor "{}" skipped because {} attribute is higher '
-                'than expected ({} > {}).'.format(
-                    str(hv),
-                    self.limit,
-                    value
-                ),
+                f'Hypervisor "{str(hv)}" skipped because {self.attribute} '
+                'attribute is higher '
+                f'than expected ({value} > {self.limit}).',
             )
             return False
 
