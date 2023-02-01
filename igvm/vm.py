@@ -659,9 +659,9 @@ class VM(Host):
         """
 
         vm_types_overview = self.aws_get_instances_overview()
-        if vm_types_overview:
-            vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
-        else:
+        vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
+
+        if not vm_types:
             vm_types = [AWS_FALLBACK_INSTANCE_TYPE]
 
         root_device = list(
