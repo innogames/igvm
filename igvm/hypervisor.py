@@ -10,7 +10,7 @@ from time import sleep, time
 from xml.etree import ElementTree
 
 from igvm.vm import VM
-from libvirt import VIR_DOMAIN_SHUTOFF, virStorageVol
+from libvirt import VIR_DOMAIN_SHUTOFF, virStorageVol, virStoragePool
 
 from igvm.drbd import DRBD
 from igvm.exceptions import (
@@ -63,16 +63,12 @@ class Hypervisor(Host):
             )
 
         self._mount_path = {}
-        self._storage_pool = None
         self._storage_type = None
 
-    def get_storage_pool(self):
+    def get_storage_pool(self) -> virStoragePool:
         # Store per-VM path information
         # We cannot store these in the VM object due to migrations.
-        if self._storage_pool:
-            return self._storage_pool
-        self._storage_pool = self.conn().storagePoolLookupByName(VG_NAME)
-        return self._storage_pool
+        return self.conn().storagePoolLookupByName(VG_NAME)
 
     def get_storage_type(self):
         if self._storage_type:
@@ -398,7 +394,11 @@ class Hypervisor(Host):
             )
 
         if transaction:
-            transaction.on_rollback('destroy storage', volume.delete)
+            def destroy_storage():
+                vol = self.get_storage_pool().storageVolLookupByName(vol_name)
+                vol.delete()
+
+            transaction.on_rollback('destroy storage', destroy_storage)
 
         # XXX: When building a VM we use the volumes path to format it right
         # after creation.  Unfortunately the kernel is slow to pick up on zfs
