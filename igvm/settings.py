@@ -402,6 +402,8 @@ HYPERVISOR_PREFERENCES = [
     ]),
     # Don't migrate two masters database servers together
     OtherVMs(['game_world', 'function'], [0, 'db']),
+    # Don't migrate two jenkins nodes to the same hypervisor
+    OtherVMs(['function'], ['jenkins_node']),
     # Don't migrate two monitoring worker to the same hypervisor
     OtherVMs(['function'], ['monitoring-worker']),
     # Less over-allocated (CPU) hypervisors first
