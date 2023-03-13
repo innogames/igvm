@@ -402,7 +402,6 @@ HYPERVISOR_PREFERENCES = [
     ]),
     # Don't migrate two masters database servers together
     OtherVMs(['game_world', 'function'], [0, 'db']),
-    OtherVMs(['function'], ['master_db']),
     # Don't migrate two monitoring worker to the same hypervisor
     OtherVMs(['function'], ['monitoring-worker']),
     # Less over-allocated (CPU) hypervisors first
