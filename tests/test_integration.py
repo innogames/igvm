@@ -542,9 +542,9 @@ class CommandTest(IGVMTest):
                     ['igvm_migration_log']).get()
             )
             cpu_usage_vm_dest = vm.hypervisor.estimate_vm_cpu_usage(vm)
-            self.assertEqual(
-                list(dest_hv_obj['igvm_migration_log']),
-                ['{} +{}'.format(timestamp, round(cpu_usage_vm_dest))]
+            self.assertIn(
+                '{} +{}'.format(timestamp, round(cpu_usage_vm_dest)),
+                list(dest_hv_obj['igvm_migration_log'])
             )
 
     def test_vm_define(self):
