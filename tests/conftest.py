@@ -46,7 +46,7 @@ def clean_all(route_network, datacenter_type, vm_hostname=None):
     # which would interrupt our work in the current JENKINS_EXECUTOR.
     hvs = [Hypervisor(o) for o in Query({
         'servertype': 'hypervisor',
-        'environment': 'testing',
+        'environment': Any('testing', 'staging'),
         'vlan_networks': route_network,
         'state': 'online',
     }, HYPERVISOR_ATTRIBUTES)]

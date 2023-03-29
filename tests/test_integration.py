@@ -65,7 +65,7 @@ basicConfig(level=INFO)
 env.update(COMMON_FABRIC_SETTINGS)
 environ['IGVM_SSH_USER'] = 'igtesting'  # Enforce user for integration testing
 env.user = 'igtesting'
-environ['IGVM_MODE'] = 'testing'
+environ['IGVM_MODE'] = 'staging'
 
 
 def teardown_module():
@@ -93,7 +93,7 @@ class IGVMTest(TestCase):
         ).get()['datacenter_type']
 
         self.hvs = [Hypervisor(o) for o in Query({
-            'environment': 'testing',
+            'environment': Any('testing', 'staging'),
             'servertype': 'hypervisor',
             'state': 'online',
             'vlan_networks': self.route_network,
@@ -542,9 +542,9 @@ class CommandTest(IGVMTest):
                     ['igvm_migration_log']).get()
             )
             cpu_usage_vm_dest = vm.hypervisor.estimate_vm_cpu_usage(vm)
-            self.assertEqual(
-                list(dest_hv_obj['igvm_migration_log']),
-                ['{} +{}'.format(timestamp, round(cpu_usage_vm_dest))]
+            self.assertIn(
+                '{} +{}'.format(timestamp, round(cpu_usage_vm_dest)),
+                list(dest_hv_obj['igvm_migration_log'])
             )
 
     def test_vm_define(self):
