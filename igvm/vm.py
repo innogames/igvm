@@ -400,19 +400,57 @@ class VM(Host):
             if 'DryRunOperation' not in str(e):
                 raise
 
+        success = self._aws_wait_for_shutdown(timeout=timeout)
+
+        if success:
+            return
+
+        # If the VM is still running after the timeout, force it to stop.
+        log.info(
+            f"{self.dataset_obj['hostname']} is still running. "
+            "Forcing it to stop."
+        )
+
+        success = self._aws_wait_for_shutdown(timeout=timeout, force=True)
+
+        if not success:
+            raise VMError(
+                f"Failed to stop {self.dataset_obj['hostname']} in AWS."
+            )
+
+    def _aws_wait_for_shutdown(
+            self,
+            timeout: int,
+            force: bool = False
+    ) -> bool:
+        """AWS wait for shutdown
+
+        Wait for a VM to shutdown in AWS.
+
+        param: timeout: Timeout value for VM shutdown
+        param: force: Force the VM to stop
+
+        return: True if the VM is stopped, False otherwise
+        """
+
         try:
             response = self.ec2c.stop_instances(
                 InstanceIds=[self.dataset_obj['aws_instance_id']],
-                DryRun=False
+                DryRun=False,
+                Force=force
             )
-            current_state = response['StoppingInstances'][0][
-                'CurrentState']['Code']
-            log.debug(response)
-            if current_state and current_state == AWS_RETURN_CODES['stopped']:
-                log.info('{} is already stopped.'.format(
-                    self.dataset_obj['hostname']))
+
         except ClientError as e:
             raise VMError(e)
+
+        current_state = response['StoppingInstances'][0][
+            'CurrentState']['Code']
+
+        log.debug(response)
+        if current_state == AWS_RETURN_CODES['stopped']:
+            log.info(f'{self.dataset_obj["hostname"]} is already stopped.')
+
+            return True
 
         for retry in range(timeout):
             if AWS_RETURN_CODES[
@@ -420,15 +458,17 @@ class VM(Host):
                     self.dataset_obj['aws_instance_id']
             ):
                 log.info(
-                    '"{}" is stopped.'.format(self.dataset_obj['hostname'])
+                    f'"{self.dataset_obj["hostname"]}" is stopped.'
                 )
-                break
+                return True
 
             log.info(
-                'Waiting for VM "{}" to shutdown. Remaining: {} secs'
-                .format(self.dataset_obj['hostname'], timeout - retry)
+                f'Waiting for VM "{self.dataset_obj["hostname"]}" to shutdown. '
+                f'Remaining: {timeout - retry} secs'
             )
             time.sleep(1)
+
+        return False
 
     def aws_describe_instance_status(self, instance_id: str) -> int:
         """AWS describe instance status
