@@ -57,7 +57,7 @@ class Hypervisor(Host):
     def __init__(self, dataset_obj):
         super(Hypervisor, self).__init__(dataset_obj)
 
-        if dataset_obj['state'] == 'retired':
+        if dataset_obj['state'] not in ['online', 'online_reserved']:
             raise InvalidStateError(
                 'Hypervisor "{0}" is retired.'.format(self.fqdn)
             )
