@@ -926,13 +926,18 @@ class VM(Host):
         if self.dataset_obj['datacenter_type'] == 'kvm.dct':
             self.block_autostart()
 
+            if self.dataset_obj['os'] == 'bookworm':
+                puppet_bin = '/usr/bin/puppet'
+            else:
+                puppet_bin = '/opt/puppetlabs/puppet/bin/puppet'
             puppet_command = (
-                '( /opt/puppetlabs/puppet/bin/puppet agent '
+                '( {} agent '
                 '--detailed-exitcodes '
                 '--fqdn={} --server={} --ca_server={} '
                 '--no-report --waitforcert=60 --onetime --no-daemonize '
                 '--skip_tags=chroot_unsafe --verbose{} ) ;'
                 '[ $? -eq 2 ]'.format(
+                    puppet_bin,
                     self.fqdn,
                     self.dataset_obj['puppet_master'],
                     self.dataset_obj['puppet_ca'],
