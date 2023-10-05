@@ -219,7 +219,7 @@ AWS_CONFIG = [{
     'apt': [{
         'name': 'innogames_stable',
         'filename': 'innogames_stable.list',
-        'source': 'deb http://update-int.ig.local/ innogames stable',
+        'source': 'deb https://aptly.innogames.de/innogames innogames stable',
         'key': [
             '-----BEGIN PGP PUBLIC KEY BLOCK-----',
             '',
@@ -254,7 +254,7 @@ AWS_CONFIG = [{
     }, {
         'name': 'base#VM_OS#_stable',
         'filename': 'base#VM_OS#_stable.list',
-        'source': 'deb http://update-int.ig.local/ base#VM_OS# stable',
+        'source': 'deb https://aptly.innogames.de/base#VM_OS# base#VM_OS# stable',
         'key': [
             '-----BEGIN PGP PUBLIC KEY BLOCK-----',
             '',
