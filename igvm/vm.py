@@ -202,7 +202,11 @@ class VM(Host):
     def check_serveradmin_config(self):
         """Validate relevant Serveradmin attributes"""
 
-        mul_numa_nodes = 128 * self.hypervisor.num_numa_nodes()
+        if self.hypervisor:
+            mul_numa_nodes = 128 * self.hypervisor.num_numa_nodes()
+        else:
+            mul_numa_nodes = 1
+
         validations = [
             (
                 'hostname',
@@ -226,6 +230,15 @@ class VM(Host):
             ('puppet_ca', lambda v: True, 'puppet_ca must be set'),
             ('puppet_master', lambda v: True, 'puppet_master must be set'),
         ]
+
+        if self.dataset_obj['datacenter_type'] == 'aws.dct':
+            validations.extend([
+                ('aws_key_name', lambda v: True, 'aws_key_name must be set'),
+                ('aws_image_id', lambda v: True, 'aws_image_id must be set'),
+                (
+                    'aws_instance_type', lambda v: True,
+                    'aws_instance_type must be set')
+            ])
 
         for attr, check, err in validations:
             value = self.dataset_obj[attr]
@@ -703,6 +716,9 @@ class VM(Host):
             vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
         else:
             vm_types = [AWS_FALLBACK_INSTANCE_TYPE]
+            self.dataset_obj['aws_instance_type'] = vm_types[0]
+
+        self.check_serveradmin_config()
 
         root_device = list(
             self.ec2r.images.filter(
@@ -1128,8 +1144,11 @@ class VM(Host):
         # multiple ones of thousand and just divide them here again.
         vm_load_99 = self.dataset_obj['load_99'] / 1000  # Default 0
         vm_num_cpu = self.dataset_obj['num_cpu']
-        hv_cpu_perffactor = self.hypervisor.dataset_obj[
-                                'cpu_perffactor'] / 1000  # Default 1000
+        if self.hypervisor:
+            hv_cpu_perffactor = self.hypervisor.dataset_obj[
+                                    'cpu_perffactor'] / 1000  # Default 1000
+        else:
+            hv_cpu_perffactor = 1
 
         # If load_99 is higher than the number of vCPUs we use the number of
         # the vCPUs to avoid returning fantastic numbers no hardware can ever
