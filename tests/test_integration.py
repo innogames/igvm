@@ -518,7 +518,7 @@ class CommandTest(IGVMTest):
 
         src_hv = self.vm.hypervisor.dataset_obj['hostname']
         cpu_usage_vm_src = self.vm.hypervisor.estimate_vm_cpu_usage(self.vm)
-        timestamp = 1234567890
+        timestamp = 1234567890000
 
         vm_migrate(
             VM_HOSTNAME,
