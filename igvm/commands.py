@@ -576,7 +576,7 @@ def vm_stop(vm_hostname, force=False, retire=False):
     """Gracefully stop a VM"""
     with _get_vm(vm_hostname, allow_retired=True) as vm:
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
-            vm.aws_shutdown()
+            vm.aws_shutdown(force=force)
         elif vm.dataset_obj['datacenter_type'] == 'kvm.dct':
             _check_defined(vm)
 

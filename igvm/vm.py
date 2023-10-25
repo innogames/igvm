@@ -383,7 +383,7 @@ class VM(Host):
                 force_stop_failed=check_vm_up_on_transaction,
             )
 
-    def aws_shutdown(self, timeout: int = 240) -> None:
+    def aws_shutdown(self, timeout: int = 240, force: bool = False) -> None:
         """AWS shutdown
 
         Shutdown a VM in AWS.
@@ -400,7 +400,7 @@ class VM(Host):
             if 'DryRunOperation' not in str(e):
                 raise
 
-        success = self._aws_wait_for_shutdown(timeout=timeout)
+        success = self._aws_wait_for_shutdown(timeout=timeout, force=force)
 
         if success:
             return
