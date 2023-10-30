@@ -329,6 +329,13 @@ def vm_build(
         vm = es.enter_context(_get_vm(vm_hostname))
 
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
+            # check if aws_image_id is our own, if yes, skip puppet_run in
+            # cloud_init because the image already includes basic configs
+            # like ssh keys. This is only needed for the disaster recovery
+            # of the games since we want to spawn instances as fast as possible
+            # in AWS in that case. Our failover scripts take care in the
+            # downstream steps that the packages and configs are up to date
+            is_golden = vm.is_aws_image_golden()
             jenv = Environment(loader=PackageLoader('igvm', 'templates'))
             template = jenv.get_template('aws_user_data.cfg')
             user_data = template.render(
@@ -338,6 +345,7 @@ def vm_build(
                 apt_repos=AWS_CONFIG[0]['apt'],
                 puppet_master=vm.dataset_obj['puppet_master'],
                 puppet_ca=vm.dataset_obj['puppet_ca'],
+                is_golden=is_golden,
             )
 
             if rebuild:
