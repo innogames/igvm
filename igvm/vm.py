@@ -10,6 +10,8 @@ import os
 import re
 import stat
 import time
+
+import botocore.exceptions
 import tqdm
 from base64 import b64decode
 from grp import getgrnam
@@ -791,8 +793,8 @@ class VM(Host):
         for retry in range(timeout_cloud_init):
             cloud_init.update(1)
 
-            # Only try to connect every 20s to avoid paramiko exceptions
-            if retry % 20 != 0:
+            # Only try to connect every 2s
+            if retry % 2 != 0:
                 time.sleep(1)
                 continue
 
@@ -1105,6 +1107,24 @@ class VM(Host):
         )
 
         return sync_values
+
+    def is_aws_image_golden(self) -> bool:
+        """Return whether the VM images is golden (created by us) or not"""
+
+        try:
+            response = self.ec2c.describe_images(
+                ImageIds=[
+                    self.dataset_obj['aws_image_id'],
+                ]
+            )
+        except botocore.exceptions.ClientError as e:
+            raise VMError("Couldn't find the image in AWS") from e
+
+        for tag in response['Images'][0].get('Tags', []):
+            if tag['Key'] == 'golden_image':
+                return True
+
+        return False
 
     def performance_value(self) -> float:
         """VM performance value
