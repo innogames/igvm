@@ -28,7 +28,7 @@ from fabric.api import cd, get, hide, put, run, settings
 from fabric.contrib.files import upload_template
 from fabric.exceptions import NetworkError
 from json.decoder import JSONDecodeError
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from igvm.exceptions import ConfigError, HypervisorError, RemoteCommandError, VMError
@@ -713,12 +713,21 @@ class VM(Host):
         :raises: VMError: Generic exception for VM errors of all kinds
         """
 
-        vm_types_overview = self.aws_get_instances_overview()
-        if vm_types_overview:
-            vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
+        # The current solution for figuring out the best instance_type is not
+        # scalable for the disaster recovery case because we are parsing a
+        # 70 MB big json file in parallel for every VM. We are currently working
+        # on a different solution to prefill the instance_type for the disaster
+        # recovery case. We'll keep the functionality in igvm for now to be able
+        # to build VMs in AWS without the need of a prefill.
+        if self.dataset_obj['aws_instance_type']:
+            vm_types = [self.dataset_obj['aws_instance_type']]
         else:
-            vm_types = [AWS_FALLBACK_INSTANCE_TYPE]
-            self.dataset_obj['aws_instance_type'] = vm_types[0]
+            vm_types_overview = self.aws_get_instances_overview()
+            if vm_types_overview:
+                vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
+            else:
+                vm_types = [AWS_FALLBACK_INSTANCE_TYPE]
+                self.dataset_obj['aws_instance_type'] = vm_types[0]
 
         self.check_serveradmin_config()
 
@@ -1221,7 +1230,7 @@ class VM(Host):
                 f.write(content)
 
                 return json.loads(content)
-        except (HTTPError, JSONDecodeError) as e:
+        except (HTTPError, JSONDecodeError, URLError) as e:
             log.warning('Could not retrieve instances overview')
             log.warning(e)
             log.info('Proceeding with instance_type: '
