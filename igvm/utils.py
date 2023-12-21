@@ -5,15 +5,27 @@ Copyright (c) 2018 InnoGames GmbH
 
 from __future__ import division
 
+import json
 import logging
 import socket
 import time
 from concurrent import futures
+from json import JSONDecodeError
 from os import path
+from pathlib import Path
+from typing import Union, List
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from paramiko import SSHConfig
 
 from igvm.exceptions import TimeoutError
+from igvm.settings import (
+    AWS_INSTANCES_OVERVIEW_URL,
+    AWS_INSTANCES_OVERVIEW_FILE,
+    AWS_INSTANCES_OVERVIEW_FILE_ETAG,
+    AWS_FALLBACK_INSTANCE_TYPE
+)
 
 _SIZE_FACTORS = {
     'T': 1024 ** 4,
@@ -219,3 +231,54 @@ def parallel(
             results.append(result)
 
     return results
+
+
+def aws_get_instances_overview(timeout: int = 5) -> Union[List, None]:
+    """AWS Get Instances Overview
+
+    Load or download the latest instances.json, which contains
+    a complete overview about all instance_types, their configuration,
+    performance and pricing.
+
+    :param: timeout: Timeout value for the head/get request
+
+    :return: VM types overview as list
+             or None, if the parsing/download failed
+    """
+
+    url = AWS_INSTANCES_OVERVIEW_URL
+    file = Path.home() / AWS_INSTANCES_OVERVIEW_FILE
+    etag_file = Path.home() / AWS_INSTANCES_OVERVIEW_FILE_ETAG
+
+    try:
+        head_req = Request(url, method='HEAD')
+        resp = urlopen(head_req, timeout=timeout)
+        if resp.status == 200:
+            etag = dict(resp.info())['ETag']
+        else:
+            log.warning('Could not retrieve ETag from {}'.format(url))
+            etag = None
+        if file.exists() and etag_file.exists() and etag:
+            with open(etag_file, 'r+') as f:
+                prev_etag = f.read()
+            if etag == prev_etag:
+                with open(file, 'r+') as f:
+                    return json.load(f)
+
+        resp = urlopen(url, timeout=timeout)
+        if etag:
+            with open(etag_file, 'w+') as f:
+                f.write(etag)
+        with open(file, 'w+') as f:
+            content = resp.read().decode('utf-8')
+            f.write(content)
+
+            return json.loads(content)
+    except (HTTPError, JSONDecodeError, URLError) as e:
+        log.warning('Could not retrieve instances overview')
+        log.warning(e)
+        log.info('Proceeding with instance_type: '
+                 f'{AWS_FALLBACK_INSTANCE_TYPE}'
+        )
+
+        return None
