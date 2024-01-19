@@ -952,7 +952,7 @@ class VM(Host):
                 '( {} agent '
                 '--detailed-exitcodes '
                 '--fqdn={} --server={} --ca_server={} '
-                '--no-report --waitforcert=60 --onetime --no-daemonize '
+                '--no-report --waitforcert=10 --onetime --no-daemonize '
                 '--skip_tags=chroot_unsafe --verbose{} ) ;'
                 '[ $? -eq 2 ]'.format(
                     puppet_bin,
