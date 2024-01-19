@@ -100,7 +100,7 @@ def run_cmd(host: str, cmd: str) -> Result:
         user = None
 
     with settings(host_string=host, user=user, warn_only=True):
-        return sudo(cmd, quiet=True)
+        return sudo(cmd, quiet=True, pty=False, shell=False)
 
 
 def find_puppet_executable(host: str) -> str:
