@@ -694,6 +694,9 @@ def vm_delete(vm_hostname, retire=False):
         # or update its state to 'retired' if retire is True.
         if retire:
             vm.dataset_obj['state'] = 'retired'
+            # We must clean the hypervisor attribute, as we enforce that no
+            # hypervisor has retired VMs assigned to it.
+            vm.dataset_obj['hypervisor'] = None
             vm.dataset_obj.commit()
             log.info(
                 '"{}" is destroyed and set to "retired" state.'.format(
