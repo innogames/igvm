@@ -12,19 +12,21 @@ from fabric.network import disconnect_all
 
 from igvm.commands import (
     change_address,
+    clean_cert,
     disk_set,
     evacuate,
     host_info,
     mem_set,
     vcpu_set,
     vm_build,
+    vm_define,
     vm_delete,
     vm_migrate,
     vm_rename,
     vm_restart,
     vm_start,
     vm_stop,
-    vm_sync, vm_define,
+    vm_sync,
 )
 from igvm.libvirt import close_virtconns
 
@@ -484,6 +486,16 @@ def parse_args():
     )
     subparser.set_defaults(func=vm_define)
     subparser.add_argument('vm_hostname', help='Hostname of the guest system')
+
+    subparser = subparsers.add_parser(
+        'clean-cert',
+        description=clean_cert.__doc__,
+    )
+    subparser.set_defaults(func=clean_cert)
+    subparser.add_argument(
+        'hostname',
+        help='Hostname of the Puppet agent',
+    )
 
     return vars(top_parser.parse_args())
 

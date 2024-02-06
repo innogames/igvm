@@ -20,6 +20,7 @@ from fabric.network import disconnect_all
 from jinja2 import Environment, PackageLoader
 from libvirt import libvirtError
 
+from igvm import puppet
 from igvm.exceptions import (
     ConfigError,
     HypervisorError,
@@ -30,7 +31,6 @@ from igvm.exceptions import (
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.hypervisor_preferences import sort_by_preference
-from igvm.puppet import clean_cert
 from igvm.settings import (
     AWS_CONFIG,
     AWS_RETURN_CODES,
@@ -687,8 +687,9 @@ def vm_delete(vm_hostname, retire=False):
                     vm.dataset_obj['datacenter_type'])
             )
 
-        # Delete the machines cert from puppet in case we want to build one with the same name in the future
-        clean_cert(vm.dataset_obj)
+        # Delete the machines cert from puppet in case we want to build
+        # one with the same name in the future
+        puppet.clean_cert(vm.dataset_obj)
 
         # Delete the serveradmin object of this VM
         # or update its state to 'retired' if retire is True.
@@ -918,6 +919,13 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
             vm.rename(new_hostname)
         elif vm.dataset_obj['datacenter_type'] == 'aws.dct':
             vm.aws_rename(new_hostname)
+
+
+@with_fabric_settings
+def clean_cert(hostname: str):
+    """Revoke and delete a Puppet certificate from the Puppet CA"""
+    vm = Query({'hostname': hostname}, ['hostname', 'puppet_ca']).get()
+    puppet.clean_cert(vm)
 
 
 @contextmanager
