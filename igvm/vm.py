@@ -17,9 +17,8 @@ from base64 import b64decode
 from grp import getgrnam
 from hashlib import sha1, sha256
 from io import BytesIO
-from pathlib import Path
 from re import compile as re_compile
-from typing import Optional, List, Union
+from typing import Optional, List
 from uuid import uuid4
 
 import boto3
@@ -27,9 +26,6 @@ from botocore.exceptions import ClientError, CapacityNotAvailableError
 from fabric.api import cd, get, hide, put, run, settings
 from fabric.contrib.files import upload_template
 from fabric.exceptions import NetworkError
-from json.decoder import JSONDecodeError
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
 
 from igvm.exceptions import ConfigError, HypervisorError, RemoteCommandError, VMError
 from igvm.host import Host
@@ -37,12 +33,9 @@ from igvm.settings import (
     AWS_ECU_FACTOR,
     AWS_FALLBACK_INSTANCE_TYPE,
     AWS_RETURN_CODES,
-    AWS_INSTANCES_OVERVIEW_FILE,
-    AWS_INSTANCES_OVERVIEW_FILE_ETAG,
-    AWS_INSTANCES_OVERVIEW_URL,
 )
 from igvm.transaction import Transaction
-from igvm.utils import parse_size, wait_until
+from igvm.utils import parse_size, wait_until, aws_get_instances_overview
 from igvm.puppet import clean_cert
 
 if typing.TYPE_CHECKING:
@@ -713,12 +706,21 @@ class VM(Host):
         :raises: VMError: Generic exception for VM errors of all kinds
         """
 
-        vm_types_overview = self.aws_get_instances_overview()
-        if vm_types_overview:
-            vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
+        # The current solution for figuring out the best instance_type is not
+        # scalable for the disaster recovery case because we are parsing a
+        # 70 MB big json file in parallel for every VM. We are currently working
+        # on a different solution to prefill the instance_type for the disaster
+        # recovery case. We'll keep the functionality in igvm for now to be able
+        # to build VMs in AWS without the need of a prefill.
+        if self.dataset_obj['aws_instance_type']:
+            vm_types = [self.dataset_obj['aws_instance_type']]
         else:
-            vm_types = [AWS_FALLBACK_INSTANCE_TYPE]
-            self.dataset_obj['aws_instance_type'] = vm_types[0]
+            vm_types_overview = aws_get_instances_overview()
+            if vm_types_overview:
+                vm_types = self.aws_get_fitting_vm_types(vm_types_overview)
+            else:
+                vm_types = [AWS_FALLBACK_INSTANCE_TYPE]
+                self.dataset_obj['aws_instance_type'] = vm_types[0]
 
         self.check_serveradmin_config()
 
@@ -1160,7 +1162,7 @@ class VM(Host):
         :return: performance_value of VM as float
         """
 
-        # Serveradmin can not handle floats right now so we safe them as
+        # Serveradmin can not handle floats right now so we save them as
         # multiple ones of thousand and just divide them here again.
         vm_load_99 = self.dataset_obj['load_99'] / 1000  # Default 0
         vm_num_cpu = self.dataset_obj['num_cpu']
@@ -1178,57 +1180,6 @@ class VM(Host):
         ) * hv_cpu_perffactor
 
         return float(estimated_load)
-
-    def aws_get_instances_overview(
-            self, timeout: int = 5) -> Union[List, None]:
-        """AWS Get Instances Overview
-
-        Load or download the latest instances.json, which contains
-        a complete overview about all instance_types, their configuration,
-        performance and pricing.
-
-        :param: timeout: Timeout value for the head/get request
-
-        :return: VM types overview as list
-                 or None, if the parsing/download failed
-        """
-
-        url = AWS_INSTANCES_OVERVIEW_URL
-        file = Path.home() / AWS_INSTANCES_OVERVIEW_FILE
-        etag_file = Path.home() / AWS_INSTANCES_OVERVIEW_FILE_ETAG
-
-        try:
-            head_req = Request(url, method='HEAD')
-            resp = urlopen(head_req, timeout=timeout)
-            if resp.status == 200:
-                etag = dict(resp.info())['ETag']
-            else:
-                log.warning('Could not retrieve ETag from {}'.format(url))
-                etag = None
-            if file.exists() and etag_file.exists() and etag:
-                with open(etag_file, 'r+') as f:
-                    prev_etag = f.read()
-                if etag == prev_etag:
-                    with open(file, 'r+') as f:
-                        return json.load(f)
-
-            resp = urlopen(url, timeout=timeout)
-            if etag:
-                with open(etag_file, 'w+') as f:
-                    f.write(etag)
-            with open(file, 'w+') as f:
-                content = resp.read().decode('utf-8')
-                f.write(content)
-
-                return json.loads(content)
-        except (HTTPError, JSONDecodeError) as e:
-            log.warning('Could not retrieve instances overview')
-            log.warning(e)
-            log.info('Proceeding with instance_type: '
-                     f'{AWS_FALLBACK_INSTANCE_TYPE}'
-            )
-
-            return None
 
     def aws_get_fitting_vm_types(self, overview: List) -> List:
         """AWS Get Fitting VM types
