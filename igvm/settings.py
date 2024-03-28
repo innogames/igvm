@@ -53,6 +53,11 @@ HOST_RESERVED_MEMORY_MIB = {
 
 VM_OVERHEAD_MEMORY_MIB = 50
 
+# Prevent creation of VMs with odd memory block size.
+# See vm.py for details.
+MEM_BLOCK_BOUNDARY_GiB = 63
+MEM_BLOCK_SIZE_GiB = 2
+
 # Default max number of CPUs, unless the hypervisor has fewer cores or num_cpu
 # is larger than this value.
 KVM_DEFAULT_MAX_CPUS = 24

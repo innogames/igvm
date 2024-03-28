@@ -40,6 +40,8 @@ from igvm.settings import (
     AWS_INSTANCES_OVERVIEW_FILE,
     AWS_INSTANCES_OVERVIEW_FILE_ETAG,
     AWS_INSTANCES_OVERVIEW_URL,
+    MEM_BLOCK_BOUNDARY_GiB,
+    MEM_BLOCK_SIZE_GiB,
 )
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
@@ -232,6 +234,27 @@ class VM(Host):
             ('puppet_ca', lambda v: True, 'puppet_ca must be set'),
             ('puppet_master', lambda v: True, 'puppet_master must be set'),
         ]
+
+        # Hosts defined with topmost address higher than MEM_BLOCK_BOUNDARY_GiB will use
+        # 1GiB or 2GiB memory block size. There is always extra 1GiB address space for
+        # the PCI bus. A host defined with an even amount of memory ends up with an
+        # an odd-sized address space and block size of 1GiB. A host with an odd amount
+        # of memory ends up with an even address space size and block size of 2GiB.
+        # The latter case makes it problematic to add memory modules: depending on
+        # their size, which also depends on NUMA layout, they might not align with
+        # the memory block size.
+        #
+        # Enforce memory sizes resulting in block size of 1GiB.
+        if self.dataset_obj['memory'] >= MEM_BLOCK_BOUNDARY_GiB * 1024 :
+            validations.extend([
+                (
+                    'memory',
+                    lambda v: v % (MEM_BLOCK_SIZE_GiB * 1024) == 0,
+                    f'For VMs with memory size of {MEM_BLOCK_BOUNDARY_GiB}GiB or more '
+                    f'it must be a multiple of {MEM_BLOCK_SIZE_GiB}GiB',
+                ),
+            ])
+
 
         if self.dataset_obj['datacenter_type'] == 'aws.dct':
             validations.extend([
