@@ -100,6 +100,9 @@ MIGRATE_CONFIG = {
     # The other cases for migrations (Buster to Bullseye and vice-versa) are
     # not working, due to what looks like libvirt incompatibility.
     ('bullseye', 'bullseye'): P2P_TLS_MIGRATION,
+    ('bullseye', 'bookworm'): P2P_TLS_MIGRATION,
+    ('bookworm', 'bookworm'): P2P_TLS_MIGRATION,
+    ('bookworm', 'bullseye'): P2P_TLS_MIGRATION,
 }
 
 # Arbitrarily chosen MAC address prefix with U/L bit set
