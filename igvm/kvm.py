@@ -388,6 +388,7 @@ def generate_domain_xml(hypervisor, vm):
     if props.qemu_version >= (2, 3):
         _set_cpu_model(hypervisor, vm, tree)
         _place_numa(hypervisor, vm, tree, props)
+        _enable_cpu_features(tree)
 
     log.info('KVM: VCPUs current: {} max: {} available on host: {}'.format(
         vm.dataset_obj['num_cpu'],
@@ -537,3 +538,27 @@ def _place_numa(hypervisor, vm, tree, props):
                 'mode': 'preferred',
             }
         # </numatune>
+
+def _enable_cpu_features(tree):
+    """
+    Enable CPU features if available.
+    """
+    cpu = _find_or_create(tree, 'cpu')
+    _create_cpu_feature(cpu, 'avx512f')
+    _create_cpu_feature(cpu, 'avx512bw')
+    _create_cpu_feature(cpu, 'avx512cd')
+    _create_cpu_feature(cpu, 'avx512dq')
+    _create_cpu_feature(cpu, 'avx512er')
+    _create_cpu_feature(cpu, 'avx512ifma')
+    _create_cpu_feature(cpu, 'avx512pf')
+    _create_cpu_feature(cpu, 'avx512vl')
+
+def _create_cpu_feature(cpu_tree, name):
+    """
+    Create cpu feature node. E.g <feature policy='optional' name='avx512f'/>.
+    """
+    cpu_feature = ElementTree.SubElement(cpu_tree, 'feature')
+    cpu_feature.attrib = {
+        'policy': 'optional',
+        'name': name
+    }
