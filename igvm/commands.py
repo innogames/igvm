@@ -487,6 +487,9 @@ def vm_migrate(
 
         # There is no point of online migration, if the VM is already shutdown.
         if not was_running:
+            log.warning(
+                f'{_vm.fqdn} is already shutdown. Forcing offline migration.'
+            )
             offline = True
 
         if not offline and run_puppet:
