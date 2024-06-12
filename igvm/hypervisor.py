@@ -6,7 +6,8 @@ Copyright (c) 2018 InnoGames GmbH
 import logging
 import math
 from contextlib import contextmanager
-from time import sleep, time
+from time import sleep
+from datetime import datetime
 from xml.etree import ElementTree
 
 from igvm.vm import VM
@@ -1149,9 +1150,12 @@ class Hypervisor(Host):
         :param operator: plus for migration to HV, minus for migration from HV
         """
 
-        cpu_usage_vm = self.estimate_vm_cpu_usage(vm)
-        timestamp = int(time())
-        log_entry = '{} {}{}'.format(timestamp, operator, round(cpu_usage_vm))
+        cpu_usage_vm = round(self.estimate_vm_cpu_usage(vm))
+        if cpu_usage_vm == 0:
+            return
+
+        timestamp = datetime.now().isoformat()
+        log_entry = '{} {}{}'.format(timestamp, operator, cpu_usage_vm)
 
         self.dataset_obj['igvm_migration_log'].add(log_entry)
         self.dataset_obj.commit()
