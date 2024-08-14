@@ -967,7 +967,7 @@ class VM(Host):
         if self.dataset_obj['datacenter_type'] == 'kvm.dct':
             self.block_autostart()
 
-            if self.dataset_obj['os'] == 'bookworm':
+            if self.dataset_obj['os'] in ['bookworm', 'rolling']:
                 puppet_bin = '/usr/bin/puppet'
             else:
                 puppet_bin = '/opt/puppetlabs/puppet/bin/puppet'
