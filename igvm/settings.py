@@ -75,6 +75,7 @@ XFS_CONFIG = {
     'buster': ['-m reflink=1'],
     'bullseye': ['-m reflink=1'],
     'bookworm': ['-m reflink=1'],
+    'rolling': ['-m reflink=1'],
 }
 
 P2P_MIGRATION = {
