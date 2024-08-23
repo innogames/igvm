@@ -475,11 +475,21 @@ class CommandTest(IGVMTest):
         with self.assertRaises(IGVMError):
             vcpu_set(VM_HOSTNAME, 0, offline=True)
 
+        # Has to be offline
         with self.assertRaises(IGVMError):
-            vcpu_set(VM_HOSTNAME, -5)
+            vcpu_set(VM_HOSTNAME, '-1')
 
+        # Not enough CPUs to remove
         with self.assertRaises(IGVMError):
-            vcpu_set(VM_HOSTNAME, -5, offline=True)
+            vcpu_set(VM_HOSTNAME, '-5', offline=True)
+
+        vcpu_set(VM_HOSTNAME, '+2')
+        self.assertEqual(_get_cpus_hv(), 4)
+        self.assertEqual(_get_cpus_vm(), 4)
+
+        vcpu_set(VM_HOSTNAME, '-2', offline=True)
+        self.assertEqual(_get_cpus_hv(), 2)
+        self.assertEqual(_get_cpus_vm(), 2)
 
     def test_sync(self):
         obj = (

@@ -141,12 +141,20 @@ def vcpu_set(vm_hostname, count, offline=False):
             )
             offline = False
 
-        if count == vm.dataset_obj['num_cpu']:
+        if str(count).startswith('+'):
+            count = vm.dataset_obj['num_cpu'] + int(str(count)[1:])
+        elif str(count).startswith('-'):
+            if not offline:
+                raise IGVMError(
+                    'Decreasing CPU count is only allowed offline.'
+                )
+            count = vm.dataset_obj['num_cpu'] - int(str(count)[1:])
+        elif int(count) == vm.dataset_obj['num_cpu']:
             raise Warning('CPU count is the same.')
 
         if offline:
             vm.shutdown()
-        vm.set_num_cpu(count)
+        vm.set_num_cpu(int(count))
         if offline:
             vm.start()
 
