@@ -66,7 +66,7 @@ class Hypervisor(Host):
         self._storage_type = None
 
     def get_active_storage_pools(self):
-        # Return all active storage pools
+        # The 2 used as argument is the value of the VIR_CONNECT_LIST_STORAGE_POOLS_ACTIVE flag.
         return self.conn().listAllStoragePools(2)
 
     def find_vg_of_vm(self, dataset_obj):
@@ -738,7 +738,7 @@ class Hypervisor(Host):
                 target_hypervisor.umount_vm_storage(vm)
 
             target_hypervisor.define_vm(
-                vm=vm, transaction=transaction, vg_name=target_vg_name
+                vm=vm, transaction=transaction
             )
         else:
             # For online migrations always use same volume name as VM
@@ -828,7 +828,7 @@ class Hypervisor(Host):
         # XXX: undefine_vm depends on vm.fqdn beeing the old name for finding
         # legacy domains w/o an uid_name.  The order is therefore important.
         vm.fqdn = new_fqdn or vm.fqdn
-        self.define_vm(vm=vm, vg_name=vm.vg_name)
+        self.define_vm(vm=vm)
 
     def _vm_sync_from_hypervisor(self, vm, result):
         vm_info = self._get_domain(vm).info()

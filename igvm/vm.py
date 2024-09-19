@@ -84,8 +84,7 @@ class VM(Host):
             # Check if we can find it
 
             if hypervisor is None:
-                # This is probably caused by an error,
-                # but we will pass as None
+                # At AWS we don't have assigned hypervisors hence no vg_name.
                 self.vg_name = None
             else:
                 found_vg = self.hypervisor.find_vg_of_vm(dataset_obj)
@@ -661,7 +660,6 @@ class VM(Host):
             postboot=None,
             cleanup_cert=False,
             barebones=False,
-            vg_name=DEFAULT_VG_NAME,
     ):
         """Builds a VM."""
         hypervisor = self.hypervisor

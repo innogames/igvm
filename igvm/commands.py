@@ -404,7 +404,6 @@ def vm_build(
                 postboot=postboot,
                 cleanup_cert=rebuild,
                 barebones=barebones,
-                vg_name=vm.vg_name,
             )
         else:
             raise NotImplementedError(
