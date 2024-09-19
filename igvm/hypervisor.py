@@ -39,7 +39,7 @@ from igvm.settings import (
     KVM_HWMODEL_TO_CPUMODEL,
     MIGRATE_CONFIG,
     RESERVED_DISK,
-    VG_NAME,
+    DEFAULT_VG_NAME,
     VM_OVERHEAD_MEMORY_MIB,
     XFS_CONFIG,
 )
@@ -65,17 +65,31 @@ class Hypervisor(Host):
         self._mount_path = {}
         self._storage_type = None
 
-    def get_storage_pool(self) -> virStoragePool:
+    def get_active_storage_pools(self):
+        # Return all active storage pools
+        return self.conn().listAllStoragePools(2)
+
+    def find_vg_of_vm(self, dataset_obj):
+        # Find the storage pool of the VM
+        # XXX: This is a slow and non-precise, returning only first match
+        host = Host(dataset_obj)
+        for pool in self.get_active_storage_pools():
+            for vol_name in pool.listVolumes():
+                if host.match_uid_name(vol_name):
+                    return pool.name()
+        return None
+
+    def get_storage_pool(self, vg_name=DEFAULT_VG_NAME) -> virStoragePool:
         # Store per-VM path information
         # We cannot store these in the VM object due to migrations.
-        return self.conn().storagePoolLookupByName(VG_NAME)
+        return self.conn().storagePoolLookupByName(vg_name)
 
-    def get_storage_type(self):
+    def get_storage_type(self, vg_name=DEFAULT_VG_NAME):
         if self._storage_type:
             return self._storage_type
 
         self._storage_type = ElementTree.fromstring(
-            self.get_storage_pool().XMLDesc()
+            self.get_storage_pool(vg_name=vg_name).XMLDesc()
         ).attrib['type']
 
         if (
@@ -88,12 +102,14 @@ class Hypervisor(Host):
             )
         return self._storage_type
 
-    def get_volume_by_vm(self, vm):
+    def get_volume_by_vm(self, vm) -> virStorageVol:
         """Get logical volume information of a VM"""
-        for vol_name in self.get_storage_pool().listVolumes():
+        for vol_name in self.get_storage_pool(vg_name=vm.vg_name).listVolumes():
             # Match the LV based on the object_id encoded within its name
             if vm.match_uid_name(vol_name):
-                return self.get_storage_pool().storageVolLookupByName(vol_name)
+                return self.get_storage_pool(
+                    vg_name=vm.vg_name
+                ).storageVolLookupByName(vol_name)
 
         raise StorageError(
             'No existing storage volume found for VM "{}" on "{}".'
@@ -120,7 +136,7 @@ class Hypervisor(Host):
                         vm.uid_name
                     )
                 )
-                self.get_storage_pool().refresh()
+                self.get_storage_pool(vg_name=vm.vg_name).refresh()
 
     def vm_mount_path(self, vm):
         """Returns the mount path for a VM or raises HypervisorError if not
@@ -215,7 +231,7 @@ class Hypervisor(Host):
             raise HypervisorError(
                 'Not enough free space in VG {} to build VM while keeping'
                 ' {} GiB reserved'
-                .format(VG_NAME, RESERVED_DISK[self.get_storage_type()])
+                .format(vm.vg_name, RESERVED_DISK[self.get_storage_type()])
             )
 
         # VM already defined? Least likely, if at all.
@@ -361,7 +377,7 @@ class Hypervisor(Host):
             # There is no resize function in version of libvirt
             # available in Debian 9.
             self.run('lvresize {} -L {}g'.format(volume.path(), new_size_gib))
-            self.get_storage_pool().refresh()
+            self.get_storage_pool(vg_name=vm.vg_name).refresh()
         else:
             raise NotImplementedError(
                 'Storage volume resizing is supported only on LVM storage!'
@@ -388,18 +404,20 @@ class Hypervisor(Host):
             size=vm.dataset_obj['disk_size_gib'],
         )
 
-        volume = self.get_storage_pool().createXML(volume_xml, 0)
+        volume = self.get_storage_pool(vg_name=vm.vg_name).createXML(volume_xml, 0)
         if volume is None:
             raise StorageError(
                 'Failed to create storage volume {}/{}'.format(
-                    self.get_storage_pool().name(),
+                    self.get_storage_pool(vg_name=vm.vg_name).name(),
                     vol_name,
                 )
             )
 
         if transaction:
             def destroy_storage():
-                vol = self.get_storage_pool().storageVolLookupByName(vol_name)
+                vol = self.get_storage_pool(
+                    vg_name=vm.vg_name
+                ).storageVolLookupByName(vol_name)
                 vol.delete()
 
             transaction.on_rollback('destroy storage', destroy_storage)
@@ -810,7 +828,7 @@ class Hypervisor(Host):
         # XXX: undefine_vm depends on vm.fqdn beeing the old name for finding
         # legacy domains w/o an uid_name.  The order is therefore important.
         vm.fqdn = new_fqdn or vm.fqdn
-        self.define_vm(vm)
+        self.define_vm(vm=vm, vg_name=vm.vg_name)
 
     def _vm_sync_from_hypervisor(self, vm, result):
         vm_info = self._get_domain(vm).info()
@@ -828,9 +846,9 @@ class Hypervisor(Host):
         props = DomainProperties.from_running(self, vm, self._get_domain(vm))
         return props.info()
 
-    def get_free_disk_size_gib(self, safe=True):
+    def get_free_disk_size_gib(self, safe=True, vg_name=DEFAULT_VG_NAME):
         """Return free disk space as float in GiB"""
-        pool_info = self.get_storage_pool().info()
+        pool_info = self.get_storage_pool(vg_name=vg_name).info()
         # Floor instead of ceil because we check free instead of used space
         vg_size_gib = math.floor(float(pool_info[3]) / 1024 ** 3)
         if safe is True:

@@ -37,6 +37,7 @@ from igvm.settings import (
     HYPERVISOR_ATTRIBUTES,
     HYPERVISOR_PREFERENCES,
     VM_ATTRIBUTES,
+    DEFAULT_VG_NAME,
 )
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, parallel
@@ -319,6 +320,7 @@ def vm_build(
     soft_preferences: bool = False,
     barebones: bool = False,
     target_hv_query: Optional[str] = None,
+    vg_name: str = '',
 ):
     """Create a VM and start it
 
@@ -326,7 +328,10 @@ def vm_build(
     """
 
     with ExitStack() as es:
-        vm = es.enter_context(_get_vm(vm_hostname))
+        vm = es.enter_context(_get_vm(
+            hostname=vm_hostname,
+            vg_name=vg_name  # Need to pass only while building
+        ))
 
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
             # check if aws_image_id is our own, if yes, skip puppet_run in
@@ -399,6 +404,7 @@ def vm_build(
                 postboot=postboot,
                 cleanup_cert=rebuild,
                 barebones=barebones,
+                vg_name=vm.vg_name,
             )
         else:
             raise NotImplementedError(
@@ -438,6 +444,12 @@ def vm_migrate(
         else:
             _vm = es.enter_context(
                 _get_vm(vm_hostname, allow_retired=True)
+            )
+
+        if _vm.vg_name != DEFAULT_VG_NAME:
+            raise NotImplementedError(
+                'This operation is not yet supported for VMs with VGs other '
+                'than {}'.format(DEFAULT_VG_NAME)
             )
 
         if _vm.dataset_obj['datacenter_type'] != 'kvm.dct':
@@ -940,7 +952,7 @@ def clean_cert(hostname: str):
 
 
 @contextmanager
-def _get_vm(hostname, unlock=True, allow_retired=False):
+def _get_vm(hostname, unlock=True, allow_retired=False, vg_name=None):
     """Get a server from Serveradmin by hostname to return VM object
 
     The function is accepting hostnames in any length as long as it resolves
@@ -968,7 +980,7 @@ def _get_vm(hostname, unlock=True, allow_retired=False):
             dataset_obj, 'hypervisor', dataset_obj['hypervisor']['hostname']
         )
 
-    vm = VM(dataset_obj, hypervisor)
+    vm = VM(dataset_obj=dataset_obj, hypervisor=hypervisor, vg_name=vg_name)
     vm.acquire_lock()
 
     try:

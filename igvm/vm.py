@@ -42,6 +42,7 @@ from igvm.settings import (
     AWS_INSTANCES_OVERVIEW_URL,
     MEM_BLOCK_BOUNDARY_GiB,
     MEM_BLOCK_SIZE_GiB,
+    DEFAULT_VG_NAME,
 )
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
@@ -69,7 +70,7 @@ class VM(Host):
     __vpc = None
     __consolidated_sg = None
 
-    def __init__(self, dataset_obj, hypervisor=None):
+    def __init__(self, dataset_obj, hypervisor=None, vg_name=None):
         super(VM, self).__init__(dataset_obj)
         self.hypervisor = hypervisor
 
@@ -78,6 +79,23 @@ class VM(Host):
         # upon method of accessing files correctly: mounted image on HV or
         # directly on running VM.
         self.mounted = False
+
+        if vg_name is None:
+            # Check if we can find it
+
+            if hypervisor is None:
+                # This is probably caused by an error,
+                # but we will pass as None
+                self.vg_name = None
+            else:
+                found_vg = self.hypervisor.find_vg_of_vm(dataset_obj)
+                if found_vg:
+                    self.vg_name = found_vg
+                else:
+                    # Should not happen, but we assume it is the default
+                    self.vg_name = DEFAULT_VG_NAME
+        else:
+            self.vg_name = vg_name
 
     def vm_host(self):
         """ Return correct ssh host for mounted and unmounted vm """
@@ -643,6 +661,7 @@ class VM(Host):
             postboot=None,
             cleanup_cert=False,
             barebones=False,
+            vg_name=DEFAULT_VG_NAME,
     ):
         """Builds a VM."""
         hypervisor = self.hypervisor

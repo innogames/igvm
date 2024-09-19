@@ -49,7 +49,7 @@ from igvm.settings import (
     HYPERVISOR_ATTRIBUTES,
     HYPERVISOR_CPU_THRESHOLDS,
     KVM_HWMODEL_TO_CPUMODEL,
-    VG_NAME,
+    DEFAULT_VG_NAME,
     VM_ATTRIBUTES
 )
 from igvm.utils import parse_size
@@ -156,7 +156,7 @@ class IGVMTest(TestCase):
         clean_cert(self.vm_obj)
         clean_all(self.route_network, self.datacenter_type, VM_HOSTNAME)
 
-    def check_vm_present(self, vm_name=VM_HOSTNAME):
+    def check_vm_present(self, vm_name=VM_HOSTNAME, vg_name=DEFAULT_VG_NAME):
         # Operate on fresh object
         with _get_vm(vm_name) as vm:
             for hv in self.hvs:
@@ -168,7 +168,7 @@ class IGVMTest(TestCase):
                     # Is it gone from other HVs after migration?
                     self.assertEqual(hv.vm_defined(vm), False)
                     hv.run(
-                        'test ! -b /dev/{}/{}'.format(VG_NAME, self.uid_name)
+                        'test ! -b /dev/{}/{}'.format(vg_name, self.uid_name)
                     )
 
             # Is VM itself alive and fine?
@@ -176,7 +176,7 @@ class IGVMTest(TestCase):
             self.assertEqual(fqdn, vm.fqdn)
             self.assertEqual(vm.dataset_obj.is_dirty(), False)
 
-    def check_vm_absent(self, vm_name=VM_HOSTNAME, hv_name=None):
+    def check_vm_absent(self, vm_name=VM_HOSTNAME, hv_name=None, vg_name=DEFAULT_VG_NAME):
         # Operate on fresh object
         with _get_vm(vm_name, allow_retired=True) as vm:
             if self.datacenter_type == 'kvm.dct':
@@ -188,7 +188,7 @@ class IGVMTest(TestCase):
                         self.assertEqual(hv.vm_defined(vm), False)
                         hv.run(
                             'test ! -b /dev/{}/{}'.format(
-                                VG_NAME, self.uid_name)
+                                vg_name, self.uid_name)
                         )
             elif self.datacenter_type == 'aws.dct':
                 self.assertEqual(

@@ -10,6 +10,7 @@ import time
 
 from fabric.network import disconnect_all
 
+from igvm.settings import DEFAULT_VG_NAME
 from igvm.commands import (
     change_address,
     clean_cert,
@@ -109,6 +110,14 @@ def parse_args():
         '--postboot',
         metavar='postboot_script',
         help='Run postboot_script on the guest after first boot',
+    )
+    subparser.add_argument(
+        '--vg-name',
+        metavar='vg_name',
+        default=DEFAULT_VG_NAME,
+        help='Name of the volume group to use for the VM (default: {})'.format(
+            DEFAULT_VG_NAME
+        ),
     )
     subparser.add_argument(
         '--skip-puppet',
