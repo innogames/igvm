@@ -229,7 +229,9 @@ class Hypervisor(Host):
         """Creates a VM on the hypervisor."""
         log.info('Defining "{}" on "{}"...'.format(vm.fqdn, self.fqdn))
 
-        self.conn().defineXML(generate_domain_xml(self, vm))
+        self.conn().defineXML(
+            generate_domain_xml(hypervisor=self, vm=vm)
+        )
 
         # Refresh storage pools to register the vm image
         for pool_name in self.conn().listStoragePools():
@@ -370,7 +372,9 @@ class Hypervisor(Host):
         )
         vm.run('xfs_growfs /')
 
-    def create_vm_storage(self, vm, transaction=None, vol_name=None):
+    def create_vm_storage(
+        self, vm, transaction=None, vol_name=None
+    ):
         """Allocate storage for a VM. Returns the disk path."""
         vol_name = vm.uid_name if vol_name is None else vol_name
         volume_xml = """
@@ -424,8 +428,12 @@ class Hypervisor(Host):
                 )
             )
 
-        self.format_storage(self.get_volume_by_vm(vm).path(), mkfs_options)
-        return self.mount_vm_storage(vm, transaction)
+        self.format_storage(
+            self.get_volume_by_vm(vm).path(), mkfs_options
+        )
+        return self.mount_vm_storage(
+            vm=vm, transaction=transaction
+        )
 
     def download_and_extract_image(self, image, target_dir):
         """Download image, verify its checsum and extract it
@@ -465,7 +473,8 @@ class Hypervisor(Host):
             )
 
         self._mount_path[vm] = self.mount_temp(
-            self.get_volume_by_vm(vm).path(), suffix=('-' + vm.fqdn)
+            self.get_volume_by_vm(vm).path(),
+            suffix=('-' + vm.fqdn),
         )
         if transaction:
             transaction.on_rollback(
@@ -491,7 +500,7 @@ class Hypervisor(Host):
         result = {}
         try:
             vol_size = self.get_volume_by_vm(vm).info()[1]
-            result['disk_size_gib'] = int(math.ceil(vol_size / 1024 ** 3))
+            result['disk_size_gib'] = int(math.ceil(vol_size / 1024**3))
         except HypervisorError:
             raise HypervisorError(
                 'Unable to find source LV and determine its size.'
@@ -701,19 +710,24 @@ class Hypervisor(Host):
                     )
             elif offline_transport == 'xfs':
                 self._wait_for_shutdown(vm, no_shutdown, transaction)
-                with target_hypervisor.xfsrestore(vm, transaction) as listener:
+                with target_hypervisor.xfsrestore(
+                    vm=vm, transaction=transaction, vg_name=target_vg_name
+                ) as listener:
                     self.xfsdump(vm, listener, transaction)
 
                 target_hypervisor.wait_for_xfsrestore(vm)
                 target_hypervisor.check_xfsrestore_log(vm)
                 target_hypervisor.umount_vm_storage(vm)
 
-            target_hypervisor.define_vm(vm, transaction)
+            target_hypervisor.define_vm(
+                vm=vm, transaction=transaction, vg_name=target_vg_name
+            )
         else:
             # For online migrations always use same volume name as VM
             # already has.
             target_hypervisor.create_vm_storage(
-                vm, transaction,
+                vm,
+                transaction,
                 vm.hypervisor.get_volume_by_vm(vm).name(),
             )
             migrate_live(self, target_hypervisor, vm, self._get_domain(vm))
@@ -965,7 +979,7 @@ class Hypervisor(Host):
 
     @contextmanager
     def xfsrestore(
-        self, vm: VM, transaction: Transaction = None,
+        self, vm: VM, transaction: Transaction = None
     ) -> Iterator[Tuple[str, int]]:
         """
         Formats a vm's storage, mounts it, spawns background netcat process

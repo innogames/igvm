@@ -509,8 +509,13 @@ def vm_migrate(
 
         with Transaction() as transaction:
             _vm.hypervisor.migrate_vm(
-                _vm, hypervisor, offline, offline_transport, transaction,
-                no_shutdown, disk_size,
+                vm=_vm,
+                target_hypervisor=hypervisor,
+                offline=offline,
+                offline_transport=offline_transport,
+                transaction=transaction,
+                no_shutdown=no_shutdown,
+                disk_size=disk_size,
             )
             previous_hypervisor = _vm.hypervisor
             _vm.hypervisor = hypervisor
@@ -521,7 +526,10 @@ def vm_migrate(
             transaction.on_rollback('reset hypervisor', _reset_hypervisor)
 
             if run_puppet:
-                hypervisor.mount_vm_storage(_vm, transaction)
+                hypervisor.mount_vm_storage(
+                    vm=_vm,
+                    transaction=transaction,
+                )
                 _vm.run_puppet(debug=debug_puppet)
                 hypervisor.umount_vm_storage(_vm)
 
