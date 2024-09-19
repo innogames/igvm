@@ -225,7 +225,7 @@ class Hypervisor(Host):
             )
 
         # Enough disk?
-        free_disk_space = self.get_free_disk_size_gib()
+        free_disk_space = self.get_free_disk_size_gib(vg_name=vm.vg_name)
         vm_disk_size = float(vm.dataset_obj['disk_size_gib'])
         if vm_disk_size > free_disk_space:
             raise HypervisorError(
