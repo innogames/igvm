@@ -320,7 +320,6 @@ def vm_build(
     soft_preferences: bool = False,
     barebones: bool = False,
     target_hv_query: Optional[str] = None,
-    vg_name: str = '',
 ):
     """Create a VM and start it
 
@@ -330,7 +329,6 @@ def vm_build(
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(
             hostname=vm_hostname,
-            vg_name=vg_name  # Need to pass only while building
         ))
 
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
@@ -979,7 +977,7 @@ def _get_vm(hostname, unlock=True, allow_retired=False, vg_name=None):
             dataset_obj, 'hypervisor', dataset_obj['hypervisor']['hostname']
         )
 
-    vm = VM(dataset_obj=dataset_obj, hypervisor=hypervisor, vg_name=vg_name)
+    vm = VM(dataset_obj=dataset_obj, hypervisor=hypervisor)
     vm.acquire_lock()
 
     try:
