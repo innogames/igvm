@@ -188,6 +188,7 @@ VM_ATTRIBUTES = [
     'igvm_locked',
     'intern_ip',
     'io_weight',
+    'libvirt_pool_override',
     'load_99',
     'mac',
     'memory',

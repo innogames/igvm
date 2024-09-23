@@ -69,8 +69,9 @@ class VM(Host):
     __ec2r = None
     __vpc = None
     __consolidated_sg = None
+    vg_name = None
 
-    def __init__(self, dataset_obj, hypervisor=None, vg_name=None):
+    def __init__(self, dataset_obj, hypervisor=None):
         super(VM, self).__init__(dataset_obj)
         self.hypervisor = hypervisor
 
@@ -80,21 +81,10 @@ class VM(Host):
         # directly on running VM.
         self.mounted = False
 
-        if vg_name is None:
-            # Check if we can find it
-
-            if hypervisor is None:
-                # At AWS we don't have assigned hypervisors hence no vg_name.
-                self.vg_name = None
-            else:
-                found_vg = self.hypervisor.find_vg_of_vm(dataset_obj)
-                if found_vg:
-                    self.vg_name = found_vg
-                else:
-                    # Should not happen, but we assume it is the default
-                    self.vg_name = DEFAULT_VG_NAME
+        if dataset_obj['libvirt_pool_override']:
+            self.vg_name = dataset_obj['libvirt_pool_override']
         else:
-            self.vg_name = vg_name
+            self.vg_name = DEFAULT_VG_NAME
 
     def vm_host(self):
         """ Return correct ssh host for mounted and unmounted vm """
