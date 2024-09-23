@@ -987,6 +987,14 @@ def _get_vm(hostname, unlock=True, allow_retired=False, vg_name=None):
                     hostname,
                 )
             )
+        if (
+            dataset_obj['libvirt_pool_override'] is not None
+            and dataset_obj['hypervisor'] is None
+        ):
+            raise InvalidStateError(
+                'Automatic HV selection is not possible for VMs with special '
+                'VG name requirements. Please specify a HV manually.'
+            )
         yield vm
     except (Exception, KeyboardInterrupt):
         VM(vm_query(), hypervisor).release_lock()
