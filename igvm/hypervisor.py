@@ -729,7 +729,7 @@ class Hypervisor(Host):
             elif offline_transport == 'xfs':
                 self._wait_for_shutdown(vm, no_shutdown, transaction)
                 with target_hypervisor.xfsrestore(
-                    vm=vm, transaction=transaction, vg_name=target_vg_name
+                    vm=vm, transaction=transaction
                 ) as listener:
                     self.xfsdump(vm, listener, transaction)
 
