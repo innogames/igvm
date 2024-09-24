@@ -9,7 +9,6 @@ from time import sleep
 from adminapi.dataset import Query, DatasetObject
 from fabric.api import settings
 from fabric.operations import sudo
-from fabric2 import Result
 
 from igvm.exceptions import ConfigError
 from igvm.settings import COMMON_FABRIC_SETTINGS
@@ -93,7 +92,7 @@ def clean_cert(vm: DatasetObject, retries: int = 10) -> None:
     )
 
 
-def run_cmd(host: str, cmd: str) -> Result:
+def run_cmd(host: str, cmd: str):
     if 'user' in COMMON_FABRIC_SETTINGS:
         user = COMMON_FABRIC_SETTINGS['user']
     else:

@@ -31,7 +31,6 @@ from igvm.settings import (
     KVM_DEFAULT_MAX_CPUS,
     KVM_HWMODEL_TO_CPUMODEL,
     MAC_ADDRESS_PREFIX,
-    VG_NAME,
     MIGRATE_CONFIG,
 )
 from igvm.utils import parse_size, parallel
@@ -369,7 +368,7 @@ def generate_domain_xml(hypervisor, vm):
 
     config = {
         'name': vm.uid_name,
-        'disk_pool': VG_NAME,
+        'disk_pool': vm.vg_name,
         'disk_volume': hypervisor.get_volume_by_vm(vm).name(),
         'io_weight': (
             500 if vm.dataset_obj['io_weight'] == 'default' else 250

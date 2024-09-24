@@ -37,7 +37,7 @@ COMMON_FABRIC_SETTINGS = dict(
 if 'IGVM_SSH_USER' in environ:
     COMMON_FABRIC_SETTINGS['user'] = environ.get('IGVM_SSH_USER')
 
-VG_NAME = 'xen-data'
+DEFAULT_VG_NAME = 'xen-data'
 # Reserved pool space on Hypervisor
 # TODO: this could be a percent value, at least for ZFS.
 RESERVED_DISK = {
@@ -188,6 +188,7 @@ VM_ATTRIBUTES = [
     'igvm_locked',
     'intern_ip',
     'io_weight',
+    'libvirt_pool_override',
     'load_99',
     'mac',
     'memory',

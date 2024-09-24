@@ -6,6 +6,7 @@ Copyright (c) 2018 InnoGames GmbH
 from adminapi import api
 from contextlib import contextmanager
 from igvm.exceptions import RemoteCommandError
+from igvm.settings import DEFAULT_VG_NAME
 from io import BytesIO
 from logging import getLogger
 from time import sleep
@@ -20,6 +21,11 @@ class DRBD(object):
         self.hv = hv
         self.master_role = master_role
 
+        if vm.vg_name != DEFAULT_VG_NAME:
+            raise NotImplementedError(
+                'DRBD migration only supported for volumes in the {} VG'
+                .format(DEFAULT_VG_NAME)
+            )
         lv = vm.hypervisor.get_volume_by_vm(vm).path()
         lv_name = lv.split('/')
         self.vg_name = lv_name[2]

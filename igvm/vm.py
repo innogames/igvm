@@ -42,6 +42,7 @@ from igvm.settings import (
     AWS_INSTANCES_OVERVIEW_URL,
     MEM_BLOCK_BOUNDARY_GiB,
     MEM_BLOCK_SIZE_GiB,
+    DEFAULT_VG_NAME,
 )
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
@@ -68,6 +69,7 @@ class VM(Host):
     __ec2r = None
     __vpc = None
     __consolidated_sg = None
+    vg_name = None
 
     def __init__(self, dataset_obj, hypervisor=None):
         super(VM, self).__init__(dataset_obj)
@@ -79,13 +81,17 @@ class VM(Host):
         # directly on running VM.
         self.mounted = False
 
+        if dataset_obj['libvirt_pool_override']:
+            self.vg_name = dataset_obj['libvirt_pool_override']
+        else:
+            self.vg_name = DEFAULT_VG_NAME
+
     def vm_host(self):
         """ Return correct ssh host for mounted and unmounted vm """
 
         if self.mounted:
             return self.hypervisor.fabric_settings()
-        else:
-            return self.fabric_settings()
+        return self.fabric_settings()
 
     def vm_path(self, path=''):
         """ Append correct prefix to reach VM's / directory """
@@ -95,8 +101,7 @@ class VM(Host):
                 self.hypervisor.vm_mount_path(self),
                 path,
             )
-        else:
-            return '/{}'.format(path)
+        return '/{}'.format(path)
 
     def run(self, command, silent=False, with_sudo=True):
         """ Same as Fabric's run() but works on mounted or running vm
@@ -115,8 +120,7 @@ class VM(Host):
                     silent=silent,
                     with_sudo=with_sudo,
                 )
-            else:
-                return super(VM, self).run(command, silent=silent)
+            return super(VM, self).run(command, silent=silent)
 
     def read_file(self, path):
         """Read a file from a running VM or a mounted image on HV."""
@@ -667,20 +671,22 @@ class VM(Host):
             transaction.on_rollback('Clean cert', clean_cert, self.dataset_obj)
 
             # Perform operations on the hypervisor
-            self.hypervisor.create_vm_storage(self, transaction)
+            self.hypervisor.create_vm_storage(
+                vm=self, transaction=transaction
+            )
 
             # The following operations are only performed in case we
             # don't want to build a barebones VM
             if not barebones:
                 mount_path = self.hypervisor.format_vm_storage(
-                    self, transaction
+                    vm=self, transaction=transaction
                 )
                 self.hypervisor.download_and_extract_image(image, mount_path)
 
             # This needs to happen at this point, so that the memory
             # usage of this VM is already taken into consideration if
             # a hypervisor is selected during a later igvm build run.
-            hypervisor.define_vm(self, transaction)
+            hypervisor.define_vm(vm=self, transaction=transaction)
 
             # Unlocking here is safe, because we keep the state in the
             # hypervisor object and a second release will trigger no

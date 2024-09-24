@@ -37,6 +37,7 @@ from igvm.settings import (
     HYPERVISOR_ATTRIBUTES,
     HYPERVISOR_PREFERENCES,
     VM_ATTRIBUTES,
+    DEFAULT_VG_NAME,
 )
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, parallel
@@ -326,7 +327,9 @@ def vm_build(
     """
 
     with ExitStack() as es:
-        vm = es.enter_context(_get_vm(vm_hostname))
+        vm = es.enter_context(_get_vm(
+            hostname=vm_hostname,
+        ))
 
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
             # check if aws_image_id is our own, if yes, skip puppet_run in
@@ -440,6 +443,12 @@ def vm_migrate(
                 _get_vm(vm_hostname, allow_retired=True)
             )
 
+        if _vm.vg_name != DEFAULT_VG_NAME:
+            raise NotImplementedError(
+                'This operation is not yet supported for VMs with VGs other '
+                'than {}'.format(DEFAULT_VG_NAME)
+            )
+
         if _vm.dataset_obj['datacenter_type'] != 'kvm.dct':
             raise NotImplementedError(
                 'This operation is not yet supported for {}'.format(
@@ -509,8 +518,13 @@ def vm_migrate(
 
         with Transaction() as transaction:
             _vm.hypervisor.migrate_vm(
-                _vm, hypervisor, offline, offline_transport, transaction,
-                no_shutdown, disk_size,
+                vm=_vm,
+                target_hypervisor=hypervisor,
+                offline=offline,
+                offline_transport=offline_transport,
+                transaction=transaction,
+                no_shutdown=no_shutdown,
+                disk_size=disk_size,
             )
             previous_hypervisor = _vm.hypervisor
             _vm.hypervisor = hypervisor
@@ -521,7 +535,10 @@ def vm_migrate(
             transaction.on_rollback('reset hypervisor', _reset_hypervisor)
 
             if run_puppet:
-                hypervisor.mount_vm_storage(_vm, transaction)
+                hypervisor.mount_vm_storage(
+                    vm=_vm,
+                    transaction=transaction,
+                )
                 _vm.run_puppet(debug=debug_puppet)
                 hypervisor.umount_vm_storage(_vm)
 
@@ -932,7 +949,7 @@ def clean_cert(hostname: str):
 
 
 @contextmanager
-def _get_vm(hostname, unlock=True, allow_retired=False):
+def _get_vm(hostname, unlock=True, allow_retired=False, vg_name=None):
     """Get a server from Serveradmin by hostname to return VM object
 
     The function is accepting hostnames in any length as long as it resolves
@@ -960,7 +977,7 @@ def _get_vm(hostname, unlock=True, allow_retired=False):
             dataset_obj, 'hypervisor', dataset_obj['hypervisor']['hostname']
         )
 
-    vm = VM(dataset_obj, hypervisor)
+    vm = VM(dataset_obj=dataset_obj, hypervisor=hypervisor)
     vm.acquire_lock()
 
     try:
@@ -969,6 +986,14 @@ def _get_vm(hostname, unlock=True, allow_retired=False):
                 'VM {} is in state retired, I refuse to work on it!'.format(
                     hostname,
                 )
+            )
+        if (
+            dataset_obj['libvirt_pool_override'] is not None
+            and dataset_obj['hypervisor'] is None
+        ):
+            raise InvalidStateError(
+                'Automatic HV selection is not possible for VMs with special '
+                'VG name requirements. Please specify a HV manually.'
             )
         yield vm
     except (Exception, KeyboardInterrupt):
