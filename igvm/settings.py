@@ -125,6 +125,7 @@ NETWORK_ATTRIBUTES = [
 ]
 
 HYPERVISOR_ATTRIBUTES = [
+    'ceph_disks',
     'cpu_perffactor',
     'cpu_util_pct',
     'environment',
