@@ -174,15 +174,17 @@ def set_vcpus(hypervisor, vm, domain, num_cpu):
 def _live_repin_cpus(domain, props, max_phys_cpus):
     """Adjusts NUMA pinning of all VCPUs."""
     num_nodes = props.num_nodes
-    for vcpu, mask in enumerate(domain.vcpuPinInfo()):
-        mask = list(mask)
-        # Set interleaving NUMA pinning for each VCPU up to the maximum
+    max_vcpus = props.max_cpus
+    # We used to iterate over the output of domain.vcpuPinInfo() here but
+    # it only showed the pinning for the current CPUs, not the maximum.
+    # It ended up that when migrating VMs from a host with more CPUs to a host
+    # with less CPUs, the VM couldn't have the amount of vCPUs increased, as the
+    # pinning still had the old (higher) amount of CPUs.
+    for vcpu in range(max_vcpus):
+        mask = []
+        # Set interleaving NUMA pinning for each vCPU up to the maximum
         for pcpu in range(0, max_phys_cpus):
-            mask[pcpu] = (pcpu % num_nodes == vcpu % num_nodes)
-        # And disable all above the threshold
-        # (Useful when migrating to a host with less CPUs)
-        for pcpu in range(max_phys_cpus, len(mask)):
-            mask[pcpu] = False
+            mask.append(pcpu % num_nodes == vcpu % num_nodes)
         domain.pinVcpu(vcpu, tuple(mask))
 
 
