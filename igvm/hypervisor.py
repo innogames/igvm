@@ -750,12 +750,25 @@ class Hypervisor(Host):
             )
             migrate_live(self, target_hypervisor, vm, self._get_domain(vm))
 
+    def _get_reserved_hv_memory_mib(self):
+        """Get the amount of memory reserved for the hypervisor
+
+        This is determined by both KVM's FS and extra memory reserved for
+        Ceph's OSDs.
+        """
+        total_reserved_mib = HOST_RESERVED_MEMORY_MIB[self.get_storage_type()]
+        # ceph_disks is a multi-attribute holding one record for each OSD
+        # and their size. For each, we'll reserve 4GiB of memory.
+        total_reserved_mib += 4096 * len(self.dataset_obj['ceph_disks'])
+
+        return total_reserved_mib
+
     def total_vm_memory(self):
         """Get amount of memory in MiB available to hypervisor"""
         # Start with what OS sees as total memory (not installed memory)
         total_mib = self.conn().getMemoryStats(-1)['total'] // 1024
         # Always keep some extra memory free for Hypervisor
-        total_mib -= HOST_RESERVED_MEMORY_MIB[self.get_storage_type()]
+        total_mib -= self._get_reserved_hv_memory_mib()
         return total_mib
 
     def free_vm_memory(self) -> int:
