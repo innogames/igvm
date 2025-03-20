@@ -71,7 +71,6 @@ KVM_HWMODEL_TO_CPUMODEL = {
 }
 
 XFS_CONFIG = {
-    'stretch': [''],
     'buster': ['-m reflink=1'],
     'bullseye': ['-m reflink=1'],
     'bookworm': ['-m reflink=1'],
@@ -91,15 +90,6 @@ P2P_TLS_MIGRATION = {
 # There are various combinations of source and target HVs which come
 # with their own bugs and must be addressed separately.
 MIGRATE_CONFIG = {
-    # Live migration works only via p2p on Stretch. See Debian bug #796122.
-    ('stretch', 'stretch'): P2P_MIGRATION,
-    ('stretch', 'buster'): P2P_MIGRATION,
-    # ('buster', 'stretch') impossible because of AppArmor on Buster
-    # "direct migration is not supported by the source host"
-    ('buster', 'buster'): P2P_MIGRATION,
-    # Online migrations are only working between Bullseye and Bullseye.
-    # The other cases for migrations (Buster to Bullseye and vice-versa) are
-    # not working, due to what looks like libvirt incompatibility.
     ('bullseye', 'bullseye'): P2P_TLS_MIGRATION,
     ('bullseye', 'bookworm'): P2P_TLS_MIGRATION,
     ('bookworm', 'bookworm'): P2P_TLS_MIGRATION,
