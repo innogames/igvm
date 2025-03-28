@@ -137,7 +137,8 @@ HYPERVISOR_ATTRIBUTES = [
     {
         'vlan_networks': [
             'hostname',
-            'intern_ip',
+            'ipv4',
+            'ipv6',
             'vlan_tag',
         ],
     },

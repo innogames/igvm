@@ -13,7 +13,7 @@ from time import sleep
 from typing import List, Optional
 
 from adminapi import parse
-from adminapi.dataset import Query
+from adminapi.dataset import Query, DatasetError
 from adminapi.filters import Any, BaseFilter, StartsWith, Contains
 from fabric.colors import green, red, white, yellow
 from fabric.network import disconnect_all
@@ -26,7 +26,7 @@ from igvm.exceptions import (
     HypervisorError,
     IGVMError,
     InconsistentAttributeError,
-    InvalidStateError,
+    InvalidStateError, NetworkError,
 )
 from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
@@ -268,14 +268,22 @@ def change_address(
             err = 'Current hypervisor does not support new subnet!'
             raise ConfigError(err)
 
-        new_network = Query(
-            {
-                'servertype': 'route_network',
-                'state': 'online',
-                'network_type': 'internal',
-                'intern_ip': Contains(new_address),
-            }
-        ).get()['hostname']
+        for attr in ('ipv4', 'ipv6'):
+            try:
+                new_network = Query(
+                    {
+                        'servertype': 'route_network',
+                        'state': 'online',
+                        'network_type': 'internal',
+                        attr: Contains(new_address),
+                    }
+                ).get()['hostname']
+                break
+            except DatasetError:
+                new_network = None
+
+        if new_network is None:
+            raise NetworkError(f'Can\'t find a route_network for IP address {new_address}')
 
         vm_was_running = vm.is_running()
 
