@@ -73,6 +73,8 @@ def teardown_module():
 
 
 class IGVMTest(TestCase):
+    ip_attr = 'ipv4'
+
     def setUp(self):
         """Initialize VM object before every test
 
@@ -112,7 +114,7 @@ class IGVMTest(TestCase):
         self.vm_obj['environment'] = 'testing'
         self.vm_obj['hostname'] = VM_HOSTNAME
         self.vm_obj['hypervisor'] = None
-        self.vm_obj['intern_ip'] = get_next_address(VM_NET, 1)
+        self.vm_obj['intern_ip'] = get_next_address(VM_NET, 1, self.ip_attr)
         self.vm_obj['memory'] = 2048
         self.vm_obj['no_monitoring'] = True
         self.vm_obj['num_cpu'] = 2
@@ -225,7 +227,7 @@ class SettingsHardwareModelTest(TestCase):
                 msg='Missing hardware_model in KVM_HWMODEL_TO_CPUMODEL')
 
 
-class BuildTest(IGVMTest):
+class _BuildTest(IGVMTest):
     """Test many possible VM building scenarios"""
 
     def test_vm_build(self):
@@ -290,6 +292,13 @@ class BuildTest(IGVMTest):
         with _get_vm(VM_HOSTNAME) as vm:
             vm.run('test ! -f /root/initial_canary')
 
+
+class BuildTestIPv4(_BuildTest):
+    ip_attr = 'ipv4'
+
+
+class BuildTestIPv6(_BuildTest):
+    ip_attr = 'ipv6'
 
 class CommandTest(IGVMTest):
     def setUp(self):
@@ -682,7 +691,7 @@ class MigrationTest(IGVMTest):
         # We don't have a way to ask for new IP address from Serveradmin
         # and lock it for us. The method below will usually work fine.
         # When it starts failing, we must develop retry method.
-        new_address = get_next_address(VM_NET, 2)
+        new_address = get_next_address(VM_NET, 2, 'ipv4')
 
         change_address(VM_HOSTNAME, new_address, offline=True)
 
