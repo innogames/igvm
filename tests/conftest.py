@@ -74,8 +74,9 @@ def clean_all(route_network, datacenter_type, vm_hostname=None):
     # logic to assign them and we want to avoid IP address conflicts.
     # Index 1 is usually used for the test's subject VM,
     # 2 might be used for testing IP change.
-    ips = [get_next_address(VM_NET, i) for i in [1, 2]]
-    clean_serveradmin({'intern_ip': Any(*ips)})
+    for ip_attr in ('ipv4', 'ipv6'):
+        ips = [get_next_address(VM_NET, i, ip_attr) for i in [1, 2]]
+        clean_serveradmin({ip_attr: Any(*ips)})
 
 
 def clean_hv(hv, pattern):
@@ -208,16 +209,16 @@ def clean_aws(vm_hostname):
             raise
 
 
-def get_next_address(vm_net, index):
+def get_next_address(vm_net, index, ip_attr):
     non_vm_hosts = list(Query({
         'project_network': vm_net,
         'servertype': Not('vm'),
-    }, ['intern_ip']))
+    }, [ip_attr]))
     offset = 1 if len(non_vm_hosts) > 0 else 0
     subnet_levels = ceil(log(PYTEST_XDIST_WORKER_COUNT + offset, 2))
-    project_network = Query({'hostname': vm_net}, ['intern_ip']).get()
+    project_network = Query({'hostname': vm_net}, [ip_attr]).get()
     try:
-        subnets = list(project_network['intern_ip'].subnets(subnet_levels))
+        subnets = list(project_network[ip_attr].subnets(subnet_levels))
     except ValueError:
         raise IGVMTestError(
             'Can\'t split {} into enough subnets '

@@ -5,6 +5,7 @@ Copyright (c) 2018 InnoGames GmbH
 
 from __future__ import division
 
+import ipaddress
 import logging
 import socket
 import time
@@ -49,7 +50,11 @@ def retry_wait_backoff(fn_check, fail_msg, max_wait=20):
 
 
 def ping_port(ip, port=22, timeout=1):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    ip_type = ipaddress.ip_address(ip)
+    if ip_type.version == 4:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    else:
+        s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     s.settimeout(timeout)
     try:
         s.connect((ip, port))

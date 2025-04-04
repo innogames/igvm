@@ -155,7 +155,7 @@ class Hypervisor(Host):
         its IP address changed.
         """
         for vlan_network in self.dataset_obj['vlan_networks']:
-            if ip_addr in vlan_network['intern_ip']:
+            if ip_addr in vlan_network['ipv4'] or ip_addr in vlan_network['ipv6']:
                 return vlan_network
         return None
 
