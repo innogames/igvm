@@ -1,8 +1,8 @@
 setuptools~=73.0
-adminapi@git+https://github.com/innogames/serveradmin.git@v4.15.0#egg=adminapi
+adminapi@git+https://github.com/innogames/serveradmin.git@v4.20.0#egg=adminapi
 netaddr~=0.8
 cffi~=1.14
-paramiko~=2.7
+paramiko>=2.7,<=4
 Fabric3~=1.14
 libvirt-python>=7,<=9
 jinja2~=2.11
