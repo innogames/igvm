@@ -319,8 +319,7 @@ def parse_args():
     )
     subparser.add_argument(
         'count',
-        type=int,
-        help='New number of CPUs',
+        help='New number of CPUs, integers with optional prefix + or -',
     )
     subparser.add_argument(
         '--offline',
