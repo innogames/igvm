@@ -125,7 +125,6 @@ HYPERVISOR_ATTRIBUTES = [
     'igvm_migration_log',
     'intern_ip',
     'iops_avg',
-    'igvm_migration_log',
     'libvirt_memory_total_gib',
     'libvirt_memory_used_gib',
     'libvirt_pool_total_gib',
