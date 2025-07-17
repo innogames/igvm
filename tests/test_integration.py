@@ -118,7 +118,7 @@ class IGVMTest(TestCase):
         self.vm_obj['memory'] = 2048
         self.vm_obj['no_monitoring'] = True
         self.vm_obj['num_cpu'] = 2
-        self.vm_obj['os'] = 'bullseye'
+        self.vm_obj['os'] = 'bookworm'
         self.vm_obj['project'] = 'test'
         self.vm_obj['puppet_environment'] = None
         self.vm_obj['puppet_ca'] = 'testing-puppetca.innogames.de'
