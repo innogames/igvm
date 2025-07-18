@@ -58,7 +58,6 @@ from tests import VM_HOSTNAME, VM_NET
 from tests.conftest import (
     clean_all,
     cmd,
-    get_next_address,
 )
 
 basicConfig(level=INFO)
@@ -114,7 +113,7 @@ class IGVMTest(TestCase):
         self.vm_obj['environment'] = 'testing'
         self.vm_obj['hostname'] = VM_HOSTNAME
         self.vm_obj['hypervisor'] = None
-        self.vm_obj['intern_ip'] = get_next_address(VM_NET, 1, self.ip_attr)
+        self.vm_obj['project_network'] = VM_NET
         self.vm_obj['memory'] = 2048
         self.vm_obj['no_monitoring'] = True
         self.vm_obj['num_cpu'] = 2
@@ -688,15 +687,11 @@ class MigrationTest(IGVMTest):
             vm_migrate(VM_HOSTNAME)
 
     def test_new_address(self):
-        # We don't have a way to ask for new IP address from Serveradmin
-        # and lock it for us. The method below will usually work fine.
-        # When it starts failing, we must develop retry method.
-        new_address = get_next_address(VM_NET, 2, 'ipv4')
-
+        new_address = Query({'hostname': VM_NET}, ['intern_ip']).get_free_ip_addr(lock=True)
         change_address(VM_HOSTNAME, new_address, offline=True)
 
-        obj = Query({'hostname': VM_HOSTNAME}, ['intern_ip']).get()
-        self.assertEqual(obj['intern_ip'], new_address)
+        obj = Query({'hostname': VM_HOSTNAME}, ['ipv4']).get()
+        self.assertEqual(obj['ipv4'], new_address)
         with _get_vm(VM_HOSTNAME) as vm:
             vm.run(cmd('ip a | grep {}', new_address))
         self.check_vm_present()
