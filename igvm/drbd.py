@@ -189,7 +189,7 @@ class DRBD(object):
             '    }}'
             .format(
                 host=self.hv.dataset_obj['hostname'],
-                addr=self.hv.dataset_obj['intern_ip'],
+                addr=self.hv.dataset_obj['ipv6'],
                 port=self.get_device_port(),
                 dm_minor=self.get_device_minor(),
                 lv_name=self.lv_name,

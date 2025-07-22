@@ -362,7 +362,7 @@ class VM(Host):
             raise VMError('VM did not come online in time')
 
         host_up = wait_until(
-            str(self.dataset_obj['intern_ip']),
+            str(self.dataset_obj['ipv6']),
             waitmsg='Waiting for SSH to respond',
         )
         if not host_up and force_stop_failed:
@@ -407,7 +407,7 @@ class VM(Host):
             raise VMError(e)
 
         host_up = wait_until(
-            str(self.dataset_obj['intern_ip']),
+            str(self.dataset_obj['ipv6']),
             waitmsg='Waiting for SSH to respond',
         )
 
@@ -622,7 +622,8 @@ class VM(Host):
     def info(self):
         result = {
             'hypervisor': self.hypervisor.fqdn,
-            'intern_ip': self.dataset_obj['intern_ip'],
+            'ipv4': self.dataset_obj['ipv4'],
+            'ipv6': self.dataset_obj['ipv6'],
             'num_cpu': self.dataset_obj['num_cpu'],
             'memory': self.dataset_obj['memory'],
             'disk_size_gib': self.dataset_obj['disk_size_gib'],
@@ -782,8 +783,8 @@ class VM(Host):
                             self.dataset_obj['aws_placement']
                         )
                     },
-                    PrivateIpAddress=str(self.dataset_obj['intern_ip']),
-                    Ipv6Addresses=[{'Ipv6Address':str(self.dataset_obj['primary_ip6'])}],
+                    PrivateIpAddress=str(self.dataset_obj['ipv4']),
+                    Ipv6Addresses=[{'Ipv6Address':str(self.dataset_obj['ipv6'])}],
                     UserData='' if postboot is None else postboot,
                     TagSpecifications=[
                         {
@@ -1021,16 +1022,19 @@ class VM(Host):
         self.put('/buildvm-postboot', script, '0755')
 
     def restore_address(self):
-        self.dataset_obj['intern_ip'] = self.old_address
+        self.dataset_obj['ipv4'] = self.old_address_ipv4
+        self.dataset_obj['ipv6'] = self.old_address_ipv6
         self.dataset_obj.commit()
         self.route_network = self.old_network
 
-    def change_address(self, new_address, new_network, transaction=None):
+    def change_address(self, new_address_ipv4, new_address_ipv6, new_network, transaction=None):
         # All queries to Serveradmin are kept in commands.py.
         # That's why this metod receives both new address and new network.
-        self.old_address = self.dataset_obj['intern_ip']
+        self.old_address_ipv4 = self.dataset_obj['ipv4']
+        self.old_address_ipv6 = self.dataset_obj['ipv6']
         self.old_network = self.route_network
-        self.dataset_obj['intern_ip'] = new_address
+        self.dataset_obj['ipv4'] = new_address_ipv4
+        self.dataset_obj['ipv6'] = new_address_ipv6
         self.dataset_obj.commit()
         self.route_network = new_network
 

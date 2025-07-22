@@ -155,7 +155,7 @@ class Hypervisor(Host):
         its IP address changed.
         """
         for vlan_network in self.dataset_obj['vlan_networks']:
-            if ip_addr in vlan_network['ipv4'] or ip_addr in vlan_network['ipv6']:
+            if ip_addr in vlan_network['ipv6']:
                 return vlan_network
         return None
 
@@ -206,7 +206,7 @@ class Hypervisor(Host):
             )
 
         # Proper VLAN?
-        if not self.get_vlan_network(vm.dataset_obj['intern_ip']):
+        if not self.get_vlan_network(vm.dataset_obj['ipv6']):
             raise HypervisorError(
                 'Hypervisor "{}" does not support route_network "{}".'
                 .format(self.fqdn, vm.route_network)
