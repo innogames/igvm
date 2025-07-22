@@ -11,7 +11,7 @@ from unittest import TestCase
 
 from adminapi import api
 from adminapi.dataset import Query
-from adminapi.filters import Any
+from adminapi.filters import Any, Not
 from fabric.api import env
 from fabric.network import disconnect_all
 from mock import patch
@@ -731,12 +731,28 @@ class MigrationTest(IGVMTest):
         # We don't have a way to ask for new IP address from Serveradmin
         # and lock it for us. The method below will usually work fine.
         # When it starts failing, we must develop retry method.
-        new_address = get_next_address(VM_NET, 2, 'ipv4')
+
+        # First figure out if the network in which the tests are run
+        # is IPv6-only or dual-stack. For dual-stack networks we must
+        # use IPv4 and IPv6 will be auto-assigned.
+        ip_attr = 'ipv4'
+        test_net = Query(
+            {
+                'servertype': 'route_network',
+                'state': Not('retired'),
+                'hostname': VM_NET,
+            },
+            ['hostname', 'ipv4', 'ipv6'],
+        ).get()
+        if not test_net['ipv4']:
+            ip_attr = 'ipv6'
+
+        new_address = get_next_address(VM_NET, 2, ip_attr)
 
         change_address(VM_HOSTNAME, new_address, offline=True)
 
-        obj = Query({'hostname': VM_HOSTNAME}, ['intern_ip']).get()
-        self.assertEqual(obj['intern_ip'], new_address)
+        obj = Query({'hostname': VM_HOSTNAME}, [ip_attr]).get()
+        self.assertEqual(obj[ip_attr], new_address)
         with _get_vm(VM_HOSTNAME) as vm:
             vm.run(cmd('ip a | grep {}', new_address))
         self.check_vm_present()
