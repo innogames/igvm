@@ -420,7 +420,8 @@ class CommandTest(IGVMTest):
             mem_set(VM_HOSTNAME, '2G')
 
         with self.assertRaises(IGVMError):
-            mem_set(VM_HOSTNAME, '200G')
+            # We do not expect our test HVs have so much memory soon.
+            mem_set(VM_HOSTNAME, '20000G')
 
         # Not dividable
         with self.assertRaises(IGVMError):
@@ -431,7 +432,8 @@ class CommandTest(IGVMTest):
         self.vm.shutdown()
 
         with self.assertRaises(IGVMError):
-            mem_set(VM_HOSTNAME, '200G')
+            # We do not expect our test HVs have so much memory soon.
+            mem_set(VM_HOSTNAME, '20000G')
 
         mem_set(VM_HOSTNAME, '1024M')
         self.assertEqual(_get_mem_hv(), 1024)
