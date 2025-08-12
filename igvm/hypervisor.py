@@ -5,6 +5,9 @@ Copyright (c) 2018 InnoGames GmbH
 
 import logging
 import math
+
+from adminapi.dataset import DatasetError
+
 from contextlib import contextmanager
 from time import sleep, time
 from xml.etree import ElementTree
@@ -1194,9 +1197,27 @@ class Hypervisor(Host):
         :param operator: plus for migration to HV, minus for migration from HV
         """
 
-        cpu_usage_vm = self.estimate_vm_cpu_usage(vm)
-        timestamp = int(time())
-        log_entry = '{} {}{}'.format(timestamp, operator, round(cpu_usage_vm))
-
-        self.dataset_obj['igvm_migration_log'].add(log_entry)
-        self.dataset_obj.commit()
+        retry = 5
+        for i in range(0, retry):
+            # It can happen, that multiple migrations at the same time will write the same log
+            # entry. This will fail during the commit and throw a DatasetError
+            try:
+                cpu_usage_vm = self.estimate_vm_cpu_usage(vm)
+                timestamp = int(time())
+                log_entry = '{} {}{}'.format(timestamp, operator, round(cpu_usage_vm))
+                self.dataset_obj['igvm_migration_log'].add(log_entry)
+                self.dataset_obj.commit()
+                return
+            except DatasetError:
+                log.error(
+                    f'Failed to log migration for VM "{str(vm)}" on Hypervisor "{str(self)}". '
+                    'Will try again...'
+                )
+                # remove log entry
+                self.dataset_obj['igvm_migration_log'].remove(log_entry)
+                sleep(i)
+        # The migration log isn't too critical and we can continue without it
+        log.error(
+            f'Failed to log migration for VM "{str(vm)}" on Hypervisor "{str(self)}" after {retry} attempts. '
+            'Migration logging has been lost! Continue anyway'
+        )
