@@ -648,8 +648,7 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
     with ExitStack() as es:
         vm = es.enter_context(_get_vm(vm_hostname))
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
-            vm.aws_shutdown()
-            vm.aws_start()
+            vm.aws_restart()
         elif vm.dataset_obj['datacenter_type'] == 'kvm.dct':
             _check_defined(vm)
 
