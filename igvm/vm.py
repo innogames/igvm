@@ -413,6 +413,30 @@ class VM(Host):
 
         if not host_up:
             raise VMError('The server is not reachable with SSH')
+        
+    def aws_restart(self):
+        """AWS restart
+
+        Restart a VM in AWS.
+        """
+
+        try:
+            self.ec2c.reboot_instances(
+                InstanceIds=[self.dataset_obj['aws_instance_id']],
+                DryRun=False
+            )
+    
+        except ClientError as e:
+            raise VMError(e)
+
+        host_up = wait_until(
+            str(self.dataset_obj['intern_ip']),
+            waitmsg='Waiting for SSH to respond',
+            timeout=180
+        )
+
+        if not host_up:
+            raise VMError('The server is not reachable with SSH')
 
     def shutdown(self, check_vm_up_on_transaction=True, transaction=None):
         self.hypervisor.stop_vm(self)
