@@ -1,32 +1,27 @@
 """igvm - Shared functions
 
-Copyright (c) 2020 InnoGames GmbH
+Copyright (c) 2025 InnoGames GmbH
 """
 
 from datetime import datetime, timezone
-from math import ceil, log
 from re import match
-from time import sleep
 from shlex import quote
+from time import sleep
 from typing import Optional
 
 import boto3
 from adminapi.dataset import Query
 from adminapi.exceptions import DatasetError
-from adminapi.filters import Any, Not, Regexp
+from adminapi.filters import Any, Regexp
 from botocore.exceptions import ClientError
 from libvirt import VIR_DOMAIN_RUNNING
 
-from igvm.exceptions import IGVMTestError
 from igvm.hypervisor import Hypervisor
 from igvm.settings import HYPERVISOR_ATTRIBUTES, AWS_RETURN_CODES
 from tests import (
     IGVM_LOCKED_TIMEOUT,
     JENKINS_EXECUTOR,
-    PYTEST_XDIST_WORKER,
-    PYTEST_XDIST_WORKER_COUNT,
     VM_HOSTNAME_PATTERN,
-    VM_NET,
 )
 
 
@@ -69,14 +64,6 @@ def clean_all(route_network, datacenter_type, vm_hostname=None):
 
     # Remove all connected Serveradmin objects.
     clean_serveradmin({'hostname': Regexp(pattern)})
-
-    # Try to remove VMs with the same IP in any case because we use custom
-    # logic to assign them and we want to avoid IP address conflicts.
-    # Index 1 is usually used for the test's subject VM,
-    # 2 might be used for testing IP change.
-    for ip_attr in ('ipv4', 'ipv6'):
-        ips = [get_next_address(VM_NET, i, ip_attr) for i in [1, 2]]
-        clean_serveradmin({ip_attr: Any(*ips)})
 
 
 def clean_hv(hv, pattern):
@@ -207,30 +194,3 @@ def clean_aws(vm_hostname):
         if not any(error in str(e) for error in
                    ['InvalidInstanceID', 'IncorrectInstanceState']):
             raise
-
-
-def get_next_address(vm_net, index, ip_attr):
-    non_vm_hosts = list(Query({
-        'project_network': vm_net,
-        'servertype': Not('vm'),
-    }, [ip_attr]))
-    offset = 1 if len(non_vm_hosts) > 0 else 0
-    subnet_levels = ceil(log(PYTEST_XDIST_WORKER_COUNT + offset, 2))
-    project_network = Query({'hostname': vm_net}, [ip_attr]).get()
-    try:
-        subnets = list(project_network[ip_attr].subnets(subnet_levels))
-    except ValueError:
-        raise IGVMTestError(
-            'Can\'t split {} into enough subnets '
-            'for {} parallel tests'.format(
-                vm_net, PYTEST_XDIST_WORKER_COUNT,
-            )
-        )
-    if len(non_vm_hosts) > subnets[0].num_addresses:
-        raise IGVMTestError(
-            'Can\'t split {} into enough subnets '
-            'for {} parallel tests'.format(
-                vm_net, PYTEST_XDIST_WORKER_COUNT,
-            )
-        )
-    return subnets[PYTEST_XDIST_WORKER + 1][index]
