@@ -13,7 +13,7 @@ from time import sleep, time
 from xml.etree import ElementTree
 
 from igvm.vm import VM
-from libvirt import VIR_DOMAIN_SHUTOFF, virStorageVol, virStoragePool
+from libvirt import VIR_DOMAIN_SHUTOFF, VIR_DOMAIN_UNDEFINE_NVRAM, virStorageVol, virStoragePool
 
 from igvm.drbd import DRBD
 from igvm.exceptions import (
@@ -833,7 +833,9 @@ class Hypervisor(Host):
             # domains w/o an uid_name.  The order is therefore important.
             self.get_volume_by_vm(vm).delete()
 
-        if self._get_domain(vm).undefine() != 0:
+        # UEFI domains have NVRAM files attached to them. As the VM has already been
+        # migrated, we can safely remove the NVRAM file while undefining the domain.
+        if self._get_domain(vm).undefineFlags(VIR_DOMAIN_UNDEFINE_NVRAM) != 0:
             raise HypervisorError('Unable to undefine "{}".'.format(vm.fqdn))
 
     def redefine_vm(self, vm, new_fqdn=None):
