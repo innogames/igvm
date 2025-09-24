@@ -364,7 +364,9 @@ def generate_domain_xml(hypervisor, vm):
     #       VM, instead the VM is updated to the latest settings.
     #       Every KVM setting should be configurable via Serveradmin anyway.
     props = DomainProperties(hypervisor, vm)
-    vlan_network = hypervisor.get_vlan_network(vm.dataset_obj['intern_ip'])
+    vlan_network = hypervisor.get_vlan_network(
+        vm.dataset_obj.get('ipv4',{}).get('ipv6')
+    )
 
     config = {
         'name': vm.uid_name,

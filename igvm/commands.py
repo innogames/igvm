@@ -260,8 +260,11 @@ def change_address(
             )
 
         new_address = ip_address(new_address)
+        new_address_attr = 'ipv6'
+        if new_address.version == 4:
+            new_address_attr = 'ipv4'
 
-        if vm.dataset_obj['intern_ip'] == new_address:
+        if vm.dataset_obj[new_address_attr] == new_address:
             raise ConfigError('New IP address is the same as the old one!')
 
         if not vm.hypervisor.get_vlan_network(new_address) and not migrate:
@@ -824,7 +827,8 @@ def host_info(vm_hostname):
                 'status',
             )),
             ('Network', (
-                'intern_ip',
+                'ipv4',
+                'ipv6',
                 'mac_address',
             )),
             ('Resources', (
