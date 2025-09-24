@@ -11,7 +11,7 @@
   <vcpu current='{{ num_cpu }}'>{{ props.max_cpus }}</vcpu>
 
   <os>
-    <type arch='x86_64' machine='pc-i440fx-2.1'>hvm</type>
+    <type arch='x86_64' machine='pc-q35-7.1'>hvm</type>
 {% if props.boot_type == 'debian' %}
     <kernel>{{ props.kernel_image }}</kernel>
     <initrd>{{ props.initrd_image }}</initrd>
@@ -33,13 +33,13 @@
   <on_reboot>restart</on_reboot>
   <on_crash>destroy</on_crash>
   <devices>
-    <emulator>/usr/bin/kvm</emulator>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
     <disk type='volume' device='disk'>
       <driver name='qemu' type='raw' cache='none' io='native'/>
       <source pool='{{ disk_pool }}' volume='{{disk_volume}}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
-    <controller type='pci' index='0' model='pci-root'/>
+    <controller type='pci' index='0' model='pcie-root'/>
     <!-- usb can only be disabled with model none -->
     <controller type='usb' index='0' model='none'/>
     <controller type='virtio-serial' index='0'>
