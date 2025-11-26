@@ -43,6 +43,7 @@ from igvm.settings import (
     MEM_BLOCK_BOUNDARY_GiB,
     MEM_BLOCK_SIZE_GiB,
     DEFAULT_VG_NAME,
+    PUPPET_BINARY_PATH,
 )
 from igvm.transaction import Transaction
 from igvm.utils import parse_size, wait_until
@@ -997,10 +998,9 @@ class VM(Host):
         if self.dataset_obj['datacenter_type'] == 'kvm.dct':
             self.block_autostart()
 
-            if self.dataset_obj['os'] in ['bookworm', 'rolling']:
-                puppet_bin = '/usr/bin/puppet'
-            else:
-                puppet_bin = '/opt/puppetlabs/puppet/bin/puppet'
+            puppet_bin = PUPPET_BINARY_PATH.get(self.dataset_obj['os'])
+            if puppet_bin is None:
+                raise ConfigError(f'Puppet binary configuration for OS {self.dataset_obj["os"]} missing')
             puppet_command = (
                 '( {} agent '
                 '--detailed-exitcodes '

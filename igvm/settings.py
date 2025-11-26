@@ -77,6 +77,13 @@ XFS_CONFIG = {
     'rolling': ['-m reflink=1'],
 }
 
+PUPPET_BINARY_PATH = {
+    'buster': '/opt/puppetlabs/puppet/bin/puppet',
+    'bullseye': '/opt/puppetlabs/puppet/bin/puppet',
+    'bookworm': '/usr/bin/puppet',
+    'rolling': '/usr/bin/puppet',
+}
+
 P2P_MIGRATION = {
     'uri': 'qemu+tls://{destination}/system',
     'flags': VIR_MIGRATE_PEER2PEER | VIR_MIGRATE_TUNNELLED,
