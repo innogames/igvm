@@ -74,7 +74,16 @@ XFS_CONFIG = {
     'buster': ['-m reflink=1'],
     'bullseye': ['-m reflink=1'],
     'bookworm': ['-m reflink=1'],
+    'trixie': ['-m reflink=1'],
     'rolling': ['-m reflink=1'],
+}
+
+PUPPET_BINARY_PATH = {
+    'buster': '/opt/puppetlabs/puppet/bin/puppet',
+    'bullseye': '/opt/puppetlabs/puppet/bin/puppet',
+    'bookworm': '/usr/bin/puppet',
+    'trixie': '/usr/bin/puppet',
+    'rolling': '/usr/bin/puppet',
 }
 
 P2P_MIGRATION = {
