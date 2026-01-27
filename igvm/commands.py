@@ -142,8 +142,29 @@ def vcpu_set(vm_hostname, count, offline=False):
             )
             offline = False
 
-        if count == vm.dataset_obj['num_cpu']:
+        if str(count).startswith('+'):
+            count = vm.dataset_obj['num_cpu'] + int(str(count)[1:])
+        elif str(count).startswith('-'):
+            if not offline:
+                raise IGVMError(
+                    'Decreasing CPU count is only allowed offline.'
+                )
+            count = vm.dataset_obj['num_cpu'] - int(str(count)[1:])
+        elif int(count) == vm.dataset_obj['num_cpu']:
             raise Warning('CPU count is the same.')
+
+        # Validate bounds to fail early
+        # First check for at least 1 CPU
+        count = int(count)
+        if count < 1:
+            raise IGVMError(f'Invalid CPU count: {count}')
+
+        # Also check if we want to exceed hypervisor maximum
+        max_cpus = vm.hypervisor.dataset_obj['num_cpu']
+        if count > max_cpus:
+            raise IGVMError(
+                f'Requested {count} CPUs exceeds hypervisor maximum ({max_cpus})'
+            )
 
         if offline:
             vm.shutdown()
