@@ -581,7 +581,7 @@ class Hypervisor(Host):
     def vm_block_device_name(self):
         """Get the name of the root file system block device as seen by
         the guest OS"""
-        return 'vda1'
+        return 'vda'
 
     def check_migrate_parameters(
         self, vm: VM, offline: bool, offline_transport: str,
