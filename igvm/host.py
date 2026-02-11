@@ -4,7 +4,7 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, timezone
 
 import fabric.api
 import fabric.state
@@ -147,7 +147,7 @@ class Host(object):
                 .format(self.dataset_obj['hostname'])
             )
 
-        self.dataset_obj['igvm_locked'] = datetime.utcnow()
+        self.dataset_obj['igvm_locked'] = datetime.now(timezone.utc)
         try:
             self.dataset_obj.commit()
         except DatasetError:

@@ -110,7 +110,7 @@ def clean_hv(hv, pattern):
 
     # Cleanup igvm_locked status after a timeout
     if hv.dataset_obj['igvm_locked'] is not None:
-        now = datetime.utcnow().replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
         diff = now - hv.dataset_obj['igvm_locked']
 
         if diff >= IGVM_LOCKED_TIMEOUT:

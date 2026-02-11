@@ -14,7 +14,7 @@ from adminapi.dataset import Query
 from adminapi.filters import Any
 from fabric.api import env
 from fabric.network import disconnect_all
-from mock import patch
+from unittest.mock import patch
 
 from igvm.commands import (
     _get_vm,
