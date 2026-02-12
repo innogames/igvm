@@ -1,6 +1,6 @@
 """igvm - Setup
 
-Copyright (c) 2024 InnoGames GmbH
+Copyright (c) 2025 InnoGames GmbH
 """
 
 from setuptools import setup
