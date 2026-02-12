@@ -131,15 +131,14 @@ class Hypervisor(Host):
         """
         old_name = self.get_volume_by_vm(vm).name()
         new_name = vm.uid_name
-        with self.fabric_settings():
-            if old_name != new_name:
-                self.run(
-                    'lvrename {} {}'.format(
-                        self.get_volume_by_vm(vm).path(),
-                        vm.uid_name
-                    )
+        if old_name != new_name:
+            self.run(
+                'lvrename {} {}'.format(
+                    self.get_volume_by_vm(vm).path(),
+                    vm.uid_name
                 )
-                self.get_storage_pool(vg_name=vm.vg_name).refresh()
+            )
+            self.get_storage_pool(vg_name=vm.vg_name).refresh()
 
     def vm_mount_path(self, vm):
         """Returns the mount path for a VM or raises HypervisorError if not
@@ -872,7 +871,7 @@ class Hypervisor(Host):
         pool_info = self.get_storage_pool(vg_name=vg_name).info()
         # Floor instead of ceil because we check free instead of used space
         vg_size_gib = math.floor(float(pool_info[3]) / 1024 ** 3)
-        if safe is True:
+        if safe:
             vg_size_gib -= RESERVED_DISK[self.get_storage_type()]
         return vg_size_gib
 
@@ -903,7 +902,7 @@ class Hypervisor(Host):
                 'umount {0}'.format(device_or_path),
                 warn_only=(i < retry - 1),
             )
-            if res.succeeded:
+            if res.ok:
                 return
 
     def remove_temp(self, mount_path):

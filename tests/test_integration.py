@@ -14,8 +14,7 @@ from unittest import TestCase
 from adminapi import api
 from adminapi.dataset import Query
 from adminapi.filters import Any
-from fabric.api import env
-from fabric.network import disconnect_all
+from igvm.host import disconnect_all
 from mock import patch
 
 from igvm.commands import (
@@ -47,7 +46,6 @@ from igvm.hypervisor import Hypervisor
 from igvm.puppet import clean_cert
 from igvm.settings import (
     AWS_RETURN_CODES,
-    COMMON_FABRIC_SETTINGS,
     HYPERVISOR_ATTRIBUTES,
     HYPERVISOR_CPU_THRESHOLDS,
     KVM_HWMODEL_TO_CPUMODEL,
@@ -63,9 +61,7 @@ from tests.conftest import (
 )
 
 basicConfig(level=INFO)
-env.update(COMMON_FABRIC_SETTINGS)
 environ['IGVM_SSH_USER'] = 'igtesting'  # Enforce user for integration testing
-env.user = 'igtesting'
 environ['IGVM_MODE'] = 'staging'
 
 
