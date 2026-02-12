@@ -62,7 +62,6 @@ def _check_defined(vm, fail_hard=True):
             log.info(error)
 
 
-
 def evacuate(
     hv_hostname: str,
     target_hv_query: Optional[str] = None,
@@ -118,7 +117,6 @@ def evacuate(
                 allow_reserved_hv=allow_reserved_hv,
                 soft_preferences=soft_preferences,
             )
-
 
 
 def vcpu_set(vm_hostname, count, offline=False):
@@ -493,7 +491,7 @@ def vm_migrate(
             # likely that a specific hypervisor was requested. Any other filter
             # could resolve to multiple HVs.
             and (not isinstance(hv_filter['hostname'], BaseFilter)
-                 or type(hv_filter['hostname']) == BaseFilter)
+                 or type(hv_filter['hostname']) is BaseFilter)
         ):
             hypervisor = es.enter_context(_get_hypervisor(
                 hv_filter['hostname'],

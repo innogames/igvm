@@ -37,7 +37,11 @@ class CommandResult(str):
     """
 
     def __new__(cls, result):
-        stdout = result.stdout if result.stdout else ''
+        # Fabric 1.x automatically stripped trailing whitespace from the
+        # string representation.  Fabric 3.x does not, so we strip here
+        # to avoid embedded newlines breaking commands that interpolate
+        # the result (e.g. mktemp output used as a mount path).
+        stdout = result.stdout.strip() if result.stdout else ''
         instance = super().__new__(cls, stdout)
         instance._result = result
         return instance
@@ -158,6 +162,16 @@ class Host(object):
 
         conn = self._get_connection()
         runner = conn.sudo if with_sudo else conn.run
+
+        # Fabric 3's sudo() prepends "sudo -S -p '...' " directly to the
+        # command without wrapping it in a shell, unlike Fabric.
+        # This breaks commands containing shell constructs (while, for, if,
+        # pipes, etc.).  Wrap in "bash -c '...'" to restore the old behavior.
+        if with_sudo and args:
+            cmd = args[0]
+            # Escape single quotes for bash -c '...' wrapping
+            cmd = cmd.replace("'", "'\"'\"'")
+            args = ("bash -c '{}'".format(cmd),) + args[1:]
 
         for attempt in range(FABRIC_CONNECTION_ATTEMPTS):
             try:

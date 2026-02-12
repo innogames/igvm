@@ -3,7 +3,6 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 
-from adminapi import api
 from contextlib import contextmanager
 from igvm.exceptions import RemoteCommandError
 from igvm.settings import DEFAULT_VG_NAME
@@ -192,7 +191,6 @@ class DRBD(object):
                 addr=self.hv.dataset_obj['intern_ip'],
                 port=self.get_device_port(),
                 dm_minor=self.get_device_minor(),
-                lv_name=self.lv_name,
                 disk=(
                     'mapper/{}_orig'.format(self.lv_name)
                     if self.master_role
