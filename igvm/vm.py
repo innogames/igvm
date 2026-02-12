@@ -8,13 +8,12 @@ import json
 import logging
 import os
 import re
-import stat
+import socket
 import time
 
 import botocore.exceptions
 import tqdm
 from base64 import b64decode
-from grp import getgrnam
 from hashlib import sha1, sha256
 from io import BytesIO
 from pathlib import Path
@@ -23,16 +22,16 @@ from typing import Optional, List, Union
 from uuid import uuid4
 
 import boto3
+import fabric
+import paramiko.ssh_exception
 from botocore.exceptions import ClientError, CapacityNotAvailableError
-from fabric.api import cd, get, hide, put, run, settings
-from fabric.contrib.files import upload_template
-from fabric.exceptions import NetworkError
+from jinja2 import Environment, FileSystemLoader
 from json.decoder import JSONDecodeError
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from igvm.exceptions import ConfigError, HypervisorError, RemoteCommandError, VMError
-from igvm.host import Host
+from igvm.host import CommandResult, Host
 from igvm.settings import (
     AWS_ECU_FACTOR,
     AWS_FALLBACK_INSTANCE_TYPE,
@@ -40,6 +39,7 @@ from igvm.settings import (
     AWS_INSTANCES_OVERVIEW_FILE,
     AWS_INSTANCES_OVERVIEW_FILE_ETAG,
     AWS_INSTANCES_OVERVIEW_URL,
+    FABRIC_CONNECTION_DEFAULTS,
     MEM_BLOCK_BOUNDARY_GiB,
     MEM_BLOCK_SIZE_GiB,
     DEFAULT_VG_NAME,
@@ -87,13 +87,6 @@ class VM(Host):
         else:
             self.vg_name = DEFAULT_VG_NAME
 
-    def vm_host(self):
-        """ Return correct ssh host for mounted and unmounted vm """
-
-        if self.mounted:
-            return self.hypervisor.fabric_settings()
-        return self.fabric_settings()
-
     def vm_path(self, path=''):
         """ Append correct prefix to reach VM's / directory """
 
@@ -104,48 +97,48 @@ class VM(Host):
             )
         return '/{}'.format(path)
 
-    def run(self, command, silent=False, with_sudo=True):
+    def run(self, command, silent=False, with_sudo=True, **kwargs):
         """ Same as Fabric's run() but works on mounted or running vm
 
             When running in a mounted VM image, run everything in chroot
             and in separate shell inside chroot. Normally Fabric runs shell
             around commands.
         """
-        with self.vm_host():
-            if self.mounted:
-                return self.hypervisor.run(
-                    'chroot {} /bin/sh -c \'{}\''.format(
-                        self.vm_path(''), command,
-                    ),
-                    shell=False, shell_escape=True,
-                    silent=silent,
-                    with_sudo=with_sudo,
-                )
-            return super(VM, self).run(command, silent=silent)
+        if self.mounted:
+            return self.hypervisor.run(
+                'chroot {} /bin/sh -c \'{}\''.format(
+                    self.vm_path(''), command,
+                ),
+                shell=False, shell_escape=True,
+                silent=silent,
+                with_sudo=with_sudo,
+            )
+        return super(VM, self).run(
+            command, silent=silent, with_sudo=with_sudo, **kwargs,
+        )
 
-    def read_file(self, path):
+    def read_file(self, path: str):
         """Read a file from a running VM or a mounted image on HV."""
-        with self.vm_host():
-            return super(VM, self).read_file(self.vm_path(path))
+        if self.mounted:
+            return self.hypervisor.read_file(self.vm_path(path))
+        return super(VM, self).read_file(self.vm_path(path))
 
     def upload_template(self, filename, destination, context=None):
         """" Same as Fabric's template() but works on mounted or running vm """
         template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-        with self.vm_host():
-            return upload_template(
-                filename,
-                self.vm_path(destination),
-                context,
-                backup=False,
-                use_jinja=True,
-                template_dir=template_dir,
-                use_sudo=True,
-            )
+        env = Environment(loader=FileSystemLoader(template_dir))
+        template = env.get_template(filename)
+        rendered = template.render(**(context or {}))
+        fd = BytesIO(rendered.encode('utf-8'))
+        self.put(self.vm_path(destination), fd)
 
     def get(self, remote_path, local_path):
         """" Same as Fabric's get() but works on mounted or running vm """
-        with self.vm_host():
-            return get(self.vm_path(remote_path), local_path, temp_dir='/tmp')
+        if self.mounted:
+            conn = self.hypervisor._get_connection()
+        else:
+            conn = self._get_connection()
+        conn.get(self.vm_path(remote_path), local_path)
 
     def put(self, remote_path, local_path, mode='0644'):
         """ Same as Fabric's put() but works on mounted or running vm
@@ -154,12 +147,19 @@ class VM(Host):
             seems broken, at least for mounted VM. This is why we run
             extra commands here.
         """
-        with self.vm_host():
-            tempfile = '/tmp/' + str(uuid4())
-            put(local_path, self.vm_path(tempfile))
-            self.run('mv {0} {1} ; chmod {2} {1}'.format(
+        if self.mounted:
+            host_obj = self.hypervisor
+        else:
+            host_obj = self
+
+        conn = host_obj._get_connection()
+        tempfile = '/tmp/' + str(uuid4())
+        conn.put(local_path, tempfile)
+        host_obj.run(
+            'mv {0} {1} ; chmod {2} {1}'.format(
                 tempfile, remote_path, mode
-            ))
+            )
+        )
 
     def set_state(self, new_state, transaction=None):
         """Changes state of VM for LB and Nagios downtimes"""
@@ -414,7 +414,7 @@ class VM(Host):
 
         if not host_up:
             raise VMError('The server is not reachable with SSH')
-        
+
     def aws_restart(self):
         """AWS restart
 
@@ -426,7 +426,7 @@ class VM(Host):
                 InstanceIds=[self.dataset_obj['aws_instance_id']],
                 DryRun=False
             )
-    
+
         except ClientError as e:
             raise VMError(e)
 
@@ -868,21 +868,28 @@ class VM(Host):
                 time.sleep(1)
                 continue
 
-            with settings(
-                hide('aborts'),
-                host_string=self.dataset_obj['hostname'],
-                warn_only=True,
-                abort_on_prompts=True,
+            try:
+                conn = fabric.Connection(
+                    self.dataset_obj['hostname'],
+                    **FABRIC_CONNECTION_DEFAULTS,
+                )
+                result = conn.run(
+                    'find /var/lib/cloud/instance/boot-finished',
+                    hide=True, warn=True,
+                )
+                conn.close()
+                if result.ok:
+                    cloud_init.update(timeout_cloud_init - retry - 1)
+                    break
+            except (
+                SystemExit,
+                paramiko.ssh_exception.SSHException,
+                paramiko.ssh_exception.NoValidConnectionsError,
+                socket.error,
+                OSError,
+                EOFError,
             ):
-                try:
-                    if run(
-                        'find /var/lib/cloud/instance/boot-finished',
-                        quiet=True
-                    ).succeeded:
-                        cloud_init.update(timeout_cloud_init - retry - 1)
-                        break
-                except (SystemExit, NetworkError):
-                    time.sleep(1)
+                time.sleep(1)
         # TODO: Handle overrun timeout
 
         self.create_ssh_keys()
@@ -956,10 +963,13 @@ class VM(Host):
 
         # Copy resolv.conf from Hypervisor
         fd = BytesIO()
-        with self.hypervisor.fabric_settings(
-            cd(self.hypervisor.vm_mount_path(self))
-        ):
-            get('/etc/resolv.conf', fd)
+        conn = self.hypervisor._get_connection()
+        conn.get(
+            '{}/etc/resolv.conf'.format(
+                self.hypervisor.vm_mount_path(self)
+            ),
+            fd,
+        )
         self.put('/etc/resolv.conf', fd)
 
         self.create_ssh_keys()
@@ -1115,23 +1125,23 @@ class VM(Host):
             if timeout_disk_resize == 0:
                 raise VMError('Timeout for disk resize reached')
 
-        with settings(
-            host_string=self.dataset_obj['hostname'],
-            warn_only=True,
-        ):
-            disk_resize = self.run('growpart /dev/{} 1'.format(disk))
-            if disk_resize.succeeded:
-                fs_resize = self.run('resize2fs {}'.format(partition))
-                if fs_resize.succeeded:
-                    log.info(
-                        'successfully resized disk of {} to {}GB'.format(
-                            self.dataset_obj['hostname'], size)
-                    )
-                    return
-
-            raise VMError('disk resize for {} failed'.format(
-                self.dataset_obj['hostname'])
+        disk_resize = self.run(
+            'growpart /dev/{} 1'.format(disk), warn_only=True,
+        )
+        if disk_resize.ok:
+            fs_resize = self.run(
+                'resize2fs {}'.format(partition), warn_only=True,
             )
+            if fs_resize.ok:
+                log.info(
+                    'successfully resized disk of {} to {}GB'.format(
+                        self.dataset_obj['hostname'], size)
+                )
+                return
+
+        raise VMError('disk resize for {} failed'.format(
+            self.dataset_obj['hostname'])
+        )
 
     def aws_sync(self) -> dict:
         """AWS sync

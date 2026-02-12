@@ -8,7 +8,7 @@ from argparse import ArgumentParser, _SubParsersAction
 from logging import StreamHandler, root as root_logger
 import time
 
-from fabric.network import disconnect_all
+from igvm.host import disconnect_all
 
 from igvm.commands import (
     change_address,
@@ -506,9 +506,8 @@ def main():
     try:
         args.pop('func')(**args)
     finally:
-        # Fabric requires the disconnect function to be called after every
-        # use.  We are also taking our chance to disconnect from
-        # the hypervisors.
+        # Disconnect all SSH connections.  We are also taking our chance
+        # to disconnect from the hypervisors.
         disconnect_all()
         close_virtconns()
 

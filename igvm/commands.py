@@ -15,8 +15,8 @@ from typing import List, Optional
 from adminapi import parse
 from adminapi.dataset import Query, DatasetError
 from adminapi.filters import Any, BaseFilter, StartsWith, Contains
-from fabric.colors import green, red, white, yellow
-from fabric.network import disconnect_all
+from igvm.colors import green, red, white, yellow
+from igvm.host import disconnect_all
 from jinja2 import Environment, PackageLoader
 from libvirt import libvirtError
 
@@ -28,7 +28,6 @@ from igvm.exceptions import (
     InconsistentAttributeError,
     InvalidStateError, NetworkError,
 )
-from igvm.host import with_fabric_settings
 from igvm.hypervisor import Hypervisor
 from igvm.hypervisor_preferences import sort_by_preference
 from igvm.settings import (
@@ -63,7 +62,7 @@ def _check_defined(vm, fail_hard=True):
             log.info(error)
 
 
-@with_fabric_settings
+
 def evacuate(
     hv_hostname: str,
     target_hv_query: Optional[str] = None,
@@ -121,7 +120,7 @@ def evacuate(
             )
 
 
-@with_fabric_settings
+
 def vcpu_set(vm_hostname, count, offline=False):
     """Change the number of CPUs in a VM"""
     with ExitStack() as es:
@@ -173,7 +172,6 @@ def vcpu_set(vm_hostname, count, offline=False):
             vm.start()
 
 
-@with_fabric_settings
 def mem_set(vm_hostname, size, offline=False):
     """Change the memory size of a VM
 
@@ -217,7 +215,6 @@ def mem_set(vm_hostname, size, offline=False):
             vm.start()
 
 
-@with_fabric_settings
 def disk_set(vm_hostname, size):
     """Change the disk size of a VM
 
@@ -258,7 +255,6 @@ def disk_set(vm_hostname, size):
         vm.dataset_obj.commit()
 
 
-@with_fabric_settings
 def change_address(
     vm_hostname, new_address,
     offline=False, migrate=False, allow_reserved_hv=False,
@@ -337,7 +333,6 @@ def change_address(
                 vm.start()
 
 
-@with_fabric_settings
 def vm_build(
     vm_hostname: str,
     run_puppet: bool = True,
@@ -441,7 +436,6 @@ def vm_build(
         vm.dataset_obj.commit()
 
 
-@with_fabric_settings  # NOQA: C901
 def vm_migrate(
     vm_hostname: str = None,
     vm_object=None,
@@ -602,7 +596,6 @@ def vm_migrate(
         previous_hypervisor.undefine_vm(_vm)
 
 
-@with_fabric_settings
 def vm_start(vm_hostname, unretire=None):
     """Start a VM"""
     with _get_vm(vm_hostname) as vm:
@@ -628,7 +621,6 @@ def vm_start(vm_hostname, unretire=None):
             vm.dataset_obj.commit()
 
 
-@with_fabric_settings
 def vm_stop(vm_hostname, force=False, retire=False):
     """Gracefully stop a VM"""
     with _get_vm(vm_hostname, allow_retired=True) as vm:
@@ -658,7 +650,6 @@ def vm_stop(vm_hostname, force=False, retire=False):
         log.info('"{}" is stopped.'.format(vm.fqdn))
 
 
-@with_fabric_settings
 def vm_restart(vm_hostname, force=False, no_redefine=False):
     """Restart a VM
 
@@ -694,7 +685,6 @@ def vm_restart(vm_hostname, force=False, no_redefine=False):
         log.info('"{}" is restarted.'.format(vm.fqdn))
 
 
-@with_fabric_settings
 def vm_delete(vm_hostname, retire=False):
     """Delete the VM from the hypervisor and from serveradmin
 
@@ -760,7 +750,6 @@ def vm_delete(vm_hostname, retire=False):
             )
 
 
-@with_fabric_settings
 def vm_sync(vm_hostname):
     """Synchronize VM resource attributes to Serveradmin
 
@@ -820,7 +809,6 @@ def vm_define(vm_hostname):
         vm_hostname, vm_dataset_obj['hypervisor']['hostname']))
 
 
-@with_fabric_settings  # NOQA: C901
 def host_info(vm_hostname):
     """Extract runtime information about a VM
 
@@ -931,7 +919,6 @@ def host_info(vm_hostname):
                 print('{} : {}'.format(k.ljust(max_key_len), value))
 
 
-@with_fabric_settings
 def vm_rename(vm_hostname, new_hostname, offline=False):
     """Redefine the VM on the same hypervisor with a different name
 
@@ -969,7 +956,6 @@ def vm_rename(vm_hostname, new_hostname, offline=False):
             vm.aws_rename(new_hostname)
 
 
-@with_fabric_settings
 def clean_cert(hostname: str):
     """Revoke and delete a Puppet certificate from the Puppet CA"""
     vm = Query({'hostname': hostname}, ['hostname', 'puppet_ca']).get()

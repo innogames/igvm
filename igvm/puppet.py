@@ -7,11 +7,15 @@ from logging import getLogger
 from time import sleep
 
 from adminapi.dataset import Query, DatasetObject
-from fabric.api import settings
-from fabric.operations import sudo
+
+import fabric
 
 from igvm.exceptions import ConfigError
-from igvm.settings import COMMON_FABRIC_SETTINGS
+from igvm.host import CommandResult
+from igvm.settings import (
+    FABRIC_CONNECTION_DEFAULTS,
+    IGVM_SSH_USER,
+)
 
 logger = getLogger(__name__)
 
@@ -93,13 +97,16 @@ def clean_cert(vm: DatasetObject, retries: int = 10) -> None:
 
 
 def run_cmd(host: str, cmd: str):
-    if 'user' in COMMON_FABRIC_SETTINGS:
-        user = COMMON_FABRIC_SETTINGS['user']
-    else:
-        user = None
+    conn_kwargs = dict(FABRIC_CONNECTION_DEFAULTS)
+    if IGVM_SSH_USER:
+        conn_kwargs['user'] = IGVM_SSH_USER
 
-    with settings(host_string=host, user=user, warn_only=True):
-        return sudo(cmd, quiet=True, pty=False, shell=False)
+    conn = fabric.Connection(host, **conn_kwargs)
+    try:
+        result = conn.sudo(cmd, hide=True, warn=True, pty=False)
+        return CommandResult(result)
+    finally:
+        conn.close()
 
 
 def find_puppet_executable(host: str) -> str:
