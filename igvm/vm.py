@@ -31,7 +31,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from igvm.exceptions import ConfigError, HypervisorError, RemoteCommandError, VMError
-from igvm.host import CommandResult, Host
+from igvm.host import Host
 from igvm.settings import (
     AWS_ECU_FACTOR,
     AWS_FALLBACK_INSTANCE_TYPE,
@@ -830,7 +830,7 @@ class VM(Host):
                 break
             except ClientError as e:
                 raise VMError(e)
-            except CapacityNotAvailableError as e:
+            except CapacityNotAvailableError:
                 continue
 
         if run_puppet:
@@ -1049,7 +1049,7 @@ class VM(Host):
         self.put('/usr/sbin/policy-rc.d', fd, '0755')
 
     def unblock_autostart(self):
-        self.run('rm /usr/sbin/policy-rc.d')
+        self.run('rm -f /usr/sbin/policy-rc.d')
 
     def copy_postboot_script(self, script):
         self.put('/buildvm-postboot', script, '0755')
