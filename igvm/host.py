@@ -3,29 +3,75 @@
 Copyright (c) 2018 InnoGames GmbH
 """
 
-from io import BytesIO
+import logging
+import shlex
+import socket
 from datetime import datetime
-
-import fabric.api
-import fabric.state
-from fabric.contrib import files
+from io import BytesIO
 from uuid import uuid4
 
-from paramiko import transport
+import fabric
+import paramiko.ssh_exception
+
 from igvm.exceptions import RemoteCommandError, InvalidStateError
-from igvm.settings import COMMON_FABRIC_SETTINGS
+from igvm.settings import (
+    FABRIC_CONNECTION_ATTEMPTS,
+    FABRIC_CONNECTION_DEFAULTS,
+    FABRIC_RUN_DEFAULTS,
+)
 
 from adminapi.dataset import DatasetError
 
+log = logging.getLogger(__name__)
 
-def with_fabric_settings(fn):
-    """Decorator to run a function with COMMON_FABRIC_SETTINGS."""
-    def decorator(*args, **kwargs):
-        with fabric.api.settings(**COMMON_FABRIC_SETTINGS):
-            return fn(*args, **kwargs)
-    decorator.__name__ = '{}_with_fabric'.format(fn.__name__)
-    decorator.__doc__ = fn.__doc__
-    return decorator
+# Registry of active connections for disconnect_all()
+_active_connections = set()
+
+
+class CommandResult(str):
+    """String subclass wrapping invoke.runners.Result for backward compat.
+
+    Fabric 1.x run()/sudo() returned a string-like object.  Fabric 3.x
+    returns invoke.runners.Result.  This wrapper lets callers keep using
+    .strip(), int(result), 'text' in result, etc. while also exposing
+    .ok, .failed, .return_code, .stdout, .stderr.
+    """
+
+    def __new__(cls, result):
+        # Fabric 1.x automatically stripped trailing whitespace from the
+        # string representation.  Fabric 3.x does not, so we strip here
+        # to avoid embedded newlines breaking commands that interpolate
+        # the result (e.g. mktemp output used as a mount path).
+        stdout = result.stdout.strip() if result.stdout else ''
+        instance = super().__new__(cls, stdout)
+        instance._result = result
+        return instance
+
+    @property
+    def return_code(self):
+        return self._result.return_code
+
+    @property
+    def ok(self):
+        return self._result.ok
+
+    @property
+    def failed(self):
+        return self._result.failed
+
+    @property
+    def stdout(self):
+        return self._result.stdout if self._result.stdout else ''
+
+
+def disconnect_all():
+    """Close all tracked SSH connections."""
+    for conn in list(_active_connections):
+        try:
+            conn.close()
+        except Exception:
+            pass
+    _active_connections.clear()
 
 
 class Host(object):
@@ -35,6 +81,7 @@ class Host(object):
         self.dataset_obj = dataset_obj
         self.route_network = dataset_obj['route_network']['hostname']
         self.fqdn = self.dataset_obj['hostname']    # TODO: Remove
+        self._connection = None
 
     def __str__(self):
         return self.fqdn
@@ -61,69 +108,128 @@ class Host(object):
         """Check if a given uid_name matches this host"""
         return uid_name.split('_', 1)[0] == str(self.dataset_obj['object_id'])
 
-    def fabric_settings(self, *args, **kwargs):
-        """Builds a fabric context manager to run commands on this host."""
-        settings = COMMON_FABRIC_SETTINGS.copy()
-        settings.update({
-            'abort_exception': RemoteCommandError,
-            'host_string': str(self.dataset_obj['hostname']),
-        })
-        settings.update(kwargs)
-        return fabric.api.settings(*args, **settings)
+    def _get_connection(self):
+        """Return a cached fabric.Connection for this host."""
+        if self._connection is None or not self._connection.is_connected:
+            hostname = str(self.dataset_obj['hostname'])
+            self._connection = fabric.Connection(
+                hostname, **FABRIC_CONNECTION_DEFAULTS
+            )
+            _active_connections.add(self._connection)
+        return self._connection
+
+    def close_connection(self):
+        """Close and discard the cached connection."""
+        if self._connection is not None:
+            try:
+                self._connection.close()
+            except Exception:
+                pass
+            _active_connections.discard(self._connection)
+            self._connection = None
 
     def run(self, *args, **kwargs):
         """Runs a command on the remote host.
         :param warn_only: If set, no exception is raised if the command fails
         :param silent: If set, no output is written for successful runs"""
-        settings = []
-        warn_only = kwargs.get('warn_only', False)
-        with_sudo = kwargs.get('with_sudo', True)
-        kwargs['pty'] = kwargs.get('pty', True)
-        if kwargs.get('silent', False):
-            hide = 'everything' if warn_only else 'commands'
-            settings.append(fabric.api.hide(hide))
+        warn_only = kwargs.pop('warn_only', False)
+        with_sudo = kwargs.pop('with_sudo', True)
+        silent = kwargs.pop('silent', False)
 
-        # Purge settings that should not be passed to run()
-        for setting in ['warn_only', 'silent', 'with_sudo']:
-            if setting in kwargs:
-                del kwargs[setting]
+        # Build run kwargs
+        run_kwargs = dict(FABRIC_RUN_DEFAULTS)
+        run_kwargs['pty'] = kwargs.pop('pty', run_kwargs.get('pty', True))
+        # Always suppress invoke's UnexpectedExit so we can raise our own
+        # RemoteCommandError instead (checked below after the call).
+        run_kwargs['warn'] = True
 
-        with self.fabric_settings(*settings, warn_only=warn_only):
+        if silent:
+            run_kwargs['hide'] = True
+
+        # Pass through any remaining kwargs (e.g. shell, shell_escape)
+        # Map shell_escape to Fabric 3.x equivalent if present
+        kwargs.pop('shell_escape', None)
+
+        # 'shell' kwarg: In Fabric 1.x, shell=False meant don't wrap in shell.
+        # In Fabric 3.x/invoke, the equivalent is setting shell to empty string
+        # or using the command directly. We'll pass it through.
+        if 'shell' in kwargs:
+            shell_val = kwargs.pop('shell')
+            if shell_val is False:
+                run_kwargs['shell'] = ''
+
+        run_kwargs.update(kwargs)
+
+        # Remove abort_exception if present (Fabric 1.x only)
+        run_kwargs.pop('abort_exception', None)
+
+        conn = self._get_connection()
+        runner = conn.sudo if with_sudo else conn.run
+
+        # Fabric 3's sudo() prepends "sudo -S -p '...' " directly to the
+        # command without wrapping it in a shell, unlike Fabric.
+        # This breaks commands containing shell constructs (while, for, if,
+        # pipes, etc.).  Wrap in "bash -c '...'" to restore the old behavior.
+        if with_sudo and args:
+            cmd = args[0]
+            args = (f"bash -c {shlex.quote(cmd)}",) + args[1:]
+
+        for attempt in range(FABRIC_CONNECTION_ATTEMPTS):
             try:
-                if with_sudo:
-                    return fabric.api.sudo(*args, **kwargs)
+                result = runner(*args, **run_kwargs)
+                if not warn_only and result.failed:
+                    raise RemoteCommandError(
+                        f'Command failed with return code {result.return_code}: {args[0] if args else ""}'
+                    )
+                return CommandResult(result)
+            except (
+                paramiko.ssh_exception.SSHException,
+                paramiko.ssh_exception.NoValidConnectionsError,
+                socket.error,
+                EOFError,
+            ):
+                if attempt < FABRIC_CONNECTION_ATTEMPTS - 1:
+                    log.warning(
+                        'Connection lost, retrying (attempt %d/%d)...',
+                        attempt + 2, FABRIC_CONNECTION_ATTEMPTS,
+                    )
+                    self.close_connection()
+                    conn = self._get_connection()
+                    runner = conn.sudo if with_sudo else conn.run
                 else:
-                    return fabric.api.run(*args, **kwargs)
-            except transport.socket.error:
-                # Retry once if connection was lost
-                host = fabric.api.env.host_string
-                if host and host in fabric.state.connections:
-                    fabric.state.connections[host].get_transport().close()
-                if with_sudo:
-                    return fabric.api.sudo(*args, **kwargs)
-                else:
-                    return fabric.api.run(*args, **kwargs)
+                    raise
 
-    def file_exists(self, *args, **kwargs):
-        """Run a fabric.contrib.files.exists on this host with sudo."""
-        with self.fabric_settings():
+    def file_exists(self, path, *args, **kwargs):
+        """Check if a file exists on the remote host."""
+        conn = self._get_connection()
+
+        for attempt in range(FABRIC_CONNECTION_ATTEMPTS):
             try:
-                return files.exists(*args, **kwargs)
-            except transport.socket.error:
-                # Retry once if connection was lost
-                host = fabric.api.env.host_string
-                if host and host in fabric.state.connections:
-                    fabric.state.connections[host].get_transport().close()
-                return files.exists(*args, **kwargs)
+                result = conn.sudo(
+                    f'test -e {path}',
+                    warn=True, hide=True,
+                )
+                return result.ok
+            except (
+                paramiko.ssh_exception.SSHException,
+                paramiko.ssh_exception.NoValidConnectionsError,
+                socket.error,
+                EOFError,
+            ):
+                if attempt < FABRIC_CONNECTION_ATTEMPTS - 1:
+                    self.close_connection()
+                    conn = self._get_connection()
+                else:
+                    raise
 
     def read_file(self, path):
         """Reads a file from the remote host and returns contents."""
         if '*' in path:
             raise ValueError('No globbing supported')
-        with self.fabric_settings(fabric.api.hide('commands')):
-            fd = BytesIO()
-            fabric.api.get(path, fd)
-            return fd.getvalue()
+        conn = self._get_connection()
+        fd = BytesIO()
+        conn.get(path, fd)
+        return fd.getvalue()
 
     def put(self, remote_path, local_path, mode='0644'):
         """Same as Fabric's put but with working sudo permissions
@@ -132,13 +238,12 @@ class Host(object):
         broken, at least for mounted VM.  This is why we run extra commands
         in here.
         """
-        with self.fabric_settings():
-            tempfile = '/tmp/' + str(uuid4())
-            fabric.api.put(local_path, tempfile)
-            self.run(
-                'mv {0} {1} ; chmod {2} {1}'
-                .format(tempfile, remote_path, mode)
-            )
+        conn = self._get_connection()
+        tempfile = '/tmp/' + str(uuid4())
+        conn.put(local_path, tempfile)
+        self.run(
+            f'mv {tempfile} {remote_path} ; chmod {mode} {remote_path}'
+        )
 
     def acquire_lock(self, allow_fail=False):
         if self.dataset_obj['igvm_locked'] is not None:

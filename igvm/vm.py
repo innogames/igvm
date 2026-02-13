@@ -8,13 +8,12 @@ import json
 import logging
 import os
 import re
-import stat
+import socket
 import time
 
 import botocore.exceptions
 import tqdm
 from base64 import b64decode
-from grp import getgrnam
 from hashlib import sha1, sha256
 from io import BytesIO
 from pathlib import Path
@@ -23,10 +22,10 @@ from typing import Optional, List, Union
 from uuid import uuid4
 
 import boto3
+import fabric
+import paramiko.ssh_exception
 from botocore.exceptions import ClientError, CapacityNotAvailableError
-from fabric.api import cd, get, hide, put, run, settings
-from fabric.contrib.files import upload_template
-from fabric.exceptions import NetworkError
+from jinja2 import Environment, FileSystemLoader
 from json.decoder import JSONDecodeError
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -40,6 +39,7 @@ from igvm.settings import (
     AWS_INSTANCES_OVERVIEW_FILE,
     AWS_INSTANCES_OVERVIEW_FILE_ETAG,
     AWS_INSTANCES_OVERVIEW_URL,
+    FABRIC_CONNECTION_DEFAULTS,
     MEM_BLOCK_BOUNDARY_GiB,
     MEM_BLOCK_SIZE_GiB,
     DEFAULT_VG_NAME,
@@ -87,65 +87,53 @@ class VM(Host):
         else:
             self.vg_name = DEFAULT_VG_NAME
 
-    def vm_host(self):
-        """ Return correct ssh host for mounted and unmounted vm """
-
-        if self.mounted:
-            return self.hypervisor.fabric_settings()
-        return self.fabric_settings()
-
     def vm_path(self, path=''):
         """ Append correct prefix to reach VM's / directory """
 
         if self.mounted:
-            return '{}/{}'.format(
-                self.hypervisor.vm_mount_path(self),
-                path,
-            )
-        return '/{}'.format(path)
+            return f'{self.hypervisor.vm_mount_path(self)}/{path}'
+        return f'/{path}'
 
-    def run(self, command, silent=False, with_sudo=True):
+    def run(self, command, silent=False, with_sudo=True, **kwargs):
         """ Same as Fabric's run() but works on mounted or running vm
 
             When running in a mounted VM image, run everything in chroot
             and in separate shell inside chroot. Normally Fabric runs shell
             around commands.
         """
-        with self.vm_host():
-            if self.mounted:
-                return self.hypervisor.run(
-                    'chroot {} /bin/sh -c \'{}\''.format(
-                        self.vm_path(''), command,
-                    ),
-                    shell=False, shell_escape=True,
-                    silent=silent,
-                    with_sudo=with_sudo,
-                )
-            return super(VM, self).run(command, silent=silent)
+        if self.mounted:
+            return self.hypervisor.run(
+                f'chroot {self.vm_path("")} /bin/sh -c \'{command}\'',
+                shell=False, shell_escape=True,
+                silent=silent,
+                with_sudo=with_sudo,
+            )
+        return super(VM, self).run(
+            command, silent=silent, with_sudo=with_sudo, **kwargs,
+        )
 
-    def read_file(self, path):
+    def read_file(self, path: str):
         """Read a file from a running VM or a mounted image on HV."""
-        with self.vm_host():
-            return super(VM, self).read_file(self.vm_path(path))
+        if self.mounted:
+            return self.hypervisor.read_file(self.vm_path(path))
+        return super(VM, self).read_file(self.vm_path(path))
 
     def upload_template(self, filename, destination, context=None):
         """" Same as Fabric's template() but works on mounted or running vm """
         template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-        with self.vm_host():
-            return upload_template(
-                filename,
-                self.vm_path(destination),
-                context,
-                backup=False,
-                use_jinja=True,
-                template_dir=template_dir,
-                use_sudo=True,
-            )
+        env = Environment(loader=FileSystemLoader(template_dir))
+        template = env.get_template(filename)
+        rendered = template.render(**(context or {}))
+        fd = BytesIO(rendered.encode('utf-8'))
+        self.put(self.vm_path(destination), fd)
 
     def get(self, remote_path, local_path):
         """" Same as Fabric's get() but works on mounted or running vm """
-        with self.vm_host():
-            return get(self.vm_path(remote_path), local_path, temp_dir='/tmp')
+        if self.mounted:
+            conn = self.hypervisor._get_connection()
+        else:
+            conn = self._get_connection()
+        conn.get(self.vm_path(remote_path), local_path)
 
     def put(self, remote_path, local_path, mode='0644'):
         """ Same as Fabric's put() but works on mounted or running vm
@@ -154,12 +142,17 @@ class VM(Host):
             seems broken, at least for mounted VM. This is why we run
             extra commands here.
         """
-        with self.vm_host():
-            tempfile = '/tmp/' + str(uuid4())
-            put(local_path, self.vm_path(tempfile))
-            self.run('mv {0} {1} ; chmod {2} {1}'.format(
-                tempfile, remote_path, mode
-            ))
+        if self.mounted:
+            host_obj = self.hypervisor
+        else:
+            host_obj = self
+
+        conn = host_obj._get_connection()
+        tempfile = '/tmp/' + str(uuid4())
+        conn.put(local_path, tempfile)
+        host_obj.run(
+            f'mv {tempfile} {remote_path} ; chmod {mode} {remote_path}'
+        )
 
     def set_state(self, new_state, transaction=None):
         """Changes state of VM for LB and Nagios downtimes"""
@@ -169,7 +162,7 @@ class VM(Host):
             return
         if new_state == self.previous_state:
             return
-        log.debug('Setting VM to state {}'.format(new_state))
+        log.debug(f'Setting VM to state {new_state}')
         self.dataset_obj['state'] = new_state
         self.dataset_obj.commit()
         if transaction:
@@ -227,7 +220,7 @@ class VM(Host):
             (
                 'memory',
                 lambda v: v % mul_numa_nodes == 0,
-                'memory must be multiple of {}MiB'.format(mul_numa_nodes),
+                f'memory must be multiple of {mul_numa_nodes}MiB',
             ),
             ('num_cpu', lambda v: v > 0, 'num_cpu must be > 0'),
             ('os', lambda v: True, 'os must be set'),
@@ -273,7 +266,7 @@ class VM(Host):
         for attr, check, err in validations:
             value = self.dataset_obj[attr]
             if not value:
-                raise ConfigError('"{}" attribute is not set'.format(attr))
+                raise ConfigError(f'"{attr}" attribute is not set')
             if not check(value):
                 raise ConfigError(err)
 
@@ -401,8 +394,7 @@ class VM(Host):
             )
             log.debug(response)
             if current_state and current_state == AWS_RETURN_CODES['running']:
-                log.info('{} is already running.'.format(
-                    self.dataset_obj['hostname']))
+                log.info(f'{self.dataset_obj["hostname"]} is already running.')
                 return
         except ClientError as e:
             raise VMError(e)
@@ -414,7 +406,7 @@ class VM(Host):
 
         if not host_up:
             raise VMError('The server is not reachable with SSH')
-        
+
     def aws_restart(self):
         """AWS restart
 
@@ -426,7 +418,7 @@ class VM(Host):
                 InstanceIds=[self.dataset_obj['aws_instance_id']],
                 DryRun=False
             )
-    
+
         except ClientError as e:
             raise VMError(e)
 
@@ -583,8 +575,7 @@ class VM(Host):
     def is_running(self):
         if self.dataset_obj['datacenter_type'] not in ['aws.dct', 'kvm.dct']:
             raise NotImplementedError(
-                'This operation is not yet supported for {}'.format(
-                    self.dataset_obj['datacenter_type'])
+                f'This operation is not yet supported for {self.dataset_obj["datacenter_type"]}'
             )
         if self.dataset_obj['datacenter_type'] == 'kvm.dct':
             return self.hypervisor.vm_running(self)
@@ -601,8 +592,7 @@ class VM(Host):
         action = 'boot' if running else 'shutdown'
         for i in range(timeout, 1, -1):
             print(
-                'Waiting for VM "{}" to {}... {} s'.format(
-                    self.fqdn, action, i))
+                f'Waiting for VM "{self.fqdn}" to {action}... {i} s')
             if self.hypervisor.vm_running(self) == running:
                 return True
             time.sleep(1)
@@ -745,7 +735,7 @@ class VM(Host):
             self.run('/buildvm-postboot')
             self.run('rm /buildvm-postboot')
 
-        log.info('"{}" is successfully built.'.format(self.fqdn))
+        log.info(f'"{self.fqdn}" is successfully built.')
 
     def aws_build(self,
                   run_puppet: bool = True,
@@ -830,7 +820,7 @@ class VM(Host):
                 break
             except ClientError as e:
                 raise VMError(e)
-            except CapacityNotAvailableError as e:
+            except CapacityNotAvailableError:
                 continue
 
         if run_puppet:
@@ -839,8 +829,7 @@ class VM(Host):
         self.dataset_obj['aws_instance_id'] = response['Instances'][0][
             'InstanceId']
 
-        log.info('waiting for {} to be started'.format(
-            self.dataset_obj['hostname']))
+        log.info(f'waiting for {self.dataset_obj["hostname"]} to be started')
         vm_setup = tqdm.tqdm(
             total=timeout_vm_setup, desc='vm_setup', position=0)
         cloud_init = tqdm.tqdm(
@@ -868,26 +857,33 @@ class VM(Host):
                 time.sleep(1)
                 continue
 
-            with settings(
-                hide('aborts'),
-                host_string=self.dataset_obj['hostname'],
-                warn_only=True,
-                abort_on_prompts=True,
+            try:
+                conn = fabric.Connection(
+                    self.dataset_obj['hostname'],
+                    **FABRIC_CONNECTION_DEFAULTS,
+                )
+                result = conn.run(
+                    'find /var/lib/cloud/instance/boot-finished',
+                    hide=True, warn=True,
+                )
+                conn.close()
+                if result.ok:
+                    cloud_init.update(timeout_cloud_init - retry - 1)
+                    break
+            except (
+                SystemExit,
+                paramiko.ssh_exception.SSHException,
+                paramiko.ssh_exception.NoValidConnectionsError,
+                socket.error,
+                OSError,
+                EOFError,
             ):
-                try:
-                    if run(
-                        'find /var/lib/cloud/instance/boot-finished',
-                        quiet=True
-                    ).succeeded:
-                        cloud_init.update(timeout_cloud_init - retry - 1)
-                        break
-                except (SystemExit, NetworkError):
-                    time.sleep(1)
+                time.sleep(1)
         # TODO: Handle overrun timeout
 
         self.create_ssh_keys()
 
-        log.info('"{}" is successfully built in AWS.'.format(self.fqdn))
+        log.info(f'"{self.fqdn}" is successfully built in AWS.')
 
     def rename(self, new_hostname):
         """Rename the VM"""
@@ -956,10 +952,11 @@ class VM(Host):
 
         # Copy resolv.conf from Hypervisor
         fd = BytesIO()
-        with self.hypervisor.fabric_settings(
-            cd(self.hypervisor.vm_mount_path(self))
-        ):
-            get('/etc/resolv.conf', fd)
+        conn = self.hypervisor._get_connection()
+        conn.get(
+            f'{self.hypervisor.vm_mount_path(self)}/etc/resolv.conf',
+            fd,
+        )
         self.put('/etc/resolv.conf', fd)
 
         self.create_ssh_keys()
@@ -978,16 +975,16 @@ class VM(Host):
         # This will also create the public key files.
         for key_id, key_type in key_types:
             self.run(
-                'ssh-keygen -q -t {0} -N "" '
-                '-f /etc/ssh/ssh_host_{0}_key'.format(key_type))
+                f'ssh-keygen -q -t {key_type} -N "" '
+                f'-f /etc/ssh/ssh_host_{key_type}_key')
 
             fd = BytesIO()
-            self.get('/etc/ssh/ssh_host_{0}_key.pub'.format(key_type), fd)
+            self.get(f'/etc/ssh/ssh_host_{key_type}_key.pub', fd)
             pub_key = b64decode(fd.getvalue().split(None, 2)[1])
             for fp_id, fp_type in fp_types:
-                self.dataset_obj['sshfp'].add('{} {} {}'.format(
-                    key_id, fp_id, fp_type(pub_key).hexdigest()
-                ))
+                self.dataset_obj['sshfp'].add(
+                    f'{key_id} {fp_id} {fp_type(pub_key).hexdigest()}'
+                )
 
     def run_puppet(self, clear_cert=False, debug=False, tries=2):
         """Runs Puppet in chroot on the hypervisor."""
@@ -1001,19 +998,15 @@ class VM(Host):
             puppet_bin = PUPPET_BINARY_PATH.get(self.dataset_obj['os'])
             if puppet_bin is None:
                 raise ConfigError(f'Puppet binary configuration for OS {self.dataset_obj["os"]} missing')
+            debug_flag = ' --debug' if debug else ''
             puppet_command = (
-                '( {} agent '
-                '--detailed-exitcodes '
-                '--fqdn={} --server={} --ca_server={} '
-                '--no-report --waitforcert=10 --onetime --no-daemonize '
-                '--skip_tags=chroot_unsafe --verbose{} ) ;'
-                '[ $? -eq 2 ]'.format(
-                    puppet_bin,
-                    self.fqdn,
-                    self.dataset_obj['puppet_master'],
-                    self.dataset_obj['puppet_ca'],
-                    ' --debug' if debug else '',
-                )
+                f'( {puppet_bin} agent '
+                f'--detailed-exitcodes '
+                f'--fqdn={self.fqdn} --server={self.dataset_obj["puppet_master"]} '
+                f'--ca_server={self.dataset_obj["puppet_ca"]} '
+                f'--no-report --waitforcert=10 --onetime --no-daemonize '
+                f'--skip_tags=chroot_unsafe --verbose{debug_flag} ) ;'
+                f'[ $? -eq 2 ]'
             )
 
             # The Puppetserver fails sometimes with HTTP 500 or isn't reachable
@@ -1039,7 +1032,7 @@ class VM(Host):
         self.put('/usr/sbin/policy-rc.d', fd, '0755')
 
     def unblock_autostart(self):
-        self.run('rm /usr/sbin/policy-rc.d')
+        self.run('rm -f /usr/sbin/policy-rc.d')
 
     def copy_postboot_script(self, script):
         self.put('/buildvm-postboot', script, '0755')
@@ -1086,52 +1079,46 @@ class VM(Host):
 
             if volume_state['ModificationState'] == 'optimizing':
                 raise VMError(
-                    'disk resize already in progress '
-                    'for {} (state: {})'.format(
-                        self.dataset_obj['hostname'],
-                        volume_state['ModificationState'])
+                    f'disk resize already in progress '
+                    f'for {self.dataset_obj["hostname"]} (state: {volume_state["ModificationState"]})'
                 )
         except ClientError:
             log.debug(
-                'First disk resize of {} ({}) - '
-                'no modification state available in AWS'.format(
-                    self.dataset_obj['hostname'], volume_id)
+                f'First disk resize of {self.dataset_obj["hostname"]} ({volume_id}) - '
+                f'no modification state available in AWS'
             )
             pass
 
         self.ec2c.modify_volume(VolumeId=volume_id, Size=int(size))
 
         partition = self.run('findmnt -nro SOURCE /')
-        disk = self.run('lsblk -nro PKNAME {}'.format(partition))
-        new_disk_size = self.run('lsblk -bdnro size /dev/{}'.format(disk))
+        disk = self.run(f'lsblk -nro PKNAME {partition}')
+        new_disk_size = self.run(f'lsblk -bdnro size /dev/{disk}')
         new_disk_size_gib = int(new_disk_size) / 1024 / 1024 / 1024
 
         while timeout_disk_resize and size != new_disk_size_gib:
             timeout_disk_resize -= 1
             time.sleep(1)
-            new_disk_size = self.run('lsblk -bdnro size /dev/{}'.format(disk))
+            new_disk_size = self.run(f'lsblk -bdnro size /dev/{disk}')
             new_disk_size_gib = int(new_disk_size) / 1024 / 1024 / 1024
 
             if timeout_disk_resize == 0:
                 raise VMError('Timeout for disk resize reached')
 
-        with settings(
-            host_string=self.dataset_obj['hostname'],
-            warn_only=True,
-        ):
-            disk_resize = self.run('growpart /dev/{} 1'.format(disk))
-            if disk_resize.succeeded:
-                fs_resize = self.run('resize2fs {}'.format(partition))
-                if fs_resize.succeeded:
-                    log.info(
-                        'successfully resized disk of {} to {}GB'.format(
-                            self.dataset_obj['hostname'], size)
-                    )
-                    return
-
-            raise VMError('disk resize for {} failed'.format(
-                self.dataset_obj['hostname'])
+        disk_resize = self.run(
+            f'growpart /dev/{disk} 1', warn_only=True,
+        )
+        if disk_resize.ok:
+            fs_resize = self.run(
+                f'resize2fs {partition}', warn_only=True,
             )
+            if fs_resize.ok:
+                log.info(
+                    f'successfully resized disk of {self.dataset_obj["hostname"]} to {size}GB'
+                )
+                return
+
+        raise VMError(f'disk resize for {self.dataset_obj["hostname"]} failed')
 
     def aws_sync(self) -> dict:
         """AWS sync
@@ -1256,7 +1243,7 @@ class VM(Host):
             if resp.status == 200:
                 etag = dict(resp.info())['ETag']
             else:
-                log.warning('Could not retrieve ETag from {}'.format(url))
+                log.warning(f'Could not retrieve ETag from {url}')
                 etag = None
             if file.exists() and etag_file.exists() and etag:
                 with open(etag_file, 'r+') as f:
