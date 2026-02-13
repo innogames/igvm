@@ -133,10 +133,7 @@ class Hypervisor(Host):
         new_name = vm.uid_name
         if old_name != new_name:
             self.run(
-                'lvrename {} {}'.format(
-                    self.get_volume_by_vm(vm).path(),
-                    vm.uid_name
-                )
+                f'lvrename {self.get_volume_by_vm(vm).path()} {vm.uid_name}'
             )
             self.get_storage_pool(vg_name=vm.vg_name).refresh()
 
@@ -877,8 +874,8 @@ class Hypervisor(Host):
 
     def mount_temp(self, device, suffix=''):
         """Mounts given device into temporary path"""
-        mount_dir = self.run('mktemp -d --suffix {}'.format(suffix))
-        self.run('mount {0} {1}'.format(device, mount_dir))
+        mount_dir = self.run(f'mktemp -d --suffix {suffix}')
+        self.run(f'mount {device} {mount_dir}')
         return mount_dir
 
     def umount_temp(self, device_or_path):

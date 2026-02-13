@@ -4,7 +4,7 @@ netaddr~=0.8
 cffi>=1.14
 paramiko>=2.7
 fabric~=3.2
-libvirt-python>=7,<=9
+#libvirt-python>=7,<=11 # Use system package (python3-libvirt) instead
 jinja2~=2.11
 markupsafe~=1.1
 boto3~=1.26

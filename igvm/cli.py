@@ -60,7 +60,7 @@ class IGVMArgumentParser(ArgumentParser):
                 out.append(ColorFormatters.BOLD.format(choice))
                 if subparser.get_default('func').__doc__:
                     out.append('\n'.join(
-                        '\t{}'.format(line.strip()) for line in subparser
+                        f'\t{line.strip()}' for line in subparser
                         .get_default('func').__doc__.strip().splitlines()
                     ))
                 out.append('\n\t{}'.format(subparser.format_usage()))

@@ -8,8 +8,8 @@ Replacement for fabric.colors which is not available in fabric 3.x.
 
 def _wrap(code: int, text: str, bold: bool = False) -> str:
     if bold:
-        return '\033[1;{}m{}\033[0m'.format(code, text)
-    return '\033[{}m{}\033[0m'.format(code, text)
+        return f'\033[1;{code}m{text}\033[0m'
+    return f'\033[{code}m{text}\033[0m'
 
 
 def green(text: str, bold: bool = False) -> str:
