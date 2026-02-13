@@ -4,6 +4,7 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
+import shlex
 import socket
 from datetime import datetime
 from io import BytesIO
@@ -138,7 +139,9 @@ class Host(object):
         # Build run kwargs
         run_kwargs = dict(FABRIC_RUN_DEFAULTS)
         run_kwargs['pty'] = kwargs.pop('pty', run_kwargs.get('pty', True))
-        run_kwargs['warn'] = warn_only
+        # Always suppress invoke's UnexpectedExit so we can raise our own
+        # RemoteCommandError instead (checked below after the call).
+        run_kwargs['warn'] = True
 
         if silent:
             run_kwargs['hide'] = True
@@ -169,18 +172,14 @@ class Host(object):
         # pipes, etc.).  Wrap in "bash -c '...'" to restore the old behavior.
         if with_sudo and args:
             cmd = args[0]
-            # Escape single quotes for bash -c '...' wrapping
-            cmd = cmd.replace("'", "'\"'\"'")
-            args = ("bash -c '{}'".format(cmd),) + args[1:]
+            args = (f"bash -c {shlex.quote(cmd)}",) + args[1:]
 
         for attempt in range(FABRIC_CONNECTION_ATTEMPTS):
             try:
                 result = runner(*args, **run_kwargs)
                 if not warn_only and result.failed:
                     raise RemoteCommandError(
-                        'Command failed with return code {}: {}'.format(
-                            result.return_code, args[0] if args else ''
-                        )
+                        f'Command failed with return code {result.return_code}: {args[0] if args else ""}'
                     )
                 return CommandResult(result)
             except (
@@ -207,7 +206,7 @@ class Host(object):
         for attempt in range(FABRIC_CONNECTION_ATTEMPTS):
             try:
                 result = conn.sudo(
-                    'test -e {}'.format(path),
+                    f'test -e {path}',
                     warn=True, hide=True,
                 )
                 return result.ok
@@ -243,8 +242,7 @@ class Host(object):
         tempfile = '/tmp/' + str(uuid4())
         conn.put(local_path, tempfile)
         self.run(
-            'mv {0} {1} ; chmod {2} {1}'
-            .format(tempfile, remote_path, mode)
+            f'mv {tempfile} {remote_path} ; chmod {mode} {remote_path}'
         )
 
     def acquire_lock(self, allow_fail=False):
