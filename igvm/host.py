@@ -6,7 +6,7 @@ Copyright (c) 2018 InnoGames GmbH
 import logging
 import shlex
 import socket
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from uuid import uuid4
 
@@ -202,25 +202,11 @@ class Host(object):
     def file_exists(self, path, *args, **kwargs):
         """Check if a file exists on the remote host."""
         conn = self._get_connection()
-
-        for attempt in range(FABRIC_CONNECTION_ATTEMPTS):
-            try:
-                result = conn.sudo(
-                    f'test -e {path}',
-                    warn=True, hide=True,
-                )
-                return result.ok
-            except (
-                paramiko.ssh_exception.SSHException,
-                paramiko.ssh_exception.NoValidConnectionsError,
-                socket.error,
-                EOFError,
-            ):
-                if attempt < FABRIC_CONNECTION_ATTEMPTS - 1:
-                    self.close_connection()
-                    conn = self._get_connection()
-                else:
-                    raise
+        result = conn.sudo(
+            f'test -e {path}',
+            warn=True, hide=True,
+        )
+        return result.ok
 
     def read_file(self, path):
         """Reads a file from the remote host and returns contents."""
@@ -245,14 +231,14 @@ class Host(object):
             f'mv {tempfile} {remote_path} ; chmod {mode} {remote_path}'
         )
 
-    def acquire_lock(self, allow_fail=False):
+    def acquire_lock(self):
         if self.dataset_obj['igvm_locked'] is not None:
             raise InvalidStateError(
                 'Server "{0}" is already being worked on by another igvm'
                 .format(self.dataset_obj['hostname'])
             )
 
-        self.dataset_obj['igvm_locked'] = datetime.utcnow()
+        self.dataset_obj['igvm_locked'] = datetime.now(timezone.utc)
         try:
             self.dataset_obj.commit()
         except DatasetError:
