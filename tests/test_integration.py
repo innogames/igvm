@@ -112,6 +112,7 @@ class IGVMTest(TestCase):
         self.vm_obj['backup_disabled'] = True
         self.vm_obj['disk_size_gib'] = 3
         self.vm_obj['environment'] = 'testing'
+        self.vm_obj['function'] = 'igvm_integration'
         self.vm_obj['hostname'] = VM_HOSTNAME
         self.vm_obj['hypervisor'] = None
         self.vm_obj['memory'] = 2048
