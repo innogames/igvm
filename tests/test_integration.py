@@ -114,12 +114,12 @@ class IGVMTest(TestCase):
         self.vm_obj['environment'] = 'testing'
         self.vm_obj['hostname'] = VM_HOSTNAME
         self.vm_obj['hypervisor'] = None
-        self.vm_obj['intern_ip'] = get_next_address(VM_NET, 1, self.ip_attr)
         self.vm_obj['memory'] = 2048
         self.vm_obj['no_monitoring'] = True
         self.vm_obj['num_cpu'] = 2
         self.vm_obj['os'] = 'bullseye'
         self.vm_obj['project'] = 'test'
+        self.vm_obj['project_network'] = VM_NET
         self.vm_obj['puppet_environment'] = None
         self.vm_obj['puppet_ca'] = 'testing-puppetca.innogames.de'
         self.vm_obj['puppet_master'] = 'puppet-lb.test.innogames.net'
