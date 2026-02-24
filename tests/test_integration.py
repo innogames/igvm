@@ -117,14 +117,14 @@ class IGVMTest(TestCase):
         self.vm_obj['memory'] = 2048
         self.vm_obj['no_monitoring'] = True
         self.vm_obj['num_cpu'] = 2
-        self.vm_obj['os'] = 'bullseye'
+        self.vm_obj['os'] = 'trixie'
         self.vm_obj['project'] = 'test'
         self.vm_obj['project_network'] = VM_NET
         self.vm_obj['puppet_environment'] = None
         self.vm_obj['puppet_ca'] = 'testing-puppetca.innogames.de'
         self.vm_obj['puppet_master'] = 'puppet-lb.test.innogames.net'
         self.vm_obj['repositories'] = [
-            'int:basebuster:stable',
+            'int:basetrixie:stable',
             'int:innogames:stable',
         ]
         self.vm_obj['state'] = 'online'
