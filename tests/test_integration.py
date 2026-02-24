@@ -15,7 +15,7 @@ from adminapi import api
 from adminapi.dataset import Query
 from adminapi.filters import Any
 from igvm.host import disconnect_all
-from mock import patch
+from unittest.mock import patch
 
 from igvm.commands import (
     _get_vm,
