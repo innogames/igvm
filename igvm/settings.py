@@ -6,6 +6,8 @@ Copyright (c) 2018 InnoGames GmbH
 from os import environ
 from sys import stdout
 
+import fabric
+
 from libvirt import (
     VIR_MIGRATE_PEER2PEER,
     VIR_MIGRATE_TLS,
@@ -32,6 +34,14 @@ FABRIC_CONNECTION_DEFAULTS = dict(
 
 if IGVM_SSH_USER:
     FABRIC_CONNECTION_DEFAULTS['user'] = IGVM_SSH_USER
+
+# Fabric 1.x used 'sudo password:' as the sudo prompt, while Fabric 3.x
+# defaults to '[sudo] password:'.  Remote hosts with SSH_ORIGINAL_COMMAND
+# whitelists match the old format, so we must keep using it.
+FABRIC_SUDO_PROMPT = 'sudo password:'
+
+def make_fabric_config():
+    return fabric.Config(overrides={'sudo': {'prompt': FABRIC_SUDO_PROMPT}})
 
 FABRIC_RUN_DEFAULTS = dict(
     pty=stdout.isatty(),

@@ -13,6 +13,7 @@ import fabric
 from igvm.exceptions import ConfigError
 from igvm.host import CommandResult
 from igvm.settings import (
+    make_fabric_config,
     FABRIC_CONNECTION_DEFAULTS,
     IGVM_SSH_USER,
 )
@@ -101,9 +102,15 @@ def run_cmd(host: str, cmd: str):
     if IGVM_SSH_USER:
         conn_kwargs['user'] = IGVM_SSH_USER
 
-    conn = fabric.Connection(host, **conn_kwargs)
+    conn = fabric.Connection(host, config=make_fabric_config(), **conn_kwargs)
     try:
-        result = conn.sudo(cmd, hide=True, warn=True, pty=False)
+        # Prepend a space to the command so that invoke's sudo() produces
+        # the two-space gap between the prompt and the command that the
+        # SSH_ORIGINAL_COMMAND whitelist on puppet CA hosts expects:
+        #   "sudo -S -p 'sudo password:'  <cmd>"
+        # invoke builds: "sudo -S -p '{prompt}' {cmd}" — one space from the
+        # format string plus our leading space gives the required two.
+        result = conn.sudo(' ' + cmd, hide=True, warn=True, pty=False)
         return CommandResult(result)
     finally:
         conn.close()
@@ -159,7 +166,10 @@ def clean_cert_v6(
 
     # Check if the cleaning was successful or if there was nothing to
     # clean in the first place
-    if res.return_code == 1 and 'Could not find files to clean' in res:
+    if res.return_code == 1 and (
+        'Could not find files to clean' in res
+        or 'Could not find files to clean' in res.stderr
+    ):
         logger.debug(
             f'Skip revoking of {vm_host} because there is no valid '
             'certificate known to the CA',

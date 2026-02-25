@@ -15,6 +15,7 @@ import paramiko.ssh_exception
 
 from igvm.exceptions import RemoteCommandError, InvalidStateError
 from igvm.settings import (
+    make_fabric_config,
     FABRIC_CONNECTION_ATTEMPTS,
     FABRIC_CONNECTION_DEFAULTS,
     FABRIC_RUN_DEFAULTS,
@@ -62,6 +63,10 @@ class CommandResult(str):
     @property
     def stdout(self):
         return self._result.stdout if self._result.stdout else ''
+
+    @property
+    def stderr(self):
+        return self._result.stderr if self._result.stderr else ''
 
 
 def disconnect_all():
@@ -113,7 +118,7 @@ class Host(object):
         if self._connection is None or not self._connection.is_connected:
             hostname = str(self.dataset_obj['hostname'])
             self._connection = fabric.Connection(
-                hostname, **FABRIC_CONNECTION_DEFAULTS
+                hostname, config=make_fabric_config(), **FABRIC_CONNECTION_DEFAULTS
             )
             _active_connections.add(self._connection)
         return self._connection
