@@ -236,7 +236,7 @@ def migrate_live(source, destination, vm, domain):
     migrate_params = {
         # parallel does a more strict TLS check, so pass the full hostname
         VIR_MIGRATE_PARAM_TLS_DESTINATION: destination.fqdn,
-        VIR_MIGRATE_PARAM_PARALLEL_CONNECTIONS: 4,
+        VIR_MIGRATE_PARAM_PARALLEL_CONNECTIONS: 2,
     }
 
     # Append OS-specific migration commands.  They might not exist for some
