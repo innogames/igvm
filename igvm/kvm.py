@@ -21,6 +21,9 @@ from libvirt import (
     VIR_MIGRATE_NON_SHARED_DISK,
     VIR_MIGRATE_AUTO_CONVERGE,
     VIR_MIGRATE_ABORT_ON_ERROR,
+    VIR_MIGRATE_PARALLEL,
+    VIR_MIGRATE_PARAM_PARALLEL_CONNECTIONS,
+    VIR_MIGRATE_PARAM_TLS_DESTINATION,
     VIR_ERR_OPERATION_ABORTED,
     libvirtError,
     virGetLastError,
@@ -226,10 +229,14 @@ def migrate_live(source, destination, vm, domain):
         VIR_MIGRATE_CHANGE_PROTECTION |  # Protect source VM
         VIR_MIGRATE_NON_SHARED_DISK |  # Copy non-shared storage
         VIR_MIGRATE_AUTO_CONVERGE |  # Slow down VM if can't migrate memory
-        VIR_MIGRATE_ABORT_ON_ERROR  # Don't tolerate soft errors
+        VIR_MIGRATE_ABORT_ON_ERROR | # Don't tolerate soft errors
+        VIR_MIGRATE_PARALLEL
     )
 
     migrate_params = {
+        # parallel does a more strict TLS check, so pass the full hostname
+        VIR_MIGRATE_PARAM_TLS_DESTINATION: destination.fqdn,
+        VIR_MIGRATE_PARAM_PARALLEL_CONNECTIONS: 2,
     }
 
     # Append OS-specific migration commands.  They might not exist for some
@@ -241,6 +248,7 @@ def migrate_live(source, destination, vm, domain):
     log.info('Starting online migration of vm {} from {} to {}'.format(
         vm, source, destination,
     ))
+    migration_start = time.monotonic()
 
     future = parallel(
         migrate_background,
@@ -255,6 +263,8 @@ def migrate_live(source, destination, vm, domain):
         return_results=False,
     )[0]
 
+    prev_processed = 0
+    prev_time = time.monotonic()
     try:
         while future.running():
             try:
@@ -263,11 +273,21 @@ def migrate_live(source, destination, vm, domain):
                 # When migration is finished, jobStats will fail
                 break
             if 'memory_total' in js and 'disk_total' in js:
+                now = time.monotonic()
+                dt = now - prev_time
+                if dt > 0:
+                    speed = (js['data_processed'] - prev_processed) / dt
+                else:
+                    speed = 0
+                prev_processed = js['data_processed']
+                prev_time = now
+
                 log.info(
                     (
                         'Migration progress: '
                         'disk {:.0f}% {:.0f}/{:.0f}MiB, '
                         'memory {:.0f}% {:.0f}/{:.0f}MiB, '
+                        'speed {:.0f} MiB/s'
                     ).format(
                         js['disk_processed'] / (js['disk_total'] + 1) * 100,
                         js['disk_processed'] / 1024 / 1024,
@@ -275,6 +295,7 @@ def migrate_live(source, destination, vm, domain):
                         js['memory_processed'] / (js['memory_total'] + 1) * 100,
                         js['memory_processed'] / 1024 / 1024,
                         js['memory_total'] / 1024 / 1024,
+                        speed / 1024 / 1024,
                     ))
             else:
                 log.info('Waiting for migration stats to show up')
@@ -294,7 +315,8 @@ def migrate_live(source, destination, vm, domain):
     else:
         log.info('Awaiting migration to finish')
         future.result()  # Exception from slave thread will re-raise here
-        log.info('Migration finished')
+        elapsed = time.monotonic() - migration_start
+        log.info('Migration finished in {:.0f}s'.format(elapsed))
 
         # And pin again, in case we migrated to a host with more physical cores
         domain = destination._get_domain(vm)

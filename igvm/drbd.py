@@ -149,19 +149,15 @@ class DRBD(object):
             'resource {dev} {{\n'
             '    net {{\n'
             '        protocol C;\n'
-            # max-buffers vs MB/s
-            # 4k-150, 8k-233, 12k-330, 16K-397, 24k-561, 32k-700
-            # 32k seems jumpy and might end up at as low aw 250MB/s
-            '        max-buffers 24k;\n'
-            # Buffer sizes don't seem to make any difference, at least within
-            # one datacenter.
-            '#        sndbuf-size 2048k;\n'
-            '#        rcvbuf-size 2048k;\n'
+            '        max-buffers 40k;\n'
+            '        sndbuf-size 4M;\n'
+            '        rcvbuf-size 4M;\n'
             '    }}\n'
             '    disk {{\n'
-            # Try maximum speed immediately, no need for the slow-start
-            '         c-max-rate 750M;\n'
-            '         resync-rate 750M;\n'
+            '        c-max-rate 1200M;\n'
+            '        c-fill-target 1M;\n'
+            '        c-min-rate 400M;\n'
+            '        resync-rate 400M;\n'
             '    }}\n'
             '{src_host}\n'
             '{dst_host}\n'
