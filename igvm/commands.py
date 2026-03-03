@@ -145,13 +145,7 @@ def vcpu_set(vm_hostname, count, offline=False):
         if str(count).startswith('+'):
             count = vm.dataset_obj['num_cpu'] + int(str(count)[1:])
         elif str(count).startswith('-'):
-            if not offline:
-                raise IGVMError(
-                    'Decreasing CPU count is only allowed offline.'
-                )
             count = vm.dataset_obj['num_cpu'] - int(str(count)[1:])
-        elif int(count) == vm.dataset_obj['num_cpu']:
-            raise Warning('CPU count is the same.')
 
         # Validate bounds to fail early
         # First check for at least 1 CPU
@@ -159,12 +153,27 @@ def vcpu_set(vm_hostname, count, offline=False):
         if count < 1:
             raise IGVMError(f'Invalid CPU count: {count}')
 
+        if count == vm.dataset_obj['num_cpu']:
+            raise Warning('CPU count is the same.')
+        elif count < vm.dataset_obj['num_cpu']:
+            if vm.is_running() and not offline:
+                raise IGVMError(
+                    'Decreasing CPU count is only allowed offline.'
+                )
+
         # Also check if we want to exceed hypervisor maximum
         max_cpus = vm.hypervisor.dataset_obj['num_cpu']
         if count > max_cpus:
             raise IGVMError(
                 f'Requested {count} CPUs exceeds hypervisor maximum ({max_cpus})'
             )
+
+        if offline and not vm.is_running():
+            log.info(
+                '"{}" is already powered off, ignoring --offline.'.format(
+                    vm.fqdn)
+            )
+            offline = False
 
         if offline:
             vm.shutdown()
@@ -202,6 +211,11 @@ def mem_set(vm_hostname, size, offline=False):
 
         if new_memory == vm.dataset_obj['memory']:
             raise Warning('Memory size is the same.')
+        elif new_memory < vm.dataset_obj['memory']:
+            if vm.is_running() and not offline:
+                raise IGVMError(
+                    'Decreasing memory size is only allowed offline or on shut down VMs.'
+                )
 
         if offline and not vm.is_running():
             log.info(

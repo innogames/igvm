@@ -112,19 +112,20 @@ class IGVMTest(TestCase):
         self.vm_obj['backup_disabled'] = True
         self.vm_obj['disk_size_gib'] = 3
         self.vm_obj['environment'] = 'testing'
+        self.vm_obj['function'] = 'igvm_integration'
         self.vm_obj['hostname'] = VM_HOSTNAME
         self.vm_obj['hypervisor'] = None
-        self.vm_obj['intern_ip'] = get_next_address(VM_NET, 1, self.ip_attr)
         self.vm_obj['memory'] = 2048
         self.vm_obj['no_monitoring'] = True
         self.vm_obj['num_cpu'] = 2
-        self.vm_obj['os'] = 'bullseye'
+        self.vm_obj['os'] = 'trixie'
         self.vm_obj['project'] = 'test'
+        self.vm_obj['project_network'] = VM_NET
         self.vm_obj['puppet_environment'] = None
         self.vm_obj['puppet_ca'] = 'testing-puppetca.innogames.de'
         self.vm_obj['puppet_master'] = 'puppet-lb.test.innogames.net'
         self.vm_obj['repositories'] = [
-            'int:basebuster:stable',
+            'int:basetrixie:stable',
             'int:innogames:stable',
         ]
         self.vm_obj['state'] = 'online'
@@ -407,38 +408,52 @@ class CommandTest(IGVMTest):
                 .strip()
             ) // 1024
 
-        # Online
+        # Sanity check
         self.assertEqual(_get_mem_hv(), 2048)
+
+        # Online increase with the "+" operator
         vm_mem = _get_mem_vm()
         mem_set(VM_HOSTNAME, '+1G')
         self.assertEqual(_get_mem_hv(), 3072)
+        # It grew by 1GiB
         self.assertEqual(_get_mem_vm() - vm_mem, 1024)
 
+        # Resize to the same size
         with self.assertRaises(Warning):
             mem_set(VM_HOSTNAME, '3G')
 
-        with self.assertRaises(InvalidStateError):
+        # Online reduce is not possible
+        with self.assertRaises(IGVMError):
             mem_set(VM_HOSTNAME, '2G')
 
+        # Online increase to an impossible size
         with self.assertRaises(IGVMError):
-            mem_set(VM_HOSTNAME, '200G')
+            mem_set(VM_HOSTNAME, '1000G')
 
         # Not dividable
         with self.assertRaises(IGVMError):
             mem_set(VM_HOSTNAME, '4097M')
 
+        # Sanity check
         self.assertEqual(_get_mem_hv(), 3072)
         vm_mem = _get_mem_vm()
+
+        # Offline operations from now on
         self.vm.shutdown()
 
+        # Offline increase to an impossible size
         with self.assertRaises(IGVMError):
-            mem_set(VM_HOSTNAME, '200G')
+            mem_set(VM_HOSTNAME, '1000G')
 
+        # Offline decrease
         mem_set(VM_HOSTNAME, '1024M')
         self.assertEqual(_get_mem_hv(), 1024)
 
+        # Offline increase
         mem_set(VM_HOSTNAME, '2G')
         self.assertEqual(_get_mem_hv(), 2048)
+
+        # Offline changes properly applied after vm.start()
         self.vm.start()
         self.assertEqual(_get_mem_vm() - vm_mem, -1024)
 
@@ -499,6 +514,21 @@ class CommandTest(IGVMTest):
         vcpu_set(VM_HOSTNAME, '-2', offline=True)
         self.assertEqual(_get_cpus_hv(), 2)
         self.assertEqual(_get_cpus_vm(), 2)
+
+        # Offline operations from now on
+        self.vm.shutdown()
+
+        # Offline increase
+        vcpu_set(VM_HOSTNAME, '+4')
+        self.assertEqual(_get_cpus_hv(), 6)
+
+        # Offline decrease
+        vcpu_set(VM_HOSTNAME, '-2')
+        self.assertEqual(_get_cpus_hv(), 4)
+
+        # Offline changes properly applied after vm.start()
+        self.vm.start()
+        self.assertEqual(_get_cpus_vm(), 4)
 
     def test_sync(self):
         obj = (
