@@ -103,6 +103,7 @@ MIGRATE_CONFIG = {
     ('bullseye', 'bookworm'): P2P_TLS_MIGRATION,
     ('bookworm', 'bookworm'): P2P_TLS_MIGRATION,
     ('bookworm', 'bullseye'): P2P_TLS_MIGRATION,
+    ('trixie', 'trixie'): P2P_TLS_MIGRATION,
 }
 
 # Arbitrarily chosen MAC address prefix with U/L bit set
