@@ -914,7 +914,7 @@ class Hypervisor(Host):
 
     def check_netcat(self, port):
         pid = self.run(
-            'pgrep -f "^/bin/nc.openbsd -l -p {}"'
+            'pgrep -f "^/bin/nc.openbsd -6 -l -p {}"'
             .format(port),
             warn_only=True,
             silent=True
@@ -927,7 +927,7 @@ class Hypervisor(Host):
 
     def kill_netcat(self, port):
         self.run(
-            'pkill -f "^/bin/nc.openbsd -l -p {}"'.format(port),
+            'pkill -f "^/bin/nc.openbsd -6 -l -p {}"'.format(port),
             warn_only=True,  # It's fine if the process already dead
         )
 
@@ -956,7 +956,7 @@ class Hypervisor(Host):
 
         # Using DD lowers load on device with big enough Block Size
         self.run(
-            'nohup /bin/nc.openbsd -l -p {port} 2>>{log_file} '
+            'nohup /bin/nc.openbsd -6 -l -p {port} 2>>{log_file} '
             '| dd of={vol_path} obs=1048576 2>>{log_file} &'.format(
                 port=port,
                 log_file=self._log_filename('netcat', vol.name()),
@@ -983,7 +983,7 @@ class Hypervisor(Host):
         # Using DD lowers load on device with big enough Block Size
         self.run(
             'dd if={vol_path} ibs=1048576 | pv -f -s {size} '
-            '| /bin/nc.openbsd -q 1 {target_host} {target_port}'.format(
+            '| /bin/nc.openbsd -6 -q 1 {target_host} {target_port}'.format(
                 vol_path=vol.path(),
                 size=size,
                 target_host=listener[0],
@@ -1038,7 +1038,7 @@ class Hypervisor(Host):
         #  -J: inhibits inventory update
         # xfsrestore needs to output its logs, otherwise it fails
         self.run(
-            'nohup /bin/nc.openbsd -l -p {port} 2>>{log_file} '
+            'nohup /bin/nc.openbsd -6 -l -p {port} 2>>{log_file} '
             '| ionice -c3 xfsrestore -F -J - {mount_dir} 2>>{log_file} 1>&2 &'
             .format(
                 port=port,
@@ -1080,7 +1080,7 @@ class Hypervisor(Host):
         #  -p: progress update interval
         self.run(
             'ionice -c3 xfsdump -o -l 0 -F -J -p 1 - {mount_dir} '
-            '| /bin/nc.openbsd -q 1 {target_host} {target_port}'
+            '| /bin/nc.openbsd -6 -q 1 {target_host} {target_port}'
             .format(
                 mount_dir=mount_dir,
                 target_host=listener[0],
