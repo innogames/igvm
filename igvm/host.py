@@ -184,3 +184,10 @@ class Host(object):
             .format(bs_kib, device)
         )
         self.run('sync')
+
+    @property
+    def ip_address(self):
+        ipaddr = self.dataset_obj.get('ipv6') or self.dataset_obj.get('ipv4')
+        if not ipaddr:
+            raise ValueError('This host has no IP address!')
+        return ipaddr

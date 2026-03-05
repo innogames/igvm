@@ -212,7 +212,7 @@ class Hypervisor(Host):
             )
 
         # Proper VLAN?
-        if not self.get_vlan_network(vm.dataset_obj['ipv6']):
+        if not self.get_vlan_network(vm.ip_address):
             raise HypervisorError(
                 'Hypervisor "{}" does not support route_network "{}".'
                 .format(self.fqdn, vm.route_network)

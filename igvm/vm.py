@@ -363,7 +363,7 @@ class VM(Host):
             raise VMError('VM did not come online in time')
 
         host_up = wait_until(
-            str(self.dataset_obj['ipv6']),
+            str(self.ip_address),
             waitmsg='Waiting for SSH to respond',
         )
         if not host_up and force_stop_failed:
@@ -408,7 +408,7 @@ class VM(Host):
             raise VMError(e)
 
         host_up = wait_until(
-            str(self.dataset_obj['ipv6']),
+            str(self.ip_address),
             waitmsg='Waiting for SSH to respond',
         )
 
@@ -431,7 +431,7 @@ class VM(Host):
             raise VMError(e)
 
         host_up = wait_until(
-            str(self.dataset_obj['ipv6']),
+            str(self.ip_address),
             waitmsg='Waiting for SSH to respond',
             timeout=180
         )
