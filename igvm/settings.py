@@ -71,11 +71,11 @@ KVM_HWMODEL_TO_CPUMODEL = {
 }
 
 XFS_CONFIG = {
-    'buster': ['-m reflink=1'],
-    'bullseye': ['-m reflink=1'],
-    'bookworm': ['-m reflink=1'],
-    'trixie': ['-m reflink=1'],
-    'rolling': ['-m reflink=1'],
+    'buster': ["-c options=/usr/share/xfsprogs/mkfs/lts_4.19.conf"],
+    'bullseye': ["-c options=/usr/share/xfsprogs/mkfs/lts_5.10.conf"],
+    'bookworm': ["-c options=/usr/share/xfsprogs/mkfs/lts_6.1.conf"],
+    'trixie': ["-c options=/usr/share/xfsprogs/mkfs/lts_6.12.conf"],
+    'rolling': ["-c options=/usr/share/xfsprogs/mkfs/lts_6.12.conf"],
 }
 
 PUPPET_BINARY_PATH = {
