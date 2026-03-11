@@ -4,6 +4,8 @@ Copyright (c) 2020 InnoGames GmbH
 """
 from __future__ import print_function
 
+import re
+
 from logging import INFO, basicConfig
 from os import environ
 from tempfile import NamedTemporaryFile
@@ -52,7 +54,6 @@ from igvm.settings import (
     DEFAULT_VG_NAME,
     VM_ATTRIBUTES
 )
-from igvm.utils import parse_size
 from igvm.vm import VM
 from tests import VM_HOSTNAME, VM_NET
 from tests.conftest import (
@@ -343,11 +344,30 @@ class CommandTest(IGVMTest):
                 )
 
             def _get_disk_vm():
-                return parse_size(
-                    self.vm.run("df -h / | tail -n+2 | awk '{ print $2 }'")
-                    .strip(),
-                    'G'
-                )
+                xfs_info = self.vm.run("xfs_info /")
+
+                block_size = None
+                total_blocks = None
+                section = None
+
+                for line in xfs_info.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("="):
+                        section = line.split("=", 1)[0].strip()
+
+                    if section == "data":
+                        match = re.search(r"bsize=(\d+)", line)
+                        if match:
+                            block_size = int(match.group(1))
+                        match = re.search(r"blocks=(\d+)", line)
+                        if match:
+                            total_blocks = int(match.group(1))
+
+                if block_size is None or total_blocks is None:
+                    raise ValueError(f"Failed to parse xfs_info output: {xfs_info}")
+
+                return (total_blocks * block_size) / (1024**3)
+
         elif self.datacenter_type == 'aws.dct':
             def _get_disk_vm():
                 partition = self.vm.run('findmnt -nro SOURCE /')
