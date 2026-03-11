@@ -70,12 +70,19 @@ KVM_HWMODEL_TO_CPUMODEL = {
     'EPYC': ['Dell_R6515', 'Dell_R7515', 'Supermicro_H13S'],
 }
 
+# Compatibility options used when making a new filesystems.
+# This is configured per VM's operating system because the VM's kernel
+# must be able to boot from and mount the FS. But we also limit it
+# to the oldest Hypervisor we have, because the HV must be able to
+# make the filesystem and mount it for building or for VM offline
+# XFS-aware migrations and disk shrinking.
+# Currently we cap it at Bookworm with kernel 6.1.
 XFS_CONFIG = {
     'buster': ["-c options=/usr/share/xfsprogs/mkfs/lts_4.19.conf"],
     'bullseye': ["-c options=/usr/share/xfsprogs/mkfs/lts_5.10.conf"],
     'bookworm': ["-c options=/usr/share/xfsprogs/mkfs/lts_6.1.conf"],
-    'trixie': ["-c options=/usr/share/xfsprogs/mkfs/lts_6.12.conf"],
-    'rolling': ["-c options=/usr/share/xfsprogs/mkfs/lts_6.12.conf"],
+    'trixie': ["-c options=/usr/share/xfsprogs/mkfs/lts_6.1.conf"],
+    'rolling': ["-c options=/usr/share/xfsprogs/mkfs/lts_6.1.conf"],
 }
 
 PUPPET_BINARY_PATH = {
