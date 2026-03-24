@@ -591,8 +591,7 @@ class VM(Host):
         """
         action = 'boot' if running else 'shutdown'
         for i in range(timeout, 1, -1):
-            print(
-                f'Waiting for VM "{self.fqdn}" to {action}... {i} s')
+            log.info(f'Waiting for VM "{self.fqdn}" to {action}... {i} s')
             if self.hypervisor.vm_running(self) == running:
                 return True
             time.sleep(1)
@@ -676,7 +675,7 @@ class VM(Host):
         self.hypervisor.check_vm(self, offline=True)
 
         if not run_puppet or self.dataset_obj['puppet_disabled']:
-            log.warn(
+            log.warning(
                 'Puppet is disabled on the VM.  It will not receive network '
                 'configuration.  Expect things to go south.'
             )
