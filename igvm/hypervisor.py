@@ -467,7 +467,7 @@ class Hypervisor(Host):
             'set -e ; '
             'flock -w 120 9 ; '
             'curl -o {img_path}/{img_file}.md5 {md5_url} ; '
-            'sed -Ei \'s_ (.*/)?([a-zA-Z0-9\.\-]+)$_ {img_path}/\\2_\' '
+            "sed -Ei 's_ (.*/)?([a-zA-Z0-9\\.\\-]+)$_ {img_path}/\\2_' "
             '{img_path}/{img_file}.md5 ; '
             'md5sum -c {img_path}/{img_file}.md5 || '
             'curl -o {img_path}/{img_file} {img_url} ; '

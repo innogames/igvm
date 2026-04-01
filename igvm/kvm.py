@@ -426,7 +426,7 @@ def generate_domain_xml(hypervisor, vm):
         log.info('KVM: Memory hotplug disabled, requires qemu 2.3')
 
     # Remove whitespace and re-indent properly.
-    out = re.sub(b'>\s+<', b'><', ElementTree.tostring(tree))
+    out = re.sub(rb'>\s+<', b'><', ElementTree.tostring(tree))
     domain_xml = minidom.parseString(out).toprettyxml()
     return domain_xml
 
