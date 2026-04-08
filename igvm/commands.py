@@ -617,12 +617,9 @@ def vm_migrate(
 
 
 @with_fabric_settings
-def vm_start(vm_hostname, unretire=None):
+def vm_start(vm_hostname):
     """Start a VM"""
     with _get_vm(vm_hostname) as vm:
-        if unretire and vm.dataset_obj['state'] != 'retired':
-            raise InvalidStateError('Can\'t unretire a non-retired VM!')
-
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
             vm.aws_start()
         elif vm.dataset_obj['datacenter_type'] == 'kvm.dct':
@@ -636,10 +633,6 @@ def vm_start(vm_hostname, unretire=None):
                 'This operation is not yet supported for {}'.format(
                     vm.dataset_obj['datacenter_type'])
             )
-
-        if unretire:
-            vm.dataset_obj['state'] = unretire
-            vm.dataset_obj.commit()
 
 
 @with_fabric_settings

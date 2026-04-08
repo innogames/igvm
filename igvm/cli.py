@@ -336,12 +336,6 @@ def parse_args():
         'vm_hostname',
         help='Hostname of the guest system',
     )
-    subparser.add_argument(
-        '--unretire',
-        nargs='?',
-        const='maintenance',
-        help='Unretire a VM, set it to given state, maintenance by default',
-    )
 
     subparser = subparsers.add_parser(
         'stop',
