@@ -357,11 +357,6 @@ def parse_args():
         action='store_true',
         help='Do not wait for guest to shutdown gracefully',
     )
-    subparser.add_argument(
-        '--retire',
-        action='store_true',
-        help='Retire VM after stopping it',
-    )
 
     subparser = subparsers.add_parser(
         'restart',

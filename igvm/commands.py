@@ -643,7 +643,7 @@ def vm_start(vm_hostname, unretire=None):
 
 
 @with_fabric_settings
-def vm_stop(vm_hostname, force=False, retire=False):
+def vm_stop(vm_hostname, force=False):
     """Gracefully stop a VM"""
     with _get_vm(vm_hostname, allow_retired=True) as vm:
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
@@ -663,11 +663,6 @@ def vm_stop(vm_hostname, force=False, retire=False):
                 'This operation is not yet supported for {}'.format(
                     vm.dataset_obj['datacenter_type'])
             )
-
-        if retire:
-            vm.dataset_obj['state'] = 'retired'
-            vm.dataset_obj.commit()
-            log.info('"{}" is retired.'.format(vm.fqdn))
 
         log.info('"{}" is stopped.'.format(vm.fqdn))
 
