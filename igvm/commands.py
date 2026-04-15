@@ -617,12 +617,9 @@ def vm_migrate(
 
 
 @with_fabric_settings
-def vm_start(vm_hostname, unretire=None):
+def vm_start(vm_hostname):
     """Start a VM"""
     with _get_vm(vm_hostname) as vm:
-        if unretire and vm.dataset_obj['state'] != 'retired':
-            raise InvalidStateError('Can\'t unretire a non-retired VM!')
-
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
             vm.aws_start()
         elif vm.dataset_obj['datacenter_type'] == 'kvm.dct':
@@ -637,13 +634,9 @@ def vm_start(vm_hostname, unretire=None):
                     vm.dataset_obj['datacenter_type'])
             )
 
-        if unretire:
-            vm.dataset_obj['state'] = unretire
-            vm.dataset_obj.commit()
-
 
 @with_fabric_settings
-def vm_stop(vm_hostname, force=False, retire=False):
+def vm_stop(vm_hostname, force=False):
     """Gracefully stop a VM"""
     with _get_vm(vm_hostname, allow_retired=True) as vm:
         if vm.dataset_obj['datacenter_type'] == 'aws.dct':
@@ -663,11 +656,6 @@ def vm_stop(vm_hostname, force=False, retire=False):
                 'This operation is not yet supported for {}'.format(
                     vm.dataset_obj['datacenter_type'])
             )
-
-        if retire:
-            vm.dataset_obj['state'] = 'retired'
-            vm.dataset_obj.commit()
-            log.info('"{}" is retired.'.format(vm.fqdn))
 
         log.info('"{}" is stopped.'.format(vm.fqdn))
 
