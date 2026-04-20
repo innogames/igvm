@@ -126,31 +126,34 @@ except KeyError:
 
 IMAGE_PATH = '/tmp'
 
+HOST_ATTRIBUTES = [
+    'environment',
+    'hostname',
+    'igvm_locked',
+    'ipv4',
+    'ipv6',
+    'os',
+    'state',
+]
+
 NETWORK_ATTRIBUTES = [
     'hostname',
     'service_groups',
 ]
 
-HYPERVISOR_ATTRIBUTES = [
+HYPERVISOR_ATTRIBUTES = HOST_ATTRIBUTES + [
     'ceph_disks',
     'cpu_perffactor',
     'cpu_util_pct',
-    'environment',
     'hardware_model',
-    'hostname',
-    'igvm_locked',
     'igvm_migration_log',
-    'intern_ip',
     'iops_avg',
-    'igvm_migration_log',
     'libvirt_memory_total_gib',
     'libvirt_memory_used_gib',
     'libvirt_pool_total_gib',
     'libvirt_pool_used_gib',
     'num_cpu',
-    'os',
     {'route_network': NETWORK_ATTRIBUTES},
-    'state',
     {
         'vlan_networks': [
             'hostname',
@@ -177,7 +180,7 @@ HYPERVISOR_ATTRIBUTES = [
     },
 ]
 
-VM_ATTRIBUTES = [
+VM_ATTRIBUTES = HOST_ATTRIBUTES + [
     'aws_image_id',
     'aws_instance_id',
     'aws_instance_type',
@@ -188,22 +191,16 @@ VM_ATTRIBUTES = [
     'datacenter',
     'datacenter_type',
     'disk_size_gib',
-    'environment',
     'function',
     'game_market',
     'game_type',
     'game_world',
-    'hostname',
-    'igvm_locked',
-    'intern_ip',
     'io_weight',
     'libvirt_pool_override',
     'load_99',
     'mac',
     'memory',
     'num_cpu',
-    'os',
-    'primary_ip6',
     'project',
     {'project_network': NETWORK_ATTRIBUTES},
     'puppet_ca',
@@ -213,7 +210,6 @@ VM_ATTRIBUTES = [
     'served_game',
     'service_groups',
     'sshfp',
-    'state',
     {'hypervisor': HYPERVISOR_ATTRIBUTES},
 ]
 
