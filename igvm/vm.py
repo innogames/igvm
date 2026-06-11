@@ -22,7 +22,6 @@ from typing import Optional, List, Union
 from uuid import uuid4
 
 import boto3
-import fabric
 import paramiko.ssh_exception
 from botocore.exceptions import ClientError, CapacityNotAvailableError
 from jinja2 import Environment, FileSystemLoader
@@ -31,6 +30,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from igvm.exceptions import ConfigError, HypervisorError, RemoteCommandError, VMError
+from igvm.fabric_compat import Connection
 from igvm.host import Host
 from igvm.settings import (
     AWS_ECU_FACTOR,
@@ -857,7 +857,7 @@ class VM(Host):
                 continue
 
             try:
-                conn = fabric.Connection(
+                conn = Connection(
                     self.dataset_obj['hostname'],
                     **FABRIC_CONNECTION_DEFAULTS,
                 )

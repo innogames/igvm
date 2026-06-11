@@ -10,12 +10,16 @@ from datetime import datetime, timezone
 from io import BytesIO
 from uuid import uuid4
 
-import fabric
 import paramiko.ssh_exception
 
 from igvm.exceptions import RemoteCommandError, InvalidStateError
-from igvm.settings import (
+from igvm.fabric_compat import (
+    Connection,
+    IS_LEGACY_FABRIC,
     make_fabric_config,
+    _active_connections,
+)
+from igvm.settings import (
     FABRIC_CONNECTION_ATTEMPTS,
     FABRIC_CONNECTION_DEFAULTS,
     FABRIC_RUN_DEFAULTS,
@@ -24,9 +28,6 @@ from igvm.settings import (
 from adminapi.dataset import DatasetError
 
 log = logging.getLogger(__name__)
-
-# Registry of active connections for disconnect_all()
-_active_connections = set()
 
 
 class CommandResult(str):
@@ -69,16 +70,6 @@ class CommandResult(str):
         return self._result.stderr if self._result.stderr else ''
 
 
-def disconnect_all():
-    """Close all tracked SSH connections."""
-    for conn in list(_active_connections):
-        try:
-            conn.close()
-        except Exception:
-            pass
-    _active_connections.clear()
-
-
 class Host(object):
     """A remote host on which commands can be executed."""
 
@@ -117,7 +108,7 @@ class Host(object):
         """Return a cached fabric.Connection for this host."""
         if self._connection is None or not self._connection.is_connected:
             hostname = str(self.dataset_obj['hostname'])
-            self._connection = fabric.Connection(
+            self._connection = Connection(
                 hostname, config=make_fabric_config(), **FABRIC_CONNECTION_DEFAULTS
             )
             _active_connections.add(self._connection)
@@ -175,7 +166,8 @@ class Host(object):
         # command without wrapping it in a shell, unlike Fabric.
         # This breaks commands containing shell constructs (while, for, if,
         # pipes, etc.).  Wrap in "bash -c '...'" to restore the old behavior.
-        if with_sudo and args:
+        # Legacy fabric3 already shell-wraps sudo commands, so skip it there.
+        if with_sudo and args and not IS_LEGACY_FABRIC:
             cmd = args[0]
             args = (f"bash -c {shlex.quote(cmd)}",) + args[1:]
 

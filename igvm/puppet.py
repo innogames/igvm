@@ -8,12 +8,10 @@ from time import sleep
 
 from adminapi.dataset import Query, DatasetObject
 
-import fabric
-
 from igvm.exceptions import ConfigError
+from igvm.fabric_compat import Connection, IS_LEGACY_FABRIC, make_fabric_config
 from igvm.host import CommandResult
 from igvm.settings import (
-    make_fabric_config,
     FABRIC_CONNECTION_DEFAULTS,
     IGVM_SSH_USER,
 )
@@ -102,7 +100,7 @@ def run_cmd(host: str, cmd: str):
     if IGVM_SSH_USER:
         conn_kwargs['user'] = IGVM_SSH_USER
 
-    conn = fabric.Connection(host, config=make_fabric_config(), **conn_kwargs)
+    conn = Connection(host, config=make_fabric_config(), **conn_kwargs)
     try:
         # Prepend a space to the command so that invoke's sudo() produces
         # the two-space gap between the prompt and the command that the
@@ -110,7 +108,10 @@ def run_cmd(host: str, cmd: str):
         #   "sudo -S -p 'sudo password:'  <cmd>"
         # invoke builds: "sudo -S -p '{prompt}' {cmd}" — one space from the
         # format string plus our leading space gives the required two.
-        result = conn.sudo(' ' + cmd, hide=True, warn=True, pty=False)
+        # Legacy fabric3's sudo() already produces the expected spacing, so
+        # there we pass the command unchanged.
+        cmd_arg = cmd if IS_LEGACY_FABRIC else (' ' + cmd)
+        result = conn.sudo(cmd_arg, hide=True, warn=True, pty=False)
         return CommandResult(result)
     finally:
         conn.close()

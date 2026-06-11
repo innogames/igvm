@@ -16,7 +16,7 @@ from adminapi import parse
 from adminapi.dataset import Query, DatasetError
 from adminapi.filters import Any, BaseFilter, StartsWith, Contains
 from igvm.colors import green, red, white, yellow
-from igvm.host import disconnect_all
+from igvm.fabric_compat import disconnect_all
 from jinja2 import Environment, PackageLoader
 from libvirt import libvirtError
 

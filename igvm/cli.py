@@ -8,7 +8,7 @@ from argparse import ArgumentParser, _SubParsersAction
 from logging import StreamHandler, root as root_logger
 import time
 
-from igvm.host import disconnect_all
+from igvm.fabric_compat import disconnect_all
 
 from igvm.commands import (
     change_address,
