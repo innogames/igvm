@@ -10,6 +10,7 @@ import os
 import re
 import stat
 import time
+import traceback
 
 import botocore.exceptions
 import tqdm
@@ -94,6 +95,21 @@ class VM(Host):
             return self.hypervisor.fabric_settings()
         return self.fabric_settings()
 
+    def _debug_fs_op(self, op, target):
+        """DEBUG: trace writes that must land inside the VM, not the HV.
+
+        ponytail: temporary; grep 'FSOP' and remove once NDCO-6147 is closed.
+        """
+        try:
+            resolved = self.vm_path(target)
+        except Exception as e:
+            resolved = 'vm_path() FAILED: {!r}'.format(e)
+        log.warning(
+            'FSOP %s class=%s mounted=%s target=%r resolved=%r\n%s',
+            op, type(self).__name__, self.mounted, target, resolved,
+            ''.join(traceback.format_stack()[:-1]),
+        )
+
     def vm_path(self, path=''):
         """ Append correct prefix to reach VM's / directory """
 
@@ -113,6 +129,11 @@ class VM(Host):
         """
         with self.vm_host():
             if self.mounted:
+                log.warning(
+                    'FSOP run(chroot) class=%s mounted=%s root=%r cmd=%r',
+                    type(self).__name__, self.mounted, self.vm_path(''),
+                    command,
+                )
                 return self.hypervisor.run(
                     'chroot {} /bin/sh -c \'{}\''.format(
                         self.vm_path(''), command,
@@ -121,6 +142,11 @@ class VM(Host):
                     silent=silent,
                     with_sudo=with_sudo,
                 )
+            log.warning(
+                'FSOP run(no-chroot) class=%s mounted=%s cmd=%r\n%s',
+                type(self).__name__, self.mounted, command,
+                ''.join(traceback.format_stack()[:-1]),
+            )
             return super(VM, self).run(command, silent=silent)
 
     def read_file(self, path):
@@ -130,6 +156,7 @@ class VM(Host):
 
     def upload_template(self, filename, destination, context=None):
         """" Same as Fabric's template() but works on mounted or running vm """
+        self._debug_fs_op('upload_template', destination)
         template_dir = os.path.join(os.path.dirname(__file__), 'templates')
         with self.vm_host():
             return upload_template(
@@ -154,6 +181,13 @@ class VM(Host):
             seems broken, at least for mounted VM. This is why we run
             extra commands here.
         """
+        # with `_remote_path = remote_path`
+        # sudo: chroot /tmp/tmp.leAAGb5wRG-igvm-00-0.test.ig.local/ /bin/sh -c 'mv /tmp/b0021aa1-d5e1-4ecc-ab6c-070ded9b93d9 /etc/hostname ; chmod 0644 /etc/hostname'
+
+        # with `_remote_path = self.vm_path(remote_path)`
+        # sudo: chroot /tmp/tmp.rdY4ZXUVTv-igvm-00-0.test.ig.local/ /bin/sh -c 'mv /tmp/cf4ecdff-e3c9-4a2d-a3b1-ea824ef03d46 /tmp/tmp.rdY4ZXUVTv-igvm-00-0.test.ig.local//etc/hostname ; chmod 0644 /tmp/tmp.rdY4ZXUVTv-igvm-00-0.test.ig.local//etc/hostname'
+
+        self._debug_fs_op('put', remote_path)
         with self.vm_host():
             tempfile = '/tmp/' + str(uuid4())
             put(local_path, self.vm_path(tempfile))

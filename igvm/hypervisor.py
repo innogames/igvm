@@ -4,6 +4,7 @@ Copyright (c) 2018 InnoGames GmbH
 """
 
 import logging
+import traceback
 import math
 
 from adminapi.dataset import DatasetError
@@ -506,6 +507,10 @@ class Hypervisor(Host):
             )
 
         vm.mounted = True
+        log.warning(
+            'FSOP mount_vm_storage %s mounted=True path=%s',
+            vm.fqdn, self._mount_path[vm],
+        )
         return self._mount_path[vm]
 
     def umount_vm_storage(self, vm):
@@ -516,6 +521,10 @@ class Hypervisor(Host):
         self.remove_temp(self._mount_path[vm])
         del self._mount_path[vm]
         vm.mounted = False
+        log.warning(
+            'FSOP umount_vm_storage %s mounted=False\n%s',
+            vm.fqdn, ''.join(traceback.format_stack()[:-1]),
+        )
 
     def vm_sync_from_hypervisor(self, vm):
         """Synchronizes serveradmin information from the actual data on
@@ -880,6 +889,12 @@ class Hypervisor(Host):
         """Mounts given device into temporary path"""
         mount_dir = self.run('mktemp -d --suffix {}'.format(suffix))
         self.run('mount {0} {1}'.format(device, mount_dir))
+        # Guard: a silently-unmounted dir would make later chroot/writes land
+        # on the hypervisor's own root filesystem (NDCO-6147).
+        if self.run('mountpoint -q {}'.format(mount_dir), warn_only=True).failed:
+            raise HypervisorError(
+                'Device {} is not mounted at {}'.format(device, mount_dir)
+            )
         return mount_dir
 
     def umount_temp(self, device_or_path):
