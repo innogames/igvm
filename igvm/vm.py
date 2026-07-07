@@ -157,7 +157,8 @@ class VM(Host):
         with self.vm_host():
             tempfile = '/tmp/' + str(uuid4())
             put(local_path, self.vm_path(tempfile))
-            _remote_path = self.vm_path(remote_path)
+            _remote_path = remote_path
+            # _remote_path = self.vm_path(remote_path)
             self.run('mv {0} {1} ; chmod {2} {1}'.format(
                 tempfile, _remote_path, mode
             ))
