@@ -125,7 +125,7 @@ class VM(Host):
         template = env.get_template(filename)
         rendered = template.render(**(context or {}))
         fd = BytesIO(rendered.encode('utf-8'))
-        self.put(self.vm_path(destination), fd)
+        self.put(destination, fd)
 
     def get(self, remote_path, local_path):
         """" Same as Fabric's get() but works on mounted or running vm """
@@ -142,6 +142,7 @@ class VM(Host):
             seems broken, at least for mounted VM. This is why we run
             extra commands here.
         """
+        remote_path = self.vm_path(remote_path)
         if self.mounted:
             host_obj = self.hypervisor
         else:
