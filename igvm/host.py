@@ -31,19 +31,14 @@ log = logging.getLogger(__name__)
 
 
 class CommandResult(str):
-    """String subclass wrapping invoke.runners.Result for backward compat.
-
-    Fabric 1.x run()/sudo() returned a string-like object.  Fabric 3.x
-    returns invoke.runners.Result.  This wrapper lets callers keep using
-    .strip(), int(result), 'text' in result, etc. while also exposing
-    .ok, .failed, .return_code, .stdout, .stderr.
+    """str subclass wrapping invoke.Result for backward compat: callers keep
+    using .strip()/int()/`in`, plus .ok/.failed/.return_code/.stdout/.stderr.
+    Fabric 1.x returned a string-like object; Fabric 3.x returns invoke.Result.
     """
 
     def __new__(cls, result):
-        # Fabric 1.x automatically stripped trailing whitespace from the
-        # string representation.  Fabric 3.x does not, so we strip here
-        # to avoid embedded newlines breaking commands that interpolate
-        # the result (e.g. mktemp output used as a mount path).
+        # Fabric 1.x stripped trailing whitespace; 3.x doesn't.  Strip here so
+        # interpolated output (e.g. mktemp as a mount path) has no newline.
         stdout = result.stdout.strip() if result.stdout else ''
         instance = super().__new__(cls, stdout)
         instance._result = result
@@ -105,11 +100,15 @@ class Host(object):
         return uid_name.split('_', 1)[0] == str(self.dataset_obj['object_id'])
 
     def _get_connection(self):
-        """Return a cached fabric.Connection for this host."""
-        if self._connection is None or not self._connection.is_connected:
+        """Return a cached fabric.Connection, built on first use.  fabric opens
+        it lazily (run/sudo/get/put are ``@opens``-decorated) and reuses it; a
+        dropped connection is cleared to None by run()'s retry loop, so the
+        next call rebuilds it."""
+        if self._connection is None:
             hostname = str(self.dataset_obj['hostname'])
             self._connection = Connection(
-                hostname, config=make_fabric_config(), **FABRIC_CONNECTION_DEFAULTS
+                hostname, config=make_fabric_config(),
+                **FABRIC_CONNECTION_DEFAULTS,
             )
             _active_connections.add(self._connection)
         return self._connection
@@ -132,23 +131,21 @@ class Host(object):
         with_sudo = kwargs.pop('with_sudo', True)
         silent = kwargs.pop('silent', False)
 
-        # Build run kwargs
         run_kwargs = dict(FABRIC_RUN_DEFAULTS)
         run_kwargs['pty'] = kwargs.pop('pty', run_kwargs.get('pty', True))
-        # Always suppress invoke's UnexpectedExit so we can raise our own
-        # RemoteCommandError instead (checked below after the call).
+        # Force warn=True so invoke never raises UnexpectedExit; we raise our
+        # own RemoteCommandError below instead.
         run_kwargs['warn'] = True
 
         if silent:
             run_kwargs['hide'] = True
 
-        # Pass through any remaining kwargs (e.g. shell, shell_escape)
-        # Map shell_escape to Fabric 3.x equivalent if present
+        # shell_escape was Fabric 1.x-only; drop it.
         kwargs.pop('shell_escape', None)
 
-        # 'shell' kwarg: In Fabric 1.x, shell=False meant don't wrap in shell.
-        # In Fabric 3.x/invoke, the equivalent is setting shell to empty string
-        # or using the command directly. We'll pass it through.
+        # Fabric 1.x shell=False ("don't add an extra /bin/sh -c") -> shell=''.
+        # Modern fabric's SSH runner ignores 'shell' (the bash -c wrap below
+        # does the real work); the fabric3 adapter maps '' back to shell=False.
         if 'shell' in kwargs:
             shell_val = kwargs.pop('shell')
             if shell_val is False:
@@ -162,11 +159,9 @@ class Host(object):
         conn = self._get_connection()
         runner = conn.sudo if with_sudo else conn.run
 
-        # Fabric 3's sudo() prepends "sudo -S -p '...' " directly to the
-        # command without wrapping it in a shell, unlike Fabric.
-        # This breaks commands containing shell constructs (while, for, if,
-        # pipes, etc.).  Wrap in "bash -c '...'" to restore the old behavior.
-        # Legacy fabric3 already shell-wraps sudo commands, so skip it there.
+        # Modern fabric's sudo() prepends "sudo -S -p '...'" with no shell, so
+        # shell constructs (pipes, while, &&) break.  Wrap in bash -c to keep
+        # them working; fabric3 already shell-wraps sudo, so skip it there.
         if with_sudo and args and not IS_LEGACY_FABRIC:
             cmd = args[0]
             args = (f"bash -c {shlex.quote(cmd)}",) + args[1:]

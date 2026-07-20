@@ -14,7 +14,7 @@ from unittest import TestCase
 from adminapi import api
 from adminapi.dataset import Query
 from adminapi.filters import Any
-from igvm.host import disconnect_all
+from igvm.fabric_compat import disconnect_all
 from unittest.mock import patch
 
 from igvm.commands import (

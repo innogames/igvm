@@ -3,8 +3,11 @@
 Copyright (c) 2020 InnoGames GmbH
 """
 import random
+import socket
 from logging import getLogger
 from time import sleep
+
+import paramiko.ssh_exception
 
 from adminapi.dataset import Query, DatasetObject
 
@@ -12,6 +15,7 @@ from igvm.exceptions import ConfigError
 from igvm.fabric_compat import Connection, IS_LEGACY_FABRIC, make_fabric_config
 from igvm.host import CommandResult
 from igvm.settings import (
+    FABRIC_CONNECTION_ATTEMPTS,
     FABRIC_CONNECTION_DEFAULTS,
     IGVM_SSH_USER,
 )
@@ -100,21 +104,33 @@ def run_cmd(host: str, cmd: str):
     if IGVM_SSH_USER:
         conn_kwargs['user'] = IGVM_SSH_USER
 
-    conn = Connection(host, config=make_fabric_config(), **conn_kwargs)
-    try:
-        # Prepend a space to the command so that invoke's sudo() produces
-        # the two-space gap between the prompt and the command that the
-        # SSH_ORIGINAL_COMMAND whitelist on puppet CA hosts expects:
-        #   "sudo -S -p 'sudo password:'  <cmd>"
-        # invoke builds: "sudo -S -p '{prompt}' {cmd}" — one space from the
-        # format string plus our leading space gives the required two.
-        # Legacy fabric3's sudo() already produces the expected spacing, so
-        # there we pass the command unchanged.
-        cmd_arg = cmd if IS_LEGACY_FABRIC else (' ' + cmd)
-        result = conn.sudo(cmd_arg, hide=True, warn=True, pty=False)
-        return CommandResult(result)
-    finally:
-        conn.close()
+    # invoke's sudo() builds "sudo -S -p '{prompt}' {cmd}" (one space), but the
+    # CA whitelist wants two spaces before the command, so prepend one.
+    # fabric3's sudo() already spaces correctly, so pass it unchanged there.
+    cmd_arg = cmd if IS_LEGACY_FABRIC else (' ' + cmd)
+
+    # Retry transient SSH failures like Host.run(); command failures aren't
+    # retried (warn=True) — clean_cert() handles CA-level retries.
+    for attempt in range(FABRIC_CONNECTION_ATTEMPTS):
+        conn = Connection(host, config=make_fabric_config(), **conn_kwargs)
+        try:
+            result = conn.sudo(cmd_arg, hide=True, warn=True, pty=False)
+            return CommandResult(result)
+        except (
+            paramiko.ssh_exception.SSHException,
+            paramiko.ssh_exception.NoValidConnectionsError,
+            socket.error,
+            EOFError,
+        ):
+            if attempt < FABRIC_CONNECTION_ATTEMPTS - 1:
+                logger.warning(
+                    'Connection to %s lost, retrying (attempt %d/%d)...',
+                    host, attempt + 2, FABRIC_CONNECTION_ATTEMPTS,
+                )
+            else:
+                raise
+        finally:
+            conn.close()
 
 
 def find_puppet_executable(host: str) -> str:

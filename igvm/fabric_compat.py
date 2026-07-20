@@ -2,24 +2,15 @@
 
 Copyright (c) 2026 InnoGames GmbH
 
-igvm targets the modern ``fabric`` 3.x (Invoke/Paramiko based,
-``fabric.Connection`` object API).  Some deployment hosts still have the old
-``fabric3`` package installed instead — a Python-3 fork of Fabric 1.x with a
-completely different, global-``env`` based ``fabric.api`` API.  Both packages
-import as ``fabric`` and cannot be co-installed, so the modern-only code would
-crash on a fabric3 host with ``AttributeError: module 'fabric' has no attribute
-'Connection'``.
+igvm targets modern ``fabric`` 3.x (the ``fabric.Connection`` object API), but
+some hosts still have old ``fabric3`` (a Py3 fork of Fabric 1.x, global
+``fabric.api``).  Both import as ``fabric`` and can't be co-installed, so this
+module detects the flavor at import and exposes one surface (``Connection``,
+``make_fabric_config``, ``disconnect_all``, ``IS_LEGACY_FABRIC``) — a thin
+passthrough on modern fabric, a small ``fabric.api`` adapter on fabric3.
 
-This module detects which flavor is installed at import time and exposes a
-single, uniform surface (``Connection``, ``make_fabric_config``,
-``disconnect_all``, ``IS_LEGACY_FABRIC``) that the rest of igvm uses instead of
-``import fabric``.  On modern fabric everything is a thin passthrough; on legacy
-fabric3 a small adapter reproduces the pre-migration behavior on top of
-``fabric.api``.
-
-The fabric3 support is meant to be short-lived.  All fabric3-specific code lives
-here, gated by ``IS_LEGACY_FABRIC``, so it can be deleted as a clean revert once
-every host runs modern fabric.
+Short-lived: all fabric3 code is gated by ``IS_LEGACY_FABRIC`` so it can be
+deleted as a clean revert once every host runs modern fabric.
 """
 
 from sys import stdout
@@ -28,11 +19,9 @@ import fabric
 
 from igvm.exceptions import RemoteCommandError
 
-# Sudo prompt format expected by the SSH_ORIGINAL_COMMAND whitelists on remote
-# hosts.  Fabric 1.x (fabric3) used 'sudo password:'; modern fabric defaults to
-# '[sudo] password:', so on modern fabric we override it back.  Defined here
-# (rather than in settings.py) so the shim has no dependency on igvm.settings,
-# which itself imports this module.
+# Sudo prompt the remote SSH_ORIGINAL_COMMAND whitelists expect.  fabric3 used
+# 'sudo password:'; modern fabric defaults to '[sudo] password:', so force it
+# back.  Kept out of settings.py so the shim needs no igvm.settings import.
 FABRIC_SUDO_PROMPT = 'sudo password:'
 
 # Modern fabric exposes fabric.Connection / fabric.Config; fabric3 does not.
@@ -67,8 +56,7 @@ else:
     # Make fabric3's sudo prompt match the whitelist format.
     fabric.api.env.sudo_prompt = FABRIC_SUDO_PROMPT
 
-    # The same global settings the pre-migration code used (see git master
-    # igvm/settings.py COMMON_FABRIC_SETTINGS / igvm/host.py).
+    # The global settings the pre-migration code used (git master settings.py).
     _COMMON_FABRIC_SETTINGS = dict(
         disable_known_hosts=True,
         use_ssh_config=True,
@@ -81,13 +69,9 @@ else:
     )
 
     class _LegacyConfig:
-        """Lightweight stand-in for fabric.Config on fabric3.
-
-        fabric3 has no per-connection config object; the sudo prompt is set
-        globally on ``fabric.api.env`` (done at import above).  This carrier
-        merely lets call sites keep passing ``config=make_fabric_config()``
-        uniformly.
-        """
+        """Stand-in for fabric.Config on fabric3 (no per-connection config; the
+        sudo prompt is global, set at import).  Lets call sites keep passing
+        ``config=make_fabric_config()`` uniformly."""
 
         def __init__(self):
             self.sudo = {'prompt': FABRIC_SUDO_PROMPT}
@@ -96,13 +80,9 @@ else:
         return _LegacyConfig()
 
     class _LegacyResult:
-        """Expose modern invoke.Result attributes over a fabric3 result.
-
-        A fabric3 run()/sudo() result is a str subclass that *is* the stdout,
-        carrying ``.return_code``, ``.failed``, ``.succeeded`` and ``.stderr``.
-        igvm (and host.CommandResult) read ``.stdout/.stderr/.return_code/.ok/
-        .failed``, so we map the names that differ.
-        """
+        """Map a fabric3 result (a str that *is* stdout, with .return_code/
+        .failed/.succeeded/.stderr) onto the invoke.Result names igvm reads
+        (.stdout/.stderr/.return_code/.ok/.failed)."""
 
         def __init__(self, result):
             self._result = result
@@ -128,13 +108,10 @@ else:
             return self._result.failed
 
     class _LegacyConnection:
-        """Subset of the modern fabric.Connection API over fabric3.
-
-        fabric3 has no persistent per-host connection object: ``env`` is global
-        and connections live in the global ``fabric.state.connections`` pool.
-        Each method therefore opens a ``fabric.api.settings(host_string=...)``
-        block per call, exactly as the pre-migration Host.run() did.
-        """
+        """Subset of modern fabric.Connection over fabric3, whose env and
+        connections are global.  Each call opens a
+        ``fabric.api.settings(host_string=...)`` block, as pre-migration
+        Host.run() did."""
 
         def __init__(self, host, config=None, user=None, connect_timeout=None,
                      connect_kwargs=None, **_ignored):
