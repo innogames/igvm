@@ -485,7 +485,13 @@ def parse_args():
         help='Hostname of the Puppet agent',
     )
 
-    return vars(top_parser.parse_args())
+    args = vars(top_parser.parse_args())
+
+    if 'func' not in args:
+        top_parser.print_help()
+        top_parser.exit(2)
+
+    return args
 
 
 def main():
