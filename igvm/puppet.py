@@ -3,15 +3,22 @@
 Copyright (c) 2020 InnoGames GmbH
 """
 import random
+import socket
 from logging import getLogger
 from time import sleep
 
+import paramiko.ssh_exception
+
 from adminapi.dataset import Query, DatasetObject
-from fabric.api import settings
-from fabric.operations import sudo
 
 from igvm.exceptions import ConfigError
-from igvm.settings import COMMON_FABRIC_SETTINGS
+from igvm.fabric_compat import Connection, IS_LEGACY_FABRIC, make_fabric_config
+from igvm.host import CommandResult
+from igvm.settings import (
+    FABRIC_CONNECTION_ATTEMPTS,
+    FABRIC_CONNECTION_DEFAULTS,
+    IGVM_SSH_USER,
+)
 
 logger = getLogger(__name__)
 
@@ -93,13 +100,37 @@ def clean_cert(vm: DatasetObject, retries: int = 10) -> None:
 
 
 def run_cmd(host: str, cmd: str):
-    if 'user' in COMMON_FABRIC_SETTINGS:
-        user = COMMON_FABRIC_SETTINGS['user']
-    else:
-        user = None
+    conn_kwargs = dict(FABRIC_CONNECTION_DEFAULTS)
+    if IGVM_SSH_USER:
+        conn_kwargs['user'] = IGVM_SSH_USER
 
-    with settings(host_string=host, user=user, warn_only=True):
-        return sudo(cmd, quiet=True, pty=False, shell=False)
+    # invoke's sudo() builds "sudo -S -p '{prompt}' {cmd}" (one space), but the
+    # CA whitelist wants two spaces before the command, so prepend one.
+    # fabric3's sudo() already spaces correctly, so pass it unchanged there.
+    cmd_arg = cmd if IS_LEGACY_FABRIC else (' ' + cmd)
+
+    # Retry transient SSH failures like Host.run(); command failures aren't
+    # retried (warn=True) — clean_cert() handles CA-level retries.
+    for attempt in range(FABRIC_CONNECTION_ATTEMPTS):
+        conn = Connection(host, config=make_fabric_config(), **conn_kwargs)
+        try:
+            result = conn.sudo(cmd_arg, hide=True, warn=True, pty=False)
+            return CommandResult(result)
+        except (
+            paramiko.ssh_exception.SSHException,
+            paramiko.ssh_exception.NoValidConnectionsError,
+            socket.error,
+            EOFError,
+        ):
+            if attempt < FABRIC_CONNECTION_ATTEMPTS - 1:
+                logger.warning(
+                    'Connection to %s lost, retrying (attempt %d/%d)...',
+                    host, attempt + 2, FABRIC_CONNECTION_ATTEMPTS,
+                )
+            else:
+                raise
+        finally:
+            conn.close()
 
 
 def find_puppet_executable(host: str) -> str:
@@ -152,7 +183,10 @@ def clean_cert_v6(
 
     # Check if the cleaning was successful or if there was nothing to
     # clean in the first place
-    if res.return_code == 1 and 'Could not find files to clean' in res:
+    if res.return_code == 1 and (
+        'Could not find files to clean' in res
+        or 'Could not find files to clean' in res.stderr
+    ):
         logger.debug(
             f'Skip revoking of {vm_host} because there is no valid '
             'certificate known to the CA',

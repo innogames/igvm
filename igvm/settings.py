@@ -21,21 +21,23 @@ from igvm.hypervisor_preferences import (
     OverAllocation,
 )
 
-COMMON_FABRIC_SETTINGS = dict(
-    disable_known_hosts=True,
-    use_ssh_config=True,
-    always_use_pty=stdout.isatty(),
-    forward_agent=True,
-    shell='/bin/sh -c',
-    timeout=5,
-    connection_attempts=3,
-    remote_interrupt=True,
+IGVM_SSH_USER = environ.get('IGVM_SSH_USER')
+
+FABRIC_CONNECTION_DEFAULTS = dict(
+    connect_timeout=5,
+    connect_kwargs={
+        'allow_agent': True,
+    },
 )
 
-# Can't not add a key with dict built above and None value gets interpreted
-# as "None" username, thus separate code.
-if 'IGVM_SSH_USER' in environ:
-    COMMON_FABRIC_SETTINGS['user'] = environ.get('IGVM_SSH_USER')
+if IGVM_SSH_USER:
+    FABRIC_CONNECTION_DEFAULTS['user'] = IGVM_SSH_USER
+
+FABRIC_RUN_DEFAULTS = dict(
+    pty=stdout.isatty(),
+)
+
+FABRIC_CONNECTION_ATTEMPTS = 3
 
 DEFAULT_VG_NAME = 'xen-data'
 # Reserved pool space on Hypervisor
