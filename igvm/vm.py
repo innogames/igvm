@@ -953,10 +953,7 @@ class VM(Host):
         # Copy resolv.conf from Hypervisor
         fd = BytesIO()
         conn = self.hypervisor._get_connection()
-        conn.get(
-            f'{self.hypervisor.vm_mount_path(self)}/etc/resolv.conf',
-            fd,
-        )
+        conn.get('/etc/resolv.conf', fd)
         self.put('/etc/resolv.conf', fd)
 
         self.create_ssh_keys()
