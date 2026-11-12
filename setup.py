@@ -59,9 +59,13 @@ setup(
     },
     author='InnoGames System Administration',
     author_email='it@innogames.com',
+    # stdeb needs these set explicitly with setuptools >= 60
+    maintainer='InnoGames System Administration',
+    maintainer_email='it@innogames.com',
     license='MIT',
     platforms='POSIX',
     description='InnoGames VM Provisioning Tool',
+    long_description='InnoGames VM Provisioning Tool',
     url='https://github.com/innogames/igvm',
     install_requires=install_requires(),
 )
