@@ -118,7 +118,7 @@ class IGVMTest(TestCase):
         self.vm_obj['os'] = 'trixie'
         self.vm_obj['project'] = 'test'
         self.vm_obj['project_network'] = VM_NET
-        self.vm_obj['puppet_environment'] = None
+        self.vm_obj['puppet_environment'] = 'k_puppetrun'
         self.vm_obj['puppet_ca'] = 'testing-puppetca.innogames.de'
         self.vm_obj['puppet_master'] = 'puppet-lb.test.innogames.net'
         self.vm_obj['repositories'] = [
