@@ -97,13 +97,19 @@ class VM(Host):
     def run(self, command, silent=False, with_sudo=True, **kwargs):
         """ Same as Fabric's run() but works on mounted or running vm
 
-            When running in a mounted VM image, run everything in chroot
-            and in separate shell inside chroot. Normally Fabric runs shell
-            around commands.
+            When running in a mounted VM image, run everything in a
+            systemd-nspawn container and in separate shell inside it.
+            Normally Fabric runs shell around commands. The container gives
+            the VM's hostname, own /proc, /sys, /dev and a cgroup, so daemons
+            started inside don't leak to the hypervisor. Nothing is written
+            to the image (resolv.conf, localtime, journal are left alone).
         """
         if self.mounted:
             return self.hypervisor.run(
-                f'chroot {self.vm_path("")} /bin/sh -c \'{command}\'',
+                f'systemd-nspawn --quiet --pipe --register=no '
+                f'--directory={self.vm_path("")} --hostname={self.fqdn} '
+                f'--resolv-conf=off --timezone=off --link-journal=no '
+                f'/bin/sh -c \'{command}\'',
                 shell=False, shell_escape=True,
                 silent=silent,
                 with_sudo=with_sudo,
@@ -983,7 +989,7 @@ class VM(Host):
                 )
 
     def run_puppet(self, clear_cert=False, debug=False, tries=2):
-        """Runs Puppet in chroot on the hypervisor."""
+        """Runs Puppet in systemd-nspawn on the hypervisor."""
 
         if clear_cert:
             clean_cert(self.dataset_obj)
