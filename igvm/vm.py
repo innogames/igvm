@@ -948,7 +948,6 @@ class VM(Host):
             'mount_options': 'defaults'
         })
         self.upload_template('etc/hosts', '/etc/hosts')
-        self.upload_template('etc/inittab', '/etc/inittab')
 
         # Copy resolv.conf from Hypervisor
         fd = BytesIO()

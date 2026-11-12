@@ -53,7 +53,6 @@ setup(
             'templates/etc/network/interfaces',
             'templates/etc/fstab',
             'templates/etc/hosts',
-            'templates/etc/inittab',
             'templates/etc/resolv.conf',
             'scripts/ssh_wrapper',
         ]
