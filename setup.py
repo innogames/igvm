@@ -4,10 +4,9 @@ Copyright (c) 2024 InnoGames GmbH
 """
 
 import re
+import subprocess
 
 from setuptools import setup
-
-from igvm import VERSION
 
 
 # igvm runs with either modern "fabric" or legacy "fabric3" through
@@ -19,6 +18,24 @@ from igvm import VERSION
 # a strict "python3-fabric" dependency and the .deb would refuse to install on
 # fabric3-only hosts.
 _EXCLUDE_FROM_INSTALL_REQUIRES = {'fabric', 'fabric3'}
+
+
+def version():
+    # An sdist (e.g. unpacked by stdeb for dpkg-buildpackage) has no .git,
+    # but carries the version in PKG-INFO.
+    try:
+        with open('PKG-INFO') as f:
+            return re.search(r'^Version: (.+)$', f.read(), re.M).group(1)
+    except FileNotFoundError:
+        pass
+    # v2.7.1-3-g018955f -> 2.7.1.post3+g018955f, sorts between 2.7.1 and
+    # 2.7.2 both in pip and dpkg, so branches can be built without a tag.
+    tag, commits, sha = subprocess.check_output(
+        ['git', 'describe', '--tags', '--long', '--match', 'v*'], text=True,
+    ).strip().rsplit('-', 2)
+    if commits == '0':
+        return tag[1:]
+    return f'{tag[1:]}.post{commits}+{sha}'
 
 
 def install_requires():
@@ -39,7 +56,7 @@ def install_requires():
 
 setup(
     name='igvm',
-    version='.'.join(str(v) for v in VERSION),
+    version=version(),
     packages=['igvm'],
     entry_points={
         'console_scripts': [
