@@ -114,7 +114,7 @@ def parse_args():
         '--skip-puppet',
         action='store_false',
         dest='run_puppet',
-        help='Skip running puppet in chroot before powering up',
+        help='Skip running puppet in systemd-nspawn before powering up',
     )
     subparser.add_argument(
         '--debug-puppet',
@@ -171,7 +171,7 @@ def parse_args():
     subparser.add_argument(
         '--run-puppet',
         action='store_true',
-        help='Run puppet in chroot before powering up',
+        help='Run puppet in systemd-nspawn before powering up',
     )
     subparser.add_argument(
         '--debug-puppet',
