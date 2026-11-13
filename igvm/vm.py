@@ -30,7 +30,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from igvm.exceptions import ConfigError, HypervisorError, RemoteCommandError, VMError
-from igvm.fabric_compat import Connection
+from igvm.fabric_compat import Connection, make_fabric_config
 from igvm.host import Host
 from igvm.settings import (
     AWS_ECU_FACTOR,
@@ -860,6 +860,7 @@ class VM(Host):
             try:
                 conn = Connection(
                     self.dataset_obj['hostname'],
+                    config=make_fabric_config(),
                     **FABRIC_CONNECTION_DEFAULTS,
                 )
                 result = conn.run(

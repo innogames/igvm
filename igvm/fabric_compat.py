@@ -13,7 +13,7 @@ Short-lived: all fabric3 code is gated by ``IS_LEGACY_FABRIC`` so it can be
 deleted as a clean revert once every host runs modern fabric.
 """
 
-from sys import stdout
+from sys import stdin, stdout
 
 import fabric
 
@@ -36,7 +36,12 @@ if not IS_LEGACY_FABRIC:
     Connection = fabric.Connection
 
     def make_fabric_config():
-        return fabric.Config(overrides={'sudo': {'prompt': FABRIC_SUDO_PROMPT}})
+        return fabric.Config(overrides={
+            'sudo': {'prompt': FABRIC_SUDO_PROMPT},
+            # Without a terminal there is nothing to forward, and reading
+            # pytest's captured stdin makes every command fail.
+            'run': {'in_stream': None if stdin.isatty() else False},
+        })
 
     def disconnect_all():
         """Close all tracked SSH connections."""
